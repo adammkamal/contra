@@ -1,0 +1,81 @@
+import type { Alias, ExtractedBackCharge, Job, Subcontract } from "./types.ts";
+
+export interface ResolverData {
+  jobs: readonly Job[];
+  subcontracts: readonly Subcontract[];
+  aliases: readonly Alias[];
+}
+
+export type Resolution =
+  | { kind: "linked"; subcontractId: string; explanation: string[] }
+  | { kind: "review"; reasons: string[]; hints: string[] };
+
+const SUFFIXES = new Set(["llc", "inc", "co", "corp", "corporation", "company", "ltd", "lp", "llp"]);
+
+export function normName(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .split(/\s+/)
+    .filter((t) => t && !SUFFIXES.has(t))
+    .join(" ");
+}
+
+/**
+ * Deterministic linkage: job -> subcontracts on that job -> party name or confirmed alias.
+ * Inputs are deliberately limited to party names and aliases: remit-to, payee and lockbox
+ * names never reach this function (INVARIANT 8).
+ */
+export function resolve(x: Pick<ExtractedBackCharge, "jobRef" | "vendorNameAsWritten">, data: ResolverData): Resolution {
+  const explanation: string[] = [];
+
+  const jr = normName(x.jobRef);
+  const jobs = data.jobs.filter((j) => [j.id, j.name, ...j.aliases].some((n) => normName(n) === jr));
+  if (jobs.length !== 1) {
+    return {
+      kind: "review",
+      reasons: [jobs.length === 0 ? `no job matches "${x.jobRef}"` : `"${x.jobRef}" matches ${jobs.length} jobs`],
+      hints: jobs.map((j) => j.id),
+    };
+  }
+  const job = jobs[0]!;
+  explanation.push(`job: "${x.jobRef}" -> ${job.id} ${job.name}`);
+
+  const onJob = data.subcontracts.filter((s) => s.jobId === job.id);
+  const vn = normName(x.vendorNameAsWritten);
+
+  const direct = onJob.filter((s) => normName(s.partyLegalName) === vn);
+  const viaAlias = data.aliases
+    .filter((a) => normName(a.alias) === vn)
+    .flatMap((a) => onJob.filter((s) => normName(s.partyLegalName) === normName(a.partyLegalName)).map((s) => ({ s, a })));
+
+  const ids = new Set([...direct.map((s) => s.id), ...viaAlias.map((v) => v.s.id)]);
+  if (ids.size === 1) {
+    const id = [...ids][0]!;
+    const sc = onJob.find((s) => s.id === id)!;
+    if (direct.length) explanation.push(`party: "${x.vendorNameAsWritten}" = legal name ${sc.partyLegalName}`);
+    else {
+      const a = viaAlias[0]!.a;
+      explanation.push(`alias: "${x.vendorNameAsWritten}" -> ${sc.partyLegalName} (${a.source}${a.confirmedBy ? `, ${a.confirmedBy}` : ""})`);
+    }
+    explanation.push(`subcontract: ${sc.id} (${sc.scope}) on ${job.id}`);
+    return { kind: "linked", subcontractId: id, explanation };
+  }
+
+  const hints = onJob
+    .filter((s) => {
+      const toks = new Set(normName(s.partyLegalName).split(" "));
+      return vn.split(" ").some((t) => toks.has(t));
+    })
+    .map((s) => `${s.id} ${s.partyLegalName}`);
+  return {
+    kind: "review",
+    reasons: [
+      ids.size === 0
+        ? `no party or confirmed alias on ${job.id} matches "${x.vendorNameAsWritten}"`
+        : `"${x.vendorNameAsWritten}" matches ${ids.size} subcontracts on ${job.id}`,
+    ],
+    hints,
+  };
+}

@@ -1,0 +1,123 @@
+import { ManualClock, SystemClock } from "./clock.ts";
+import { MockERP } from "./mocks/erp.ts";
+import { MockRamp, type RampBill, type RampCredit } from "./mocks/ramp.ts";
+import { reconcile, scanEmails, type ReconResult } from "./reconcile.ts";
+import { demoSeed, historySeed } from "./seed.ts";
+import { SqliteStore } from "./store/sqlite.ts";
+import type { Alias } from "./types.ts";
+import { Contra, type ContraState } from "./workflow.ts";
+
+interface AppState {
+  seedBaseMs: number;
+  clockMs: number;
+  contra: ContraState;
+  erp: { aliases: Alias[]; synced: string[] };
+  ramp: { bills: RampBill[]; credits: RampCredit[] };
+}
+
+export interface Ctx {
+  clock: ManualClock;
+  contra: Contra;
+  erp: MockERP;
+  ramp: MockRamp;
+  seed: ReturnType<typeof demoSeed>;
+}
+
+/**
+ * The one entry point for the UI and scripts. Every command goes through run(): the command,
+ * its audit events and the new snapshot commit in one transaction. If the command throws,
+ * everything rolls back and in-memory state is reloaded from the last good snapshot.
+ */
+export class App {
+  readonly store: SqliteStore;
+  #ctx!: Ctx;
+  #seedBaseMs!: number;
+
+  constructor(dbPath: string, opts: { start?: Date } = {}) {
+    this.store = new SqliteStore(dbPath);
+    if (!this.store.loadSnapshot()) {
+      const start = opts.start ?? new SystemClock().now();
+      this.#fresh(start);
+      this.store.transaction(() => this.#save());
+    } else {
+      this.#load();
+    }
+  }
+
+  /** Read-only access for rendering. Never mutate through this. */
+  get ctx(): Readonly<Ctx> {
+    return this.#ctx;
+  }
+
+  run<T>(command: (ctx: Ctx) => T): T {
+    try {
+      return this.store.transaction(() => {
+        const out = command(this.#ctx);
+        this.#save();
+        return out;
+      });
+    } catch (e) {
+      this.#load();
+      throw e;
+    }
+  }
+
+  /** Read-only shadow scan of email history against Ramp credits and bills (demo opener). */
+  missedBackCharges(): ReconResult {
+    const { erp, ramp } = this.#ctx;
+    const h = historySeed(new Date(this.#seedBaseMs));
+    return reconcile(scanEmails(h.emails, h.extractions, erp), ramp);
+  }
+
+  advanceDays(days: number): void {
+    this.run((c) => c.clock.advanceDays(days));
+  }
+
+  close(): void {
+    this.store.close();
+  }
+
+  #fresh(start: Date): void {
+    this.#seedBaseMs = start.getTime();
+    this.#build(null, start.getTime());
+  }
+
+  #load(): void {
+    const s = this.store.loadSnapshot<AppState>();
+    if (!s) throw new Error("no snapshot");
+    this.#seedBaseMs = s.seedBaseMs;
+    this.#build(s, s.clockMs);
+  }
+
+  #build(s: AppState | null, clockMs: number): void {
+    const clock = new ManualClock(new Date(clockMs));
+    const seed = demoSeed(new Date(this.#seedBaseMs));
+    const log = this.store.auditLog(clock);
+    const erp = new MockERP({ jobs: seed.jobs, subcontracts: seed.subcontracts, aliases: s ? s.erp.aliases : [...seed.aliases] });
+    for (const id of s?.erp.synced ?? []) erp.syncCredit(id);
+    const ramp = new MockRamp(seed.vendors);
+    if (s) {
+      ramp.bills.push(...s.ramp.bills);
+      ramp.credits.push(...s.ramp.credits);
+    } else {
+      const h = historySeed(new Date(this.#seedBaseMs));
+      ramp.bills.push(...h.rampBills);
+      ramp.credits.push(...h.rampCredits);
+    }
+    const deps = { clock, log, erp, ramp };
+    const contra = s ? Contra.restore(deps, s.contra) : new Contra(deps);
+    this.#ctx = { clock, contra, erp, ramp, seed };
+  }
+
+  #save(): void {
+    const { clock, contra, erp, ramp } = this.#ctx;
+    const state: AppState = {
+      seedBaseMs: this.#seedBaseMs,
+      clockMs: clock.now().getTime(),
+      contra: contra.snapshot(),
+      erp: { aliases: erp.aliases, synced: erp.syncedIds() },
+      ramp: { bills: ramp.bills, credits: ramp.credits },
+    };
+    this.store.saveSnapshot(state);
+  }
+}
