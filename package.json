@@ -1,0 +1,21 @@
+{
+  "name": "contra",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test \"test/*.test.ts\"",
+    "check": "npm run typecheck && npm test",
+    "bench": "tsx bench/run.ts",
+    "extract:live": "tsx scripts/extract-live.ts",
+    "hooks": "node scripts/install-hooks.mjs"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
+}
