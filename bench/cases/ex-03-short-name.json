@@ -1,0 +1,24 @@
+{
+  "id": "ex-03-short-name",
+  "description": "Bare 'Ridgeline' is ambiguous on Summit (drywall vs glass)",
+  "email": {
+    "id": "BX-3",
+    "from": "dana.ortiz@apexbuilders.example",
+    "to": "office@ridgeline.example",
+    "subject": "Summit protection",
+    "receivedAt": "2026-10-20T15:00:00.000Z",
+    "body": "Ridgeline didn't protect the finished floor. BC-5003: floor protection and cleaning, $950.00."
+  },
+  "extraction": {
+    "ref": "BC-5003",
+    "description": "Floor protection",
+    "amountCents": 95000,
+    "amountEvidence": {
+      "emailId": "BX-3",
+      "sentence": "BC-5003: floor protection and cleaning, $950.00."
+    },
+    "vendorNameAsWritten": "Ridgeline",
+    "jobRef": "Summit",
+    "disputeNoted": false
+  }
+}

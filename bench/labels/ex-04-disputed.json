@@ -1,0 +1,7 @@
+{
+  "id": "ex-04-disputed",
+  "labeledBy": "claude-example (REPLACE: confirm or rewrite by hand)",
+  "link": "SC-SUM-0700",
+  "disputed": true,
+  "amountCents": 340000
+}

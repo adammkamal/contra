@@ -1,0 +1,24 @@
+{
+  "id": "ex-01-alias",
+  "description": "Yard-sign name 'Ridgeline Drywall' resolves via alias",
+  "email": {
+    "id": "BX-1",
+    "from": "dana.ortiz@apexbuilders.example",
+    "to": "marco@ridgelinedrywall.example",
+    "subject": "Summit L3 patch",
+    "receivedAt": "2026-10-20T15:00:00.000Z",
+    "body": "Ridgeline Drywall - BC-5001: patch L3 corridor after your crew's cart damage, $1,200.00."
+  },
+  "extraction": {
+    "ref": "BC-5001",
+    "description": "Patch L3 corridor",
+    "amountCents": 120000,
+    "amountEvidence": {
+      "emailId": "BX-1",
+      "sentence": "BC-5001: patch L3 corridor after your crew's cart damage, $1,200.00."
+    },
+    "vendorNameAsWritten": "Ridgeline Drywall",
+    "jobRef": "Summit",
+    "disputeNoted": false
+  }
+}

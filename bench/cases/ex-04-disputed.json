@@ -1,0 +1,28 @@
+{
+  "id": "ex-04-disputed",
+  "description": "Correct party, but the PM notes a dispute",
+  "email": {
+    "id": "BX-4",
+    "from": "dana.ortiz@apexbuilders.example",
+    "to": "ap@harbormech.example",
+    "subject": "Summit ceiling",
+    "receivedAt": "2026-10-20T15:00:00.000Z",
+    "body": "BC-5004: ceiling tile replacement after condensate leak, $3,400.00. Harbor Mechanical disputes this; they say the leak is the roofer's."
+  },
+  "extraction": {
+    "ref": "BC-5004",
+    "description": "Ceiling tile replacement",
+    "amountCents": 340000,
+    "amountEvidence": {
+      "emailId": "BX-4",
+      "sentence": "BC-5004: ceiling tile replacement after condensate leak, $3,400.00."
+    },
+    "vendorNameAsWritten": "Harbor Mechanical",
+    "jobRef": "Summit",
+    "disputeNoted": true,
+    "disputeEvidence": {
+      "emailId": "BX-4",
+      "sentence": "Harbor Mechanical disputes this; they say the leak is the roofer's."
+    }
+  }
+}
