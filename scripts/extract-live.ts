@@ -1,5 +1,6 @@
 /**
- * Live acceptance test for AI extraction (#2). Needs ANTHROPIC_API_KEY (optional ANTHROPIC_MODEL).
+ * Live acceptance test for AI extraction (#2). Reads CONTRA_ANTHROPIC_API_KEY and optional CONTRA_MODEL
+ * from .env.local (never from ANTHROPIC_* variables, which Claude Code also reads).
  *   npm run extract:live            # 5 runs per email, compare, record fixtures only if ALL pass
  *   npm run extract:live -- --runs 3
  * Pass = every run, for every email: same refs, same cents, verbatim sentence passes the span check,
@@ -15,6 +16,11 @@ import { demoReply, demoSeed } from "../src/seed.ts";
 import { verifyAmountEvidence, verifySpan } from "../src/span.ts";
 import type { ExtractedBackCharge } from "../src/types.ts";
 
+try {
+  process.loadEnvFile(".env.local");
+} catch {
+  /* no .env.local: settingsFromEnv reports what's missing */
+}
 const runsArg = process.argv.indexOf("--runs");
 const RUNS = runsArg > 0 ? Number(process.argv[runsArg + 1]) : 5;
 const cfg = settingsFromEnv(process.env);

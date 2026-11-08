@@ -29,10 +29,23 @@ export function normalizeApiKey(raw: string | undefined): { ok: true; key: strin
   return { ok: true, key };
 }
 
+/**
+ * Contra uses its OWN variable names, loaded from .env.local. ANTHROPIC_API_KEY and ANTHROPIC_MODEL are
+ * deliberately NOT read: Claude Code reads those too, so exporting them in a terminal would silently
+ * change the coding session's model or bill it to the API key.
+ */
 export function settingsFromEnv(env: Record<string, string | undefined>): { ok: true; settings: ModelSettings } | { ok: false; message: string } {
-  const k = normalizeApiKey(env.ANTHROPIC_API_KEY);
-  if (!k.ok) return { ok: false, message: k.reason === "EMPTY" ? "Set ANTHROPIC_API_KEY" : "ANTHROPIC_API_KEY contains characters that can't go in an HTTP header; re-enter it without line breaks" };
-  return { ok: true, settings: { apiKey: k.key, model: (env.ANTHROPIC_MODEL ?? "").trim() || "claude-opus-5-5" } };
+  const k = normalizeApiKey(env.CONTRA_ANTHROPIC_API_KEY);
+  if (!k.ok) {
+    return {
+      ok: false,
+      message:
+        k.reason === "EMPTY"
+          ? "Put CONTRA_ANTHROPIC_API_KEY in .env.local (copy .env.example). Do not export ANTHROPIC_API_KEY in a Claude Code terminal."
+          : "CONTRA_ANTHROPIC_API_KEY contains characters that can't go in an HTTP header; re-enter it without line breaks",
+    };
+  }
+  return { ok: true, settings: { apiKey: k.key, model: (env.CONTRA_MODEL ?? "").trim() || "claude-opus-5-5" } };
 }
 
 const isRecord = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x);

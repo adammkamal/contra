@@ -32,5 +32,8 @@ inline on purpose, so subagents get them even if file imports are not expanded.
 - At most two builder sessions at once; the human reviews every diff in src/.
 
 ## Environment
-- Windows. Use PowerShell syntax in instructions: `$env:ANTHROPIC_API_KEY = "..."`, not `KEY=... cmd`.
+- Windows. Use PowerShell syntax in instructions, never `KEY=... cmd`.
+- Contra's API key and model live in `.env.local` as CONTRA_ANTHROPIC_API_KEY and CONTRA_MODEL (see
+  .env.example). Never set ANTHROPIC_API_KEY or ANTHROPIC_MODEL in a terminal that runs Claude Code:
+  Claude Code reads them too (billing and model would silently change). Never print or commit the key.
 - Node 22.13+ (node:sqlite). Tests: node's runner via tsx.

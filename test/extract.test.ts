@@ -111,8 +111,17 @@ test("API key hygiene: trailing newline trimmed, control characters refused befo
   const r = await callTool({ apiKey: "sk-\nbad", model: "m" }, { system: "s", user: "u", tool: BACKCHARGE_TOOL }, { fetcher: f });
   assert.deepEqual([r.status, called], ["INVALID_CREDENTIAL", false]);
   assert.equal(settingsFromEnv({}).ok, false);
-  const s = settingsFromEnv({ ANTHROPIC_API_KEY: "sk-x\n" });
+  const s = settingsFromEnv({ CONTRA_ANTHROPIC_API_KEY: "sk-x\n" });
   assert.ok(s.ok && s.settings.apiKey === "sk-x" && s.settings.model === "claude-opus-5-5");
+  const m = settingsFromEnv({ CONTRA_ANTHROPIC_API_KEY: "sk-x", CONTRA_MODEL: "claude-fable-5-1" });
+  assert.ok(m.ok && m.settings.model === "claude-fable-5-1");
+});
+
+test("Contra never reads Claude Code's ANTHROPIC_API_KEY or ANTHROPIC_MODEL", () => {
+  const r = settingsFromEnv({ ANTHROPIC_API_KEY: "sk-shared", ANTHROPIC_MODEL: "claude-fable-5-1" });
+  assert.equal(r.ok, false);
+  const s = settingsFromEnv({ ANTHROPIC_API_KEY: "sk-shared", ANTHROPIC_MODEL: "claude-haiku-5-5", CONTRA_ANTHROPIC_API_KEY: "sk-contra" });
+  assert.ok(s.ok && s.settings.apiKey === "sk-contra" && s.settings.model === "claude-opus-5-5");
 });
 
 test("extractResponse wires the notice refs into the prompt and validates against them", async () => {
