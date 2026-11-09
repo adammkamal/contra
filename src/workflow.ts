@@ -4,7 +4,7 @@ import { creditAmountFor } from "./credits.ts";
 import { evaluateEligibility, type EligibilityResult } from "./eligibility.ts";
 import { renderCreditMemo } from "./memo.ts";
 import { formatUsd, sub as subCents, sum, type Cents } from "./money.ts";
-import { resolve, type Resolution } from "./resolver.ts";
+import { ambiguousWith, resolve, type Resolution } from "./resolver.ts";
 import { disputeSentencesFor, normalize, verifyAmountEvidence, verifySpan } from "./span.ts";
 import { transitionBackCharge, transitionCredit, transitionNotice } from "./state.ts";
 import type { MockERP } from "./mocks/erp.ts";
@@ -166,8 +166,16 @@ export class Contra {
     if (!sc) throw new Error(`${ref}: no subcontract to link to`);
 
     if (proposal?.kind !== "linked" || proposal.subcontractId !== sc.id) {
-      this.d.erp.addAlias({ alias: bc.extracted.vendorNameAsWritten, partyLegalName: sc.partyLegalName, source: "pm_confirmed", confirmedBy: pm.id });
-      this.d.log.append({ actor: pm, entity: "alias", entityId: bc.extracted.vendorNameAsWritten, action: `alias -> ${sc.partyLegalName}`, from: null, to: null, evidence: [ref] });
+      const name = bc.extracted.vendorNameAsWritten;
+      // Aliases apply on every job, so check every party in the ERP, not only this job's.
+      const parties = [...new Set(this.d.erp.subcontracts.map((s) => s.partyLegalName))];
+      const other = ambiguousWith(name, sc.partyLegalName, parties);
+      if (other) {
+        this.d.log.append({ actor: pm, entity: "alias", entityId: name, action: `alias not learned: "${name}" is ambiguous with ${other}`, from: null, to: null, evidence: [ref] });
+      } else {
+        this.d.erp.addAlias({ alias: name, partyLegalName: sc.partyLegalName, source: "pm_confirmed", confirmedBy: pm.id });
+        this.d.log.append({ actor: pm, entity: "alias", entityId: name, action: `alias -> ${sc.partyLegalName}`, from: null, to: null, evidence: [ref] });
+      }
       bc.linkExplanation = [`PM ${pm.id} linked "${bc.extracted.vendorNameAsWritten}" to ${sc.id} ${sc.partyLegalName}`];
     }
     bc.subcontractId = sc.id;

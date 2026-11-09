@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { evaluateEligibility } from "../src/eligibility.ts";
 import { cents } from "../src/money.ts";
-import { resolve } from "../src/resolver.ts";
+import { ambiguousWith, normName, resolve } from "../src/resolver.ts";
 import { demoReply } from "../src/seed.ts";
 import { disputeSentencesFor, normalize } from "../src/span.ts";
 import { CONTROLLER, LLM, PM, setup, throughNotice } from "./helpers.ts";
@@ -263,4 +263,44 @@ test("bill arrival: imported bills and other-job bills are flagged", () => {
   assert.equal(imp.wouldPayCents, 1_000_000);
   ctx.ramp.createBillViaApi({ id: "B-lak", vendorId: "V-RIDGE", jobId: "LAK-02", amountCents: cents(1_000_000), accountingDate: ctx.clock.now(), origin: "native" });
   assert.match(ctx.contra.billArrivalCheck("B-lak").warnings.join(" "), /is for job SUM-01 but this bill is for LAK-02/);
+});
+
+test("an ambiguous name is never learned as an alias: PM links 'Ridgeline' once, the next 'Ridgeline' still goes to review", () => {
+  const ctx = setup();
+  const { contra, seed } = ctx;
+  const x = { ...seed.extractions["E-2"]![0]!, vendorNameAsWritten: "Ridgeline" };
+  contra.ingestBackChargeEmail(seed.emails[1]!, [x], LLM);
+  assert.equal(contra.backCharges.get("BC-4470")!.state, "needs_review");
+  contra.confirmLink("BC-4470", PM, "SC-SUM-0912");
+  assert.equal(contra.backCharges.get("BC-4470")!.state, "linked"); // the item itself is linked
+  assert.ok(!ctx.erp.aliases.some((a) => normName(a.alias) === "ridgeline"));
+  const ev = [...ctx.log.all()].find((e) => e.entity === "alias" && e.entityId === "Ridgeline");
+  assert.ok(ev && /not learned/.test(ev.action) && /Ridgeline Glass & Glazing Inc/.test(ev.action), ev?.action);
+
+  const y = { ...seed.extractions["E-1"]![1]!, vendorNameAsWritten: "Ridgeline" };
+  contra.ingestBackChargeEmail(seed.emails[0]!, [y], LLM);
+  assert.equal(contra.proposals.get("BC-4468")!.kind, "review");
+  assert.equal(contra.backCharges.get("BC-4468")!.state, "needs_review");
+});
+
+test("the seeded 'Ridgeline Drywall' alias is not ambiguous and still links to SC-SUM-0912", () => {
+  const { seed, erp } = setup();
+  const r = resolve({ jobRef: "Summit", vendorNameAsWritten: "Ridgeline Drywall" }, erp);
+  assert.ok(r.kind === "linked" && r.subcontractId === "SC-SUM-0912");
+  assert.equal(ambiguousWith("Ridgeline Drywall", "Ridgeline Interiors LLC", seed.subcontracts.map((s) => s.partyLegalName)), null);
+  assert.equal(ambiguousWith("Ridgeline", "Ridgeline Interiors LLC", seed.subcontracts.map((s) => s.partyLegalName)), "Ridgeline Glass & Glazing Inc");
+});
+
+test("an alias that becomes ambiguous after a similar party joins the job stops linking", () => {
+  const ctx = setup();
+  const { contra, seed, erp } = ctx;
+  const x = { ...seed.extractions["E-1"]![0]!, vendorNameAsWritten: "RDG Interiors crew" };
+  contra.ingestBackChargeEmail(seed.emails[0]!, [x], LLM);
+  contra.confirmLink("BC-4467", PM, "SC-SUM-0912");
+  assert.ok(erp.aliases.some((a) => a.alias === "RDG Interiors crew")); // learned: not ambiguous yet
+  const sc = erp.subcontract("SC-SUM-0820")!;
+  erp.subcontracts.push({ ...sc, id: "SC-SUM-0990", partyLegalName: "RDG Interiors Crew Services LLC", paymentsVendorId: "V-RGG" });
+  const r = resolve({ jobRef: "Summit", vendorNameAsWritten: "RDG Interiors crew" }, erp);
+  assert.equal(r.kind, "review");
+  assert.ok(r.kind === "review" && r.reasons.some((m) => /alias "RDG Interiors crew" -> Ridgeline Interiors LLC ignored/.test(m) && /RDG Interiors Crew Services LLC/.test(m)), JSON.stringify(r));
 });
