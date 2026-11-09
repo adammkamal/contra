@@ -3,7 +3,7 @@
   "items": [
     {
       "ref": "BC-4471",
-      "description": "Overtime for missed inspection (framing crew overtime to hold schedule after drywall crew not ready for inspection)",
+      "description": "Overtime paid to framing crew to hold schedule after drywall crew was not ready for drywall inspection",
       "amountCents": 400000,
       "amountEvidence": {
         "emailId": "E-3",
@@ -14,5 +14,5 @@
       "disputeNoted": false
     }
   ],
-  "recordedAt": "2026-11-09T00:52:46.596Z"
+  "recordedAt": "2026-11-09T01:58:50.491Z"
 }
