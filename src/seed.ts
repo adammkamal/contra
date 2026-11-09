@@ -38,12 +38,13 @@ export function demoSeed(now: Date) {
 
   const pm = "dana.ortiz@apexbuilders.example";
   const sub = "marco@ridgelinedrywall.example";
+  const subNamed = `Ridgeline Drywall <${sub}>`;
 
   const emails: Email[] = [
     {
       id: "E-1",
       from: pm,
-      to: sub,
+      to: subNamed,
       subject: "Summit - back-charges L2",
       receivedAt: addDays(now, -9),
       body:
@@ -54,7 +55,7 @@ export function demoSeed(now: Date) {
     {
       id: "E-2",
       from: pm,
-      to: sub,
+      to: subNamed,
       subject: "RE: Summit corridor patch",
       receivedAt: addDays(now, -8),
       body:
@@ -64,7 +65,7 @@ export function demoSeed(now: Date) {
     {
       id: "E-3",
       from: pm,
-      to: sub,
+      to: subNamed,
       subject: "Summit MOB - missed inspection",
       receivedAt: addDays(now, -7),
       body:

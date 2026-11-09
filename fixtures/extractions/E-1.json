@@ -1,0 +1,30 @@
+{
+  "model": "claude-opus-5-5",
+  "items": [
+    {
+      "ref": "BC-4467",
+      "description": "Replace damaged ceiling grid, L2 (damaged by drywall lift)",
+      "amountCents": 680000,
+      "amountEvidence": {
+        "emailId": "E-1",
+        "sentence": "BC-4467: replace damaged\nceiling grid, L2, $6,800.00 per the Apex Ceilings invoice."
+      },
+      "vendorNameAsWritten": "Ridgeline Drywall",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    },
+    {
+      "ref": "BC-4468",
+      "description": "Debris haul-off",
+      "amountCents": 470000,
+      "amountEvidence": {
+        "emailId": "E-1",
+        "sentence": "BC-4468: debris haul-off, $4,700.00."
+      },
+      "vendorNameAsWritten": "Ridgeline Drywall",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    }
+  ],
+  "recordedAt": "2026-11-09T00:52:46.588Z"
+}

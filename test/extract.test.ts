@@ -31,8 +31,10 @@ test("happy path: tool output becomes cents from the copied text, and spans veri
   for (const x of r.items) assert.ok(verifyAmountEvidence(E1, x.amountEvidence, x.amountCents).ok);
   assert.deepEqual(r.actor, { kind: "llm", id: "extractor", model: "claude-test-1" });
   const body = JSON.parse(String(sent!.body));
-  assert.equal(body.tool_choice.name, "record_back_charges");
-  assert.equal(body.temperature, 0);
+  assert.deepEqual(body.tool_choice, { type: "auto" });
+  assert.equal("temperature" in body, false);
+  assert.equal(body.max_tokens, 16000);
+  assert.deepEqual(body.output_config, { effort: "medium" });
   assert.match(body.messages[0].content, /<email id="E-1">/);
   assert.equal((sent!.headers as Record<string, string>)["x-api-key"], "sk-test");
   assert.doesNotMatch(String(sent!.body), /sk-test/); // key only in the header
@@ -71,21 +73,15 @@ test("reply parsing: refs must be in the notice; accepted+disputed contradiction
   assert.ok(!bad.ok);
 });
 
-test("transport: retries once on 529, never reads error bodies, maps statuses", async () => {
+test("transport: retries once on 529, reports only error.type and error.message, maps statuses", async () => {
   let calls = 0;
   const flaky = (async () => (++calls === 1 ? new Response("overloaded", { status: 529 }) : toolResponse(E1_OUTPUT))) as unknown as typeof fetch;
   assert.equal((await callTool(S, { system: "s", user: "u", tool: BACKCHARGE_TOOL }, { fetcher: flaky, ...noSleep })).status, "OK");
   assert.equal(calls, 2);
 
-  let read = false;
-  const secretEcho = (async () => {
-    const r = new Response("echo of the request with secrets", { status: 400 });
-    const orig = r.text.bind(r);
-    Object.defineProperty(r, "text", { value: async () => { read = true; return orig(); } });
-    return r;
-  }) as unknown as typeof fetch;
-  const e = await callTool(S, { system: "s", user: "u", tool: BACKCHARGE_TOOL }, { fetcher: secretEcho, ...noSleep });
-  assert.deepEqual([e.status, read], ["MODEL_ERROR", false]);
+  const nonJson = (async () => new Response("echo of the request with secrets", { status: 400 })) as unknown as typeof fetch;
+  const e = await callTool(S, { system: "s", user: "u", tool: BACKCHARGE_TOOL }, { fetcher: nonJson, ...noSleep });
+  assert.deepEqual(e, { status: "MODEL_ERROR", message: "API returned HTTP 400" });
 
   const unauthorized = (async () => new Response("", { status: 401 })) as unknown as typeof fetch;
   assert.equal((await callTool(S, { system: "s", user: "u", tool: BACKCHARGE_TOOL }, { fetcher: unauthorized })).status, "INVALID_CREDENTIAL");
@@ -102,6 +98,46 @@ test("transport: timeout, network error, oversized and wrong-shape responses fai
   assert.equal((await callTool(S, { system: "s", user: "u", tool: BACKCHARGE_TOOL }, { fetcher: twoCalls })).status, "INVALID_OUTPUT");
 });
 
+test("error messages carry error.type and error.message only, capped, never request content or the key", async () => {
+  const SECRET_EMAIL = "Confidential: BC-4467 $6,800.00 Ridgeline";
+  let sentBody = "";
+  const echo = (async (_u: string, init: RequestInit) => {
+    sentBody = String(init.body);
+    return new Response(JSON.stringify({
+      type: "error",
+      error: { type: "invalid_request_error", message: "temperature is deprecated for this model.", echoed_request: sentBody, key: "sk-test" },
+      request_id: "req_123",
+    }), { status: 400 });
+  }) as unknown as typeof fetch;
+  const r = await callTool(S, { system: "SYSTEM-PROMPT-TEXT", user: SECRET_EMAIL, tool: BACKCHARGE_TOOL }, { fetcher: echo, ...noSleep });
+  assert.ok(r.status === "MODEL_ERROR");
+  assert.equal(r.message, "API returned HTTP 400 (invalid_request_error: temperature is deprecated for this model.)");
+  for (const leak of [SECRET_EMAIL, "SYSTEM-PROMPT-TEXT", "sk-test", "record_back_charges", "req_123", sentBody]) assert.ok(!r.message.includes(leak), leak);
+
+  // The message itself is cut to 300 characters, even when the API echoes the email inside it.
+  const longEcho = (async () => new Response(JSON.stringify({ error: { type: "invalid_request_error", message: "x".repeat(400) + SECRET_EMAIL } }), { status: 400 })) as unknown as typeof fetch;
+  const l = await callTool(S, { system: "s", user: SECRET_EMAIL, tool: BACKCHARGE_TOOL }, { fetcher: longEcho, ...noSleep });
+  assert.ok(l.status !== "OK" && l.message.includes("x".repeat(300)) && !l.message.includes("x".repeat(301)) && !l.message.includes("Confidential"));
+
+  // Only the first 2,000 characters are read: an error placed after that is never seen.
+  const padded = (async () => new Response(" ".repeat(5_000) + JSON.stringify({ error: { type: "t", message: "late" } }), { status: 400 })) as unknown as typeof fetch;
+  const p = await callTool(S, { system: "s", user: "u", tool: BACKCHARGE_TOOL }, { fetcher: padded, ...noSleep });
+  assert.deepEqual(p, { status: "MODEL_ERROR", message: "API returned HTTP 400" });
+});
+
+test("no tool call: max_tokens and refusal stop reasons are reported", async () => {
+  const reply = (body: unknown) => (async () => new Response(JSON.stringify(body), { status: 200 })) as unknown as typeof fetch;
+  const thinkingOnly = [{ type: "thinking", thinking: "" }];
+  const mt = await callTool(S, { system: "s", user: "u", tool: BACKCHARGE_TOOL }, { fetcher: reply({ content: thinkingOnly, stop_reason: "max_tokens", stop_details: null }) });
+  assert.ok(mt.status === "INVALID_OUTPUT" && /max_tokens limit/.test(mt.message));
+  const rf = await callTool(S, { system: "s", user: "u", tool: BACKCHARGE_TOOL }, { fetcher: reply({ content: [], stop_reason: "refusal", stop_details: { type: "refusal", category: "cyber", explanation: "..." } }) });
+  assert.ok(rf.status === "INVALID_OUTPUT" && /refused/.test(rf.message) && /category cyber/.test(rf.message));
+  const rn = await callTool(S, { system: "s", user: "u", tool: BACKCHARGE_TOOL }, { fetcher: reply({ content: [], stop_reason: "refusal", stop_details: null }) });
+  assert.ok(rn.status === "INVALID_OUTPUT" && /refused/.test(rn.message) && !/category/.test(rn.message));
+  const text = await callTool(S, { system: "s", user: "u", tool: BACKCHARGE_TOOL }, { fetcher: reply({ content: [{ type: "text", text: "Here you go" }], stop_reason: "end_turn" }) });
+  assert.ok(text.status === "INVALID_OUTPUT" && /got 0/.test(text.message));
+});
+
 test("API key hygiene: trailing newline trimmed, control characters refused before any request", async () => {
   assert.deepEqual(normalizeApiKey("sk-abc\r\n"), { ok: true, key: "sk-abc" });
   assert.equal(normalizeApiKey("sk-a\u0000bc").ok, false);
@@ -115,6 +151,11 @@ test("API key hygiene: trailing newline trimmed, control characters refused befo
   assert.ok(s.ok && s.settings.apiKey === "sk-x" && s.settings.model === "claude-opus-5-5");
   const m = settingsFromEnv({ CONTRA_ANTHROPIC_API_KEY: "sk-x", CONTRA_MODEL: "claude-fable-5-1" });
   assert.ok(m.ok && m.settings.model === "claude-fable-5-1");
+  assert.ok(s.ok && s.settings.effort === "medium");
+  const hi = settingsFromEnv({ CONTRA_ANTHROPIC_API_KEY: "sk-x", CONTRA_EFFORT: "high" });
+  assert.ok(hi.ok && hi.settings.effort === "high");
+  const bad = settingsFromEnv({ CONTRA_ANTHROPIC_API_KEY: "sk-x", CONTRA_EFFORT: "max" });
+  assert.ok(!bad.ok && /CONTRA_EFFORT must be one of low, medium, high/.test(bad.message));
 });
 
 test("Contra never reads Claude Code's ANTHROPIC_API_KEY or ANTHROPIC_MODEL", () => {
@@ -130,6 +171,10 @@ test("extractResponse wires the notice refs into the prompt and validates agains
   const r = await extractResponse(S, { ...E1, id: "E-4" }, { id: "N-1", backChargeRefs: ["BC-4467", "BC-4468", "BC-4471"] }, { fetcher: f });
   assert.ok(r.ok);
   assert.match(JSON.parse(body).messages[0].content, /Notice N-1 listed: BC-4467, BC-4468, BC-4471/);
+  assert.equal(JSON.parse(body).max_tokens, 16000); // a lower cap would leave thinking no room
+  const hi = await extractResponse({ ...S, effort: "high" }, { ...E1, id: "E-4" }, { id: "N-1", backChargeRefs: ["BC-4467", "BC-4468", "BC-4471"] }, { fetcher: f });
+  assert.ok(hi.ok);
+  assert.deepEqual(JSON.parse(body).output_config, { effort: "high" });
 });
 
 test("amountText with two dollar figures is rejected even when it is inside the sentence", () => {

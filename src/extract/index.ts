@@ -26,7 +26,7 @@ export async function extractResponse(
   opts: CallOptions = {},
 ): Promise<{ ok: true; value: ExtractedResponse; actor: Actor } | { ok: false; reason: string }> {
   const user = `Notice ${notice.id} listed: ${notice.backChargeRefs.join(", ")}\n\n${wrap(email)}`;
-  const r = await callTool(settings, { system: RESPONSE_SYSTEM, user, tool: RESPONSE_TOOL, maxTokens: 1024 }, opts);
+  const r = await callTool(settings, { system: RESPONSE_SYSTEM, user, tool: RESPONSE_TOOL }, opts);
   if (r.status !== "OK") return { ok: false, reason: `${r.status}: ${r.message}` };
   const p = parseResponse(r.toolInput, email, notice.id, notice.backChargeRefs);
   return p.ok ? { ok: true, value: p.value, actor: { kind: "llm", id: "extractor", model: r.model } } : p;
