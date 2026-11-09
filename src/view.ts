@@ -2,7 +2,7 @@ import type { AuditEvent } from "./audit.ts";
 import type { App } from "./app.ts";
 import { DEMO_BILL, DEMO_SC } from "./commands.ts";
 import { formatUsd } from "./money.ts";
-import type { Actor, BackCharge, Credit, HoldReason, Notice } from "./types.ts";
+import { EMAIL_INGESTED, type Actor, type BackCharge, type Credit, type HoldReason, type Notice } from "./types.ts";
 
 /**
  * Pure screen data. Screens render this and nothing else: every status word, amount and available
@@ -101,6 +101,8 @@ export interface Screens {
   now: string;
   /** Who produced the extractions on screen. "sample" must be shown as hand-written, never as AI output. */
   extractionSource: "model" | "sample" | "mixed" | null;
+  /** Where the Inbox's PM emails were read from: "eml" (.eml files), "builtin" (built-in sample), "mixed", or null before ingest. */
+  emailSource: "eml" | "builtin" | "mixed" | null;
   nextStep: { text: string; action: Action | null };
   inbox: InboxRow[];
   outbox: { id: string; total: string; refs: string[]; body: string; status: Status; actions: Action[] }[];
@@ -229,9 +231,15 @@ export function buildScreens(app: App): Screens {
   const extractionSource: Screens["extractionSource"] =
     extractedBy.length === 0 ? null : extractedBy.every((k) => k === "llm") ? "model" : extractedBy.some((k) => k === "llm") ? "mixed" : "sample";
 
+  const ingested = [...contra.audit.all()].filter((e) => e.entity === "email" && (e.action === EMAIL_INGESTED.eml || e.action === EMAIL_INGESTED.builtin));
+  const fromEml = ingested.filter((e) => e.action === EMAIL_INGESTED.eml).length;
+  const emailSource: Screens["emailSource"] =
+    ingested.length === 0 ? null : fromEml === ingested.length ? "eml" : fromEml > 0 ? "mixed" : "builtin";
+
   return {
     now: when(clock.now()),
     extractionSource,
+    emailSource,
     nextStep: nextStep(app),
     inbox,
     outbox,

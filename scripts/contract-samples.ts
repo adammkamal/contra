@@ -6,6 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DEFAULT_EML_DIR, loadPmEmails } from "../ingest/eml.ts";
 import { App } from "../src/app.ts";
 import * as cmd from "../src/commands.ts";
 import { backChargeDetail, buildScreens, nextStep } from "../src/view.ts";
@@ -15,6 +16,8 @@ rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 const write = (name: string, data: unknown) => writeFileSync(join(out, name), JSON.stringify(data, null, 2) + "\n");
 
+// Same email source as the API: fixtures/emails/*.eml when present.
+const pmEmails = await loadPmEmails(join(dirname(fileURLToPath(import.meta.url)), "..", DEFAULT_EML_DIR));
 const tmp = mkdtempSync(join(tmpdir(), "contra-samples-"));
 const app = new App(join(tmp, "s.db"), { start: new Date("2026-11-07T15:00:00Z") });
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50);
@@ -24,7 +27,7 @@ write(`${String(i).padStart(2, "0")}-${slug(nextStep(app).text)}.screens.json`, 
 for (;;) {
   const step = nextStep(app);
   if (!step.action) break;
-  if (step.action.command === "ingestPmEmails") cmd.ingestPmEmails(app, { fixturesDir: null });
+  if (step.action.command === "ingestPmEmails") cmd.ingestPmEmails(app, { fixturesDir: null, ...(pmEmails ? { emails: pmEmails.emails, emailOrigin: pmEmails.origin } : {}) });
   else cmd.runAction(app, step.action);
   i++;
   write(`${String(i).padStart(2, "0")}-after-${slug(step.text)}.screens.json`, buildScreens(app));

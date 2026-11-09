@@ -1,13 +1,14 @@
 /**
- * Zero-dependency JSON API over Contra, for a frontend that can't import the TypeScript core directly.
+ * JSON API over Contra (node:http only), for a frontend that can't import the TypeScript core directly.
  * Same functions as the in-process path: buildScreens / backChargeDetail / creditMemo to read,
- * runAction to change state. Binds to 127.0.0.1 by default; it's a local demo server, not production.
+ * runAction to change state. PM emails come from fixtures/emails/*.eml via ingest/eml.ts when present. Binds to 127.0.0.1 by default; it's a local demo server, not production.
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { dirname } from "node:path";
 import { App } from "../src/app.ts";
-import { NotOffered, runAction, type ActionInput } from "../src/commands.ts";
+import { DEFAULT_EML_DIR, EmlError, loadPmEmails } from "../ingest/eml.ts";
+import { NotOffered, runAction, type ActionInput, type PmEmailSource } from "../src/commands.ts";
 import { IneligibleForCredit } from "../src/credits.ts";
 import { IllegalTransition } from "../src/state.ts";
 import { backChargeDetail, buildScreens, type Action } from "../src/view.ts";
@@ -17,6 +18,11 @@ export interface ApiOptions {
   start?: Date;
   corsOrigin?: string;
   maxBodyBytes?: number;
+  /**
+   * Folder of PM .eml files for "Ingest PM emails" (read through ingest/eml.ts, re-read on reset).
+   * Default fixtures/emails; when it's missing or empty, or this is null, the built-in sample is used.
+   */
+  emlDir?: string | null;
 }
 
 const COMMANDS: Record<Action["command"], Record<string, "string" | "number" | "string[]">> = {
@@ -59,10 +65,19 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
   mkdirSync(dirname(opts.dbPath), { recursive: true });
   let app = new App(opts.dbPath, opts.start ? { start: opts.start } : {});
 
+  // mailparser is async and runAction is sync, so the files are read up front and awaited before an action.
+  const loadEmails = (): Promise<PmEmailSource | null> => {
+    const p = opts.emlDir === null ? Promise.resolve(null) : loadPmEmails(opts.emlDir ?? DEFAULT_EML_DIR);
+    p.catch(() => {}); // reported when an action awaits it, not as an unhandled rejection
+    return p;
+  };
+  let pmEmails = loadEmails();
+
   const reset = () => {
     app.close();
     for (const suffix of ["", "-wal", "-shm"]) if (existsSync(opts.dbPath + suffix)) rmSync(opts.dbPath + suffix);
     app = new App(opts.dbPath, opts.start ? { start: opts.start } : {});
+    pmEmails = loadEmails();
   };
 
   const send = (res: ServerResponse, status: number, body: unknown) => {
@@ -103,6 +118,7 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
     if (e && typeof e === "object" && "status" in e && typeof (e as { status: unknown }).status === "number") return (e as { status: number }).status;
     if (e instanceof IllegalTransition || e instanceof IneligibleForCredit || e instanceof NotOffered) return 409;
     if (e instanceof Error && /^no (back-charge|notice|credit|bill|subcontract)\b/.test(e.message)) return 404;
+    if (e instanceof EmlError) return 500;
     if (e instanceof Error) return 409;
     return 500;
   };
@@ -136,13 +152,14 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
           ...(typeof rawInput.choice === "string" ? { choice: rawInput.choice } : {}),
           ...(typeof rawInput.reason === "string" ? { reason: rawInput.reason } : {}),
         };
-        runAction(app, action, input);
+        runAction(app, action, input, action.command === "ingestPmEmails" ? { pmEmails: await pmEmails } : {});
         return send(res, 200, { ok: true, screens: buildScreens(app) });
       }
       return send(res, 404, { ok: false, error: `no route ${req.method} ${path}` });
     } catch (e) {
       const status = statusFor(e);
-      return send(res, status, { ok: false, error: status === 500 ? "internal error" : e instanceof Error ? e.message : String(e) });
+      const show = e instanceof EmlError || (status !== 500 && e instanceof Error);
+      return send(res, status, { ok: false, error: show ? (e as Error).message : status === 500 ? "internal error" : String(e) });
     }
   });
 

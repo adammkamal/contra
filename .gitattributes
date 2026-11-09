@@ -1,0 +1,2 @@
+# .eml fixtures are byte-exact (CRLF, quoted-printable soft breaks): never convert line endings.
+*.eml -text

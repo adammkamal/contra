@@ -14,10 +14,13 @@ Next.js inside this repo.
 import { App } from "./src/app.ts";
 import { runAction } from "./src/commands.ts";
 import { buildScreens, backChargeDetail, type Action } from "./src/view.ts";
+import { loadPmEmails } from "./ingest/eml.ts";
 // One App per server process, kept on globalThis; Node.js runtime only (node:sqlite).
 const app = (globalThis as any).__contra ??= new App("data/demo.db");
+// PM emails from fixtures/emails/*.eml (null when the folder is missing: built-in sample). Async: load once.
+const pmEmails = (globalThis as any).__contraEmails ??= await loadPmEmails();
 buildScreens(app);                    // read
-runAction(app, action, { choice, reason }); // change state (one function for every button)
+runAction(app, action, { choice, reason }, { pmEmails }); // change state (one function for every button)
 backChargeDetail(app, "BC-4470");     // detail screen
 app.ctx.contra.creditMemo("VC-1");    // { filename, text }
 ```
@@ -49,6 +52,7 @@ Show the message; don't retry.
 |---|---|
 | `now` | The demo clock (it moves when "advance a week" runs). |
 | `extractionSource` | `"model"`, `"sample"`, `"mixed"` or `null`. When it is `"sample"`, the Inbox must say **"Sample extractions (hand-written), not model output"**. |
+| `emailSource` | `"eml"`, `"builtin"`, `"mixed"` or `null` (before ingest). Where the Inbox's PM emails were read from. Show it in the Inbox beside the extraction note: **"Emails: .eml files"** for `"eml"`, **"Emails: built-in sample"** for `"builtin"`, **"Emails: .eml files and built-in sample"** for `"mixed"`. |
 | `nextStep` | `{ text, action }` for the presenter bar. Highlight `action`'s button. `action` is `null` only at "Demo complete". |
 | `opener` | The missed back-charges screen. Always show **"Sample data"**. Totals are already formatted; rows carry `ref`, `status`, `amount` and `evidence`. |
 | `inbox[]` | `ref`, `emailSubject`, `vendorAsWritten`, `amount`, `sourceSentence` (show beside the amount), `linkExplanation[]`, `status`, `actions[]`. |
@@ -97,7 +101,7 @@ A button only appears when its action is legal right now. Don't add buttons the 
 | Field | Contents |
 |---|---|
 | Identity | `ref`, `description`, `amount`, `status` |
-| Source | `vendorAsWritten`, `jobRef`, `email` (`{ id, subject, from, body }`), `sourceSentence` (highlight it inside `email.body`), `disputeSentence` |
+| Source | `vendorAsWritten`, `jobRef`, `email` (`{ id, subject, from, body }`), `sourceSentence` (highlight it inside `email.body`), `disputeSentence`. A sentence can cross a line break in `body` (an .eml's HTML part is re-wrapped), so match it with runs of whitespace treated as equal. |
 | `link` | `subcontractId` and `explanation[]`, e.g. alias, then party, then job |
 | `clause` | `section`, `text` (quote it), `responseWindow` (e.g. "5 working days"), `deductionAllowed`, `noticeRequired`. Can be `null`. |
 | `eligibility` | `status`, `holdReasons[]` (already in words), `waitingFor[]`, `trace[]` (lines beginning PASS, HOLD or WAIT) |

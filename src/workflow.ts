@@ -9,6 +9,7 @@ import { disputeSentencesFor, normalize, verifyAmountEvidence, verifySpan } from
 import { transitionBackCharge, transitionCredit, transitionNotice } from "./state.ts";
 import type { MockERP } from "./mocks/erp.ts";
 import { planApplication, type PaymentsPlatform, type PlannedApplication } from "./mocks/ramp.ts";
+import { EMAIL_INGESTED, type EmailOrigin } from "./types.ts";
 import type {
   Actor,
   BackCharge,
@@ -101,9 +102,9 @@ export class Contra {
 
   // ---- Step 1: ingest PM emails ------------------------------------------------------------
 
-  ingestBackChargeEmail(email: Email, extracted: ExtractedBackCharge[], extractor: Actor): BackCharge[] {
+  ingestBackChargeEmail(email: Email, extracted: ExtractedBackCharge[], extractor: Actor, origin: EmailOrigin = "builtin"): BackCharge[] {
     this.emails.set(email.id, email);
-    this.d.log.append({ actor: SYSTEM, entity: "email", entityId: email.id, action: "ingested", from: null, to: null, evidence: [email.subject] });
+    this.d.log.append({ actor: SYSTEM, entity: "email", entityId: email.id, action: EMAIL_INGESTED[origin], from: null, to: null, evidence: [email.subject] });
     const out: BackCharge[] = [];
 
     for (const x of extracted) {

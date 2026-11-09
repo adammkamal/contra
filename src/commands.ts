@@ -6,7 +6,7 @@ import { isOffered } from "./view.ts";
 export class NotOffered extends Error {}
 import { cents } from "./money.ts";
 import { demoReply } from "./seed.ts";
-import type { Actor, ExtractedBackCharge, ExtractedResponse } from "./types.ts";
+import type { Actor, Email, EmailOrigin, ExtractedBackCharge, ExtractedResponse } from "./types.ts";
 
 /**
  * Every button in the UI maps to exactly one of these. Each runs inside app.run (atomic).
@@ -19,16 +19,35 @@ export const DEMO_BILL = "B-SUM-48K";
 export const DEFAULT_FIXTURES_DIR = "fixtures/extractions";
 
 /**
- * Ingests the demo PM emails. Source, in order:
+ * PM emails read outside src/ (ingest/eml.ts loads fixtures/emails/*.eml) and injected here, so src/
+ * needs no mail-parsing dependency. Ids must match the seed's (E-1..E-3) for recorded extractions to apply.
+ */
+export interface PmEmailSource {
+  origin: EmailOrigin;
+  emails: Email[];
+}
+
+/**
+ * Ingests the demo PM emails: `emails` when given (from `emailOrigin`, required with it), else the
+ * built-in sample in src/seed.ts. Extractions, in order:
  *  1. `extractions` passed in (with the `extractor` that produced them);
  *  2. recorded model output in `fixturesDir` (written by `npm run extract:live` on a full pass);
  *  3. the hand-written sample in src/seed.ts, logged as SAMPLE_EXTRACTIONS, never as the model.
  */
 export function ingestPmEmails(
   app: App,
-  opts: { extractions?: Record<string, ExtractedBackCharge[]>; extractor?: Actor; fixturesDir?: string | null } = {},
-): { refs: string[]; source: "model" | "sample" | "provided" } {
+  opts: {
+    extractions?: Record<string, ExtractedBackCharge[]>;
+    extractor?: Actor;
+    fixturesDir?: string | null;
+    emails?: Email[];
+    emailOrigin?: EmailOrigin;
+  } = {},
+): { refs: string[]; source: "model" | "sample" | "provided"; emailOrigin: EmailOrigin } {
+  if (opts.emails && !opts.emailOrigin) throw new Error("provided emails need their origin");
   return app.run(({ contra, seed }) => {
+    const emails = opts.emails ?? seed.emails;
+    const emailOrigin: EmailOrigin = opts.emails ? opts.emailOrigin! : "builtin";
     let ex: Record<string, ExtractedBackCharge[]>;
     let actor: Actor;
     let source: "model" | "sample" | "provided";
@@ -36,12 +55,12 @@ export function ingestPmEmails(
       if (!opts.extractor) throw new Error("provided extractions need the extractor that produced them");
       [ex, actor, source] = [opts.extractions, opts.extractor, "provided"];
     } else {
-      const rec = opts.fixturesDir === null ? null : loadFixtures(opts.fixturesDir ?? DEFAULT_FIXTURES_DIR, seed.emails.map((e) => e.id));
+      const rec = opts.fixturesDir === null ? null : loadFixtures(opts.fixturesDir ?? DEFAULT_FIXTURES_DIR, emails.map((e) => e.id));
       if (rec) [ex, actor, source] = [rec.extractions, { kind: "llm", id: "extractor", model: rec.model }, "model"];
       else [ex, actor, source] = [seed.extractions, SAMPLE_EXTRACTIONS, "sample"];
     }
-    const refs = seed.emails.flatMap((e) => contra.ingestBackChargeEmail(e, ex[e.id] ?? [], actor).map((b) => b.ref));
-    return { refs, source };
+    const refs = emails.flatMap((e) => contra.ingestBackChargeEmail(e, ex[e.id] ?? [], actor, emailOrigin).map((b) => b.ref));
+    return { refs, source, emailOrigin };
   });
 }
 
@@ -118,11 +137,17 @@ export interface ActionInput {
  * The single dispatcher every frontend uses (Next server action or HTTP API). Exhaustive: adding an
  * Action variant without a case here is a type error.
  */
-export function runAction(app: App, action: import("./view.ts").Action, input: ActionInput = {}): void {
+export function runAction(
+  app: App,
+  action: import("./view.ts").Action,
+  input: ActionInput = {},
+  /** Injected by the host: where "Ingest PM emails" reads from. Absent or null: the built-in sample. */
+  sources: { pmEmails?: PmEmailSource | null } = {},
+): void {
   if (!isOffered(app, action)) throw new NotOffered(`${action.command} is not available right now (refresh the screen)`);
   switch (action.command) {
     case "ingestPmEmails":
-      ingestPmEmails(app);
+      ingestPmEmails(app, sources.pmEmails ? { emails: sources.pmEmails.emails, emailOrigin: sources.pmEmails.origin } : {});
       return;
     case "confirmLink":
       return confirmLink(app, action.ref);

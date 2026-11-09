@@ -52,6 +52,12 @@ export interface Email {
   body: string;
 }
 
+/** Where an ingested PM email came from: an .eml file read by ingest/eml.ts, or the built-in sample in seed.ts. */
+export type EmailOrigin = "eml" | "builtin";
+
+/** Audit action for an ingested PM email, by origin. "ingested" alone (older logs too) means built-in. */
+export const EMAIL_INGESTED: Record<EmailOrigin, string> = { builtin: "ingested", eml: "ingested from .eml file" };
+
 /** A sentence quoted from a specific email. Must pass the span check before use. */
 export interface Evidence {
   emailId: string;

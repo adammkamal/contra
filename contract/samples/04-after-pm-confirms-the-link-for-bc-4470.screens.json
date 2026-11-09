@@ -1,6 +1,7 @@
 {
   "now": "2026-11-07 15:00 UTC",
   "extractionSource": "sample",
+  "emailSource": "eml",
   "nextStep": {
     "text": "PM confirms the link for BC-4471",
     "action": {
@@ -172,7 +173,7 @@
       "seq": 6,
       "at": "2026-11-07 15:00 UTC",
       "actor": "Contra",
-      "what": "email E-3: ingested",
+      "what": "email E-3: ingested from .eml file",
       "evidence": [
         "Summit MOB - missed inspection"
       ]
@@ -191,7 +192,7 @@
       "seq": 4,
       "at": "2026-11-07 15:00 UTC",
       "actor": "Contra",
-      "what": "email E-2: ingested",
+      "what": "email E-2: ingested from .eml file",
       "evidence": [
         "RE: Summit corridor patch"
       ]
@@ -218,7 +219,7 @@
       "seq": 1,
       "at": "2026-11-07 15:00 UTC",
       "actor": "Contra",
-      "what": "email E-1: ingested",
+      "what": "email E-1: ingested from .eml file",
       "evidence": [
         "Summit - back-charges L2"
       ]

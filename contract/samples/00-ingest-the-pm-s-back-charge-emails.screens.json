@@ -1,6 +1,7 @@
 {
   "now": "2026-11-07 15:00 UTC",
   "extractionSource": null,
+  "emailSource": null,
   "nextStep": {
     "text": "Ingest the PM's back-charge emails",
     "action": {
