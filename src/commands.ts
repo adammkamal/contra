@@ -1,5 +1,9 @@
-import { AP, CONTROLLER, PM, RECORDED_EXTRACTOR } from "./actors.ts";
+import { AP, CONTROLLER, PM, SAMPLE_EXTRACTIONS } from "./actors.ts";
 import type { App } from "./app.ts";
+import { loadFixtures } from "./extract/index.ts";
+import { isOffered } from "./view.ts";
+
+export class NotOffered extends Error {}
 import { cents } from "./money.ts";
 import { demoReply } from "./seed.ts";
 import type { Actor, ExtractedBackCharge, ExtractedResponse } from "./types.ts";
@@ -12,10 +16,32 @@ import type { Actor, ExtractedBackCharge, ExtractedResponse } from "./types.ts";
 export const DEMO_SC = "SC-SUM-0912";
 export const DEMO_BILL = "B-SUM-48K";
 
-export function ingestPmEmails(app: App, opts: { extractions?: Record<string, ExtractedBackCharge[]>; extractor?: Actor } = {}) {
+export const DEFAULT_FIXTURES_DIR = "fixtures/extractions";
+
+/**
+ * Ingests the demo PM emails. Source, in order:
+ *  1. `extractions` passed in (with the `extractor` that produced them);
+ *  2. recorded model output in `fixturesDir` (written by `npm run extract:live` on a full pass);
+ *  3. the hand-written sample in src/seed.ts, logged as SAMPLE_EXTRACTIONS, never as the model.
+ */
+export function ingestPmEmails(
+  app: App,
+  opts: { extractions?: Record<string, ExtractedBackCharge[]>; extractor?: Actor; fixturesDir?: string | null } = {},
+): { refs: string[]; source: "model" | "sample" | "provided" } {
   return app.run(({ contra, seed }) => {
-    const ex = opts.extractions ?? seed.extractions;
-    return seed.emails.flatMap((e) => contra.ingestBackChargeEmail(e, ex[e.id] ?? [], opts.extractor ?? RECORDED_EXTRACTOR).map((b) => b.ref));
+    let ex: Record<string, ExtractedBackCharge[]>;
+    let actor: Actor;
+    let source: "model" | "sample" | "provided";
+    if (opts.extractions) {
+      if (!opts.extractor) throw new Error("provided extractions need the extractor that produced them");
+      [ex, actor, source] = [opts.extractions, opts.extractor, "provided"];
+    } else {
+      const rec = opts.fixturesDir === null ? null : loadFixtures(opts.fixturesDir ?? DEFAULT_FIXTURES_DIR, seed.emails.map((e) => e.id));
+      if (rec) [ex, actor, source] = [rec.extractions, { kind: "llm", id: "extractor", model: rec.model }, "model"];
+      else [ex, actor, source] = [seed.extractions, SAMPLE_EXTRACTIONS, "sample"];
+    }
+    const refs = seed.emails.flatMap((e) => contra.ingestBackChargeEmail(e, ex[e.id] ?? [], actor).map((b) => b.ref));
+    return { refs, source };
   });
 }
 
@@ -40,7 +66,8 @@ export function ingestSubReply(app: App, noticeId: string, opts: { extraction?: 
     const n = contra.notices.get(noticeId);
     if (!n || !n.sentAt) throw new Error(`notice ${noticeId} has not been sent`);
     const r = demoReply(n.id, n.body, clock.now());
-    contra.ingestSubResponse(r.email, opts.extraction ?? r.extraction, opts.extractor ?? RECORDED_EXTRACTOR);
+    if (opts.extraction && !opts.extractor) throw new Error("a provided reply extraction needs the extractor that produced it");
+    contra.ingestSubResponse(r.email, opts.extraction ?? r.extraction, opts.extractor ?? SAMPLE_EXTRACTIONS);
   });
 }
 
@@ -78,4 +105,65 @@ export function turnOnCredits(app: App, billId = DEMO_BILL) {
 
 export function payBill(app: App, billId = DEMO_BILL) {
   return app.run(({ contra }) => contra.payBill(billId, AP).paidCents);
+}
+
+export interface ActionInput {
+  /** For chooseSubcontract: the subcontract the PM picked (must be one of action.options). */
+  choice?: string;
+  /** For rejectCredit: the reason the controller typed. */
+  reason?: string;
+}
+
+/**
+ * The single dispatcher every frontend uses (Next server action or HTTP API). Exhaustive: adding an
+ * Action variant without a case here is a type error.
+ */
+export function runAction(app: App, action: import("./view.ts").Action, input: ActionInput = {}): void {
+  if (!isOffered(app, action)) throw new NotOffered(`${action.command} is not available right now (refresh the screen)`);
+  switch (action.command) {
+    case "ingestPmEmails":
+      ingestPmEmails(app);
+      return;
+    case "confirmLink":
+      return confirmLink(app, action.ref);
+    case "chooseSubcontract": {
+      if (!input.choice || !action.options.includes(input.choice)) throw new Error(`choose one of: ${action.options.join(", ")}`);
+      return confirmLink(app, action.ref, input.choice);
+    }
+    case "draftNotice":
+      draftNotice(app, action.subcontractId);
+      return;
+    case "approveNotice":
+      return approveNotice(app, action.noticeId);
+    case "sendNotice":
+      return sendNotice(app, action.noticeId);
+    case "ingestSubReply":
+      return ingestSubReply(app, action.noticeId);
+    case "advanceDays":
+      return advanceDays(app, action.days);
+    case "evaluateAll":
+      evaluateAll(app);
+      return;
+    case "proposeCredit":
+      proposeCredit(app, action.subcontractId);
+      return;
+    case "approveCredit":
+      return approveCredit(app, action.creditId);
+    case "rejectCredit": {
+      const why = (input.reason ?? "").trim();
+      if (!why) throw new Error("a rejection needs a reason");
+      return rejectCredit(app, action.creditId, why.slice(0, 500));
+    }
+    case "billArrives":
+      return billArrives(app);
+    case "turnOnCredits":
+      return turnOnCredits(app, action.billId);
+    case "payBill":
+      payBill(app, action.billId);
+      return;
+    default: {
+      const never: never = action;
+      throw new Error(`unknown action ${JSON.stringify(never)}`);
+    }
+  }
 }

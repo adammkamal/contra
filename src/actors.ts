@@ -4,4 +4,8 @@ import type { Actor } from "./types.ts";
 export const PM: Actor = { kind: "human", id: "dana.ortiz", role: "pm" };
 export const CONTROLLER: Actor = { kind: "human", id: "lee.chen", role: "controller" };
 export const AP: Actor = { kind: "human", id: "sam.ap", role: "ap" };
-export const RECORDED_EXTRACTOR: Actor = { kind: "llm", id: "extractor", model: "recorded" };
+/**
+ * Hand-written sample extractions (src/seed.ts). Deliberately NOT an llm actor: the audit log and the
+ * screens must never credit hand-written data to the model.
+ */
+export const SAMPLE_EXTRACTIONS: Actor = { kind: "system", id: "sample-extractions" };

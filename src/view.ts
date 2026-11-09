@@ -16,6 +16,7 @@ export interface Status {
   tone: Tone;
 }
 export type Action =
+  | { command: "ingestPmEmails" }
   | { command: "confirmLink"; ref: string }
   | { command: "chooseSubcontract"; ref: string; options: string[] }
   | { command: "draftNotice"; subcontractId: string }
@@ -81,6 +82,7 @@ const CREDIT_STATUS: Record<Credit["state"], Status> = {
 export function actorLabel(a: Actor): string {
   if (a.kind === "human") return `${a.id} (${a.role === "pm" ? "PM" : a.role === "ap" ? "AP" : "Controller"})`;
   if (a.kind === "llm") return `AI extractor (${a.model})`;
+  if (a.id === "sample-extractions") return "Sample extractions (hand-written)";
   return "Contra";
 }
 
@@ -97,6 +99,8 @@ export interface InboxRow {
 
 export interface Screens {
   now: string;
+  /** Who produced the extractions on screen. "sample" must be shown as hand-written, never as AI output. */
+  extractionSource: "model" | "sample" | "mixed" | null;
   nextStep: { text: string; action: Action | null };
   inbox: InboxRow[];
   outbox: { id: string; total: string; refs: string[]; body: string; status: Status; actions: Action[] }[];
@@ -221,8 +225,13 @@ export function buildScreens(app: App): Screens {
       evidence: [...e.evidence],
     }));
 
+  const extractedBy = [...contra.audit.all()].filter((e) => e.entity === "backcharge" && e.to === "extracted").map((e) => e.actor.kind);
+  const extractionSource: Screens["extractionSource"] =
+    extractedBy.length === 0 ? null : extractedBy.every((k) => k === "llm") ? "model" : extractedBy.some((k) => k === "llm") ? "mixed" : "sample";
+
   return {
     now: when(clock.now()),
+    extractionSource,
     nextStep: nextStep(app),
     inbox,
     outbox,
@@ -242,7 +251,7 @@ export function nextStep(app: App): { text: string; action: Action | null } {
   const credits = [...contra.credits.values()];
   const bill = ramp.bills.find((b) => b.id === DEMO_BILL);
 
-  if (bcs.length === 0) return { text: "Ingest the PM's back-charge emails", action: null };
+  if (bcs.length === 0) return { text: "Ingest the PM's back-charge emails", action: { command: "ingestPmEmails" } };
   const toConfirm = bcs.find((b) => b.state === "extracted" || b.state === "needs_review");
   if (toConfirm) return { text: `PM confirms the link for ${toConfirm.ref}`, action: { command: "confirmLink", ref: toConfirm.ref } };
   if (notices.length === 0) return { text: "Draft the back-charge notice", action: { command: "draftNotice", subcontractId: DEMO_SC } };
@@ -263,4 +272,78 @@ export function nextStep(app: App): { text: string; action: Action | null } {
   if (bill.status === "approved" && !bill.applyCredits) return { text: "Turn on credits for the bill", action: { command: "turnOnCredits", billId: bill.id } };
   if (bill.status === "approved") return { text: "Pay the bill (simulated)", action: { command: "payBill", billId: bill.id } };
   return { text: "Demo complete", action: null };
+}
+
+export interface BackChargeDetail {
+  ref: string;
+  description: string;
+  amount: string;
+  status: Status;
+  vendorAsWritten: string;
+  jobRef: string;
+  email: { id: string; subject: string; from: string; body: string } | null;
+  sourceSentence: string;
+  disputeSentence: string | null;
+  link: { subcontractId: string | null; explanation: string[] };
+  /** The subcontract's back-charge clause, quoted, or null if not linked / no clause. */
+  clause: { section: string; text: string; responseWindow: string; deductionAllowed: boolean; noticeRequired: boolean } | null;
+  eligibility: { status: "eligible" | "pending" | "held"; holdReasons: string[]; waitingFor: string[]; trace: string[] };
+  history: { seq: number; at: string; actor: string; what: string; evidence: string[] }[];
+}
+
+const WINDOW_WORDS = { hours: "hours", calendar_days: "calendar days", working_days: "working days" } as const;
+
+/** Everything the back-charge detail screen shows. Read-only. Throws for an unknown ref. */
+export function backChargeDetail(app: App, ref: string): BackChargeDetail {
+  const { contra, erp } = app.ctx;
+  const b = contra.backCharges.get(ref);
+  if (!b) throw new Error(`no back-charge ${ref}`);
+  const email = contra.emails.get(b.extracted.amountEvidence.emailId) ?? null;
+  const proposal = contra.proposals.get(ref);
+  const scId = b.subcontractId ?? (proposal?.kind === "linked" ? proposal.subcontractId : null);
+  const sc = scId ? erp.subcontract(scId) : null;
+  const r = contra.explainEligibility(ref);
+  return {
+    ref,
+    description: b.extracted.description,
+    amount: formatUsd(b.extracted.amountCents),
+    status: backChargeStatus(b),
+    vendorAsWritten: b.extracted.vendorNameAsWritten,
+    jobRef: b.extracted.jobRef,
+    email: email ? { id: email.id, subject: email.subject, from: email.from, body: email.body } : null,
+    sourceSentence: b.extracted.amountEvidence.sentence,
+    disputeSentence: b.extracted.disputeEvidence?.sentence || null,
+    link: { subcontractId: b.subcontractId, explanation: b.linkExplanation.length ? b.linkExplanation : proposal?.kind === "review" ? proposal.reasons : proposal?.kind === "linked" ? proposal.explanation : [] },
+    clause: sc?.clause
+      ? {
+          section: sc.clause.section,
+          text: sc.clause.text,
+          responseWindow: `${sc.clause.responseWindow.amount} ${WINDOW_WORDS[sc.clause.responseWindow.unit]}`,
+          deductionAllowed: sc.clause.deductionAllowed,
+          noticeRequired: sc.clause.noticeRequired,
+        }
+      : null,
+    eligibility: { status: r.status, holdReasons: r.holdReasons.map((h) => HOLD_WORDS[h]), waitingFor: r.pendingReasons, trace: r.trace },
+    history: contra.audit.forEntity("backcharge", ref).map((e) => ({ seq: e.seq, at: when(e.at), actor: actorLabel(e.actor), what: e.action + (e.from || e.to ? ` (${e.from ?? "new"} → ${e.to ?? e.from})` : ""), evidence: [...e.evidence] })),
+  };
+}
+
+/** Every action the screens currently offer. runAction refuses anything else (forged, stale or double-clicked). */
+export function offeredActions(app: App): Action[] {
+  const s = buildScreens(app);
+  const all: Action[] = [
+    ...s.inbox.flatMap((r) => r.actions),
+    ...s.outbox.flatMap((r) => r.actions),
+    ...s.credits.flatMap((r) => r.actions),
+    ...s.bills.flatMap((r) => r.actions),
+    ...(s.nextStep.action ? [s.nextStep.action] : []),
+  ];
+  return all;
+}
+
+const canonical = (a: Action) => JSON.stringify(Object.keys(a).sort().map((k) => [k, (a as Record<string, unknown>)[k]]));
+
+export function isOffered(app: App, action: Action): boolean {
+  const want = canonical(action);
+  return offeredActions(app).some((a) => canonical(a) === want);
 }
