@@ -43,7 +43,10 @@ src/memo.ts          credit memo for the Ramp AP-inbox route
 src/reconcile.ts     read-only "missed back-charges" scan (shadow mode)
 src/store/sqlite.ts  append-only event log + snapshots (node:sqlite, built in)
 src/app.ts           App: the ONLY entry point for UI and scripts
-src/commands.ts      one function per UI button; each runs inside app.run
+src/commands.ts      one function per UI button (each inside app.run) + runAction(app, action, input) dispatcher
+server/api.ts        zero-dependency JSON API over the same functions (npm run api)
+FRONTEND_CONTRACT.md what the frontend may rely on; contract/samples/ = real JSON per demo step
+INTEGRATION.md       how Contra maps onto real Ramp (public docs only)
 src/view.ts          buildScreens(app) / nextStep(app): everything the screens show
 src/actors.ts        demo identities (PM, controller, AP)
 src/extract/         AI extraction: prompt, Anthropic adapter, strict validation, fixtures

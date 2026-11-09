@@ -1,0 +1,54 @@
+{
+  "now": "2026-11-07 15:00 UTC",
+  "extractionSource": null,
+  "nextStep": {
+    "text": "Ingest the PM's back-charge emails",
+    "action": {
+      "command": "ingestPmEmails"
+    }
+  },
+  "inbox": [],
+  "outbox": [],
+  "credits": [],
+  "bills": [],
+  "pmQueue": [],
+  "opener": {
+    "sampleData": true,
+    "notDeducted": "$12,850.00",
+    "possible": "$1,850.00",
+    "deducted": "$5,500.00",
+    "rows": [
+      {
+        "ref": "BC-4391",
+        "status": "deducted",
+        "amount": "$3,100.00",
+        "evidence": "credit VC-OLD-1: \"Backcharge BC-4391 cleanup Lakeview\""
+      },
+      {
+        "ref": "BC-4415",
+        "status": "deducted",
+        "amount": "$2,400.00",
+        "evidence": "short-paid bill B-OLD-1: \"Pay app 3 less BC-4415 glass breakage\""
+      },
+      {
+        "ref": "BC-4402",
+        "status": "possible match",
+        "amount": "$1,850.00",
+        "evidence": "same vendor and amount, no ref: VC-OLD-2"
+      },
+      {
+        "ref": "BC-4410",
+        "status": "not deducted",
+        "amount": "$5,600.00",
+        "evidence": "no credit or short-pay for V-RIDGE names BC-4410 or equals $5,600.00"
+      },
+      {
+        "ref": "BC-4420",
+        "status": "not deducted",
+        "amount": "$7,250.00",
+        "evidence": "no credit or short-pay for V-HARBOR names BC-4420 or equals $7,250.00"
+      }
+    ]
+  },
+  "audit": []
+}

@@ -15,8 +15,10 @@ inline on purpose, so subagents get them even if file imports are not expanded.
 - Put real (non-sample) emails or financial data in git. They go in private/ (gitignored).
 
 ## UI
-- Screens render only `buildScreens(app)` (src/view.ts) plus `contra.explainEligibility` / `contra.creditMemo`.
-- Every button calls exactly one function in src/commands.ts through a server action.
+- The frontend contract is FRONTEND_CONTRACT.md. Screens render only `buildScreens(app)`, `backChargeDetail(app, ref)`
+  and `contra.creditMemo(id)` (or the same data from the JSON API in server/api.ts).
+- Every button sends the Action it was given to `runAction` (src/commands.ts), in-process or via POST /api/action.
+- When `extractionSource` is "sample", the Inbox says the extractions are hand-written, not model output.
 - Every Ramp screen shows a "Simulated Ramp" badge. The opener shows "Sample data".
 - The status word carries the meaning; color only decorates.
 

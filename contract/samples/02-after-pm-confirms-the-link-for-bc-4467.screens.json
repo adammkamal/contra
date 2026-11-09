@@ -1,0 +1,215 @@
+{
+  "now": "2026-11-07 15:00 UTC",
+  "extractionSource": "sample",
+  "nextStep": {
+    "text": "PM confirms the link for BC-4468",
+    "action": {
+      "command": "confirmLink",
+      "ref": "BC-4468"
+    }
+  },
+  "inbox": [
+    {
+      "ref": "BC-4467",
+      "emailSubject": "Summit - back-charges L2",
+      "vendorAsWritten": "Ridgeline Drywall",
+      "amount": "$6,800.00",
+      "sourceSentence": "BC-4467: replace damaged ceiling grid, L2, $6,800.00 per the Apex Ceilings invoice.",
+      "linkExplanation": [
+        "job: \"Summit\" -> SUM-01 Summit Medical Office",
+        "alias: \"Ridgeline Drywall\" -> Ridgeline Interiors LLC (seed)",
+        "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
+      ],
+      "status": {
+        "label": "Linked, no notice yet",
+        "tone": "info"
+      },
+      "actions": []
+    },
+    {
+      "ref": "BC-4468",
+      "emailSubject": "Summit - back-charges L2",
+      "vendorAsWritten": "Ridgeline Drywall",
+      "amount": "$4,700.00",
+      "sourceSentence": "BC-4468: debris haul-off, $4,700.00.",
+      "linkExplanation": [
+        "job: \"Summit\" -> SUM-01 Summit Medical Office",
+        "alias: \"Ridgeline Drywall\" -> Ridgeline Interiors LLC (seed)",
+        "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
+      ],
+      "status": {
+        "label": "Waiting for PM to confirm the link",
+        "tone": "warn"
+      },
+      "actions": [
+        {
+          "command": "confirmLink",
+          "ref": "BC-4468"
+        }
+      ]
+    },
+    {
+      "ref": "BC-4470",
+      "emailSubject": "RE: Summit corridor patch",
+      "vendorAsWritten": "Ridgeline Drywall",
+      "amount": "$2,750.00",
+      "sourceSentence": "BC-4470: re-patch corridor wall after MEP rework, $2,750.00.",
+      "linkExplanation": [
+        "job: \"Summit\" -> SUM-01 Summit Medical Office",
+        "alias: \"Ridgeline Drywall\" -> Ridgeline Interiors LLC (seed)",
+        "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
+      ],
+      "status": {
+        "label": "Waiting for PM to confirm the link",
+        "tone": "warn"
+      },
+      "actions": [
+        {
+          "command": "confirmLink",
+          "ref": "BC-4470"
+        }
+      ]
+    },
+    {
+      "ref": "BC-4471",
+      "emailSubject": "Summit MOB - missed inspection",
+      "vendorAsWritten": "Ridgeline Drywall",
+      "amount": "$4,000.00",
+      "sourceSentence": "BC-4471: overtime for missed inspection, $4,000.00.",
+      "linkExplanation": [
+        "job: \"Summit MOB\" -> SUM-01 Summit Medical Office",
+        "alias: \"Ridgeline Drywall\" -> Ridgeline Interiors LLC (seed)",
+        "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
+      ],
+      "status": {
+        "label": "Waiting for PM to confirm the link",
+        "tone": "warn"
+      },
+      "actions": [
+        {
+          "command": "confirmLink",
+          "ref": "BC-4471"
+        }
+      ]
+    }
+  ],
+  "outbox": [],
+  "credits": [],
+  "bills": [],
+  "pmQueue": [],
+  "opener": {
+    "sampleData": true,
+    "notDeducted": "$12,850.00",
+    "possible": "$1,850.00",
+    "deducted": "$5,500.00",
+    "rows": [
+      {
+        "ref": "BC-4391",
+        "status": "deducted",
+        "amount": "$3,100.00",
+        "evidence": "credit VC-OLD-1: \"Backcharge BC-4391 cleanup Lakeview\""
+      },
+      {
+        "ref": "BC-4415",
+        "status": "deducted",
+        "amount": "$2,400.00",
+        "evidence": "short-paid bill B-OLD-1: \"Pay app 3 less BC-4415 glass breakage\""
+      },
+      {
+        "ref": "BC-4402",
+        "status": "possible match",
+        "amount": "$1,850.00",
+        "evidence": "same vendor and amount, no ref: VC-OLD-2"
+      },
+      {
+        "ref": "BC-4410",
+        "status": "not deducted",
+        "amount": "$5,600.00",
+        "evidence": "no credit or short-pay for V-RIDGE names BC-4410 or equals $5,600.00"
+      },
+      {
+        "ref": "BC-4420",
+        "status": "not deducted",
+        "amount": "$7,250.00",
+        "evidence": "no credit or short-pay for V-HARBOR names BC-4420 or equals $7,250.00"
+      }
+    ]
+  },
+  "audit": [
+    {
+      "seq": 8,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "dana.ortiz (PM)",
+      "what": "backcharge BC-4467: link confirmed (extracted → linked)",
+      "evidence": [
+        "job: \"Summit\" -> SUM-01 Summit Medical Office",
+        "alias: \"Ridgeline Drywall\" -> Ridgeline Interiors LLC (seed)",
+        "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
+      ]
+    },
+    {
+      "seq": 7,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Sample extractions (hand-written)",
+      "what": "backcharge BC-4471: extracted $4,000.00 (new → extracted)",
+      "evidence": [
+        "BC-4471: overtime for missed inspection, $4,000.00."
+      ]
+    },
+    {
+      "seq": 6,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Contra",
+      "what": "email E-3: ingested",
+      "evidence": [
+        "Summit MOB - missed inspection"
+      ]
+    },
+    {
+      "seq": 5,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Sample extractions (hand-written)",
+      "what": "backcharge BC-4470: extracted $2,750.00 (new → extracted)",
+      "evidence": [
+        "BC-4470: re-patch corridor wall after MEP rework, $2,750.00.",
+        "Ridgeline disputes this one, holding until we sort out who caused it."
+      ]
+    },
+    {
+      "seq": 4,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Contra",
+      "what": "email E-2: ingested",
+      "evidence": [
+        "RE: Summit corridor patch"
+      ]
+    },
+    {
+      "seq": 3,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Sample extractions (hand-written)",
+      "what": "backcharge BC-4468: extracted $4,700.00 (new → extracted)",
+      "evidence": [
+        "BC-4468: debris haul-off, $4,700.00."
+      ]
+    },
+    {
+      "seq": 2,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Sample extractions (hand-written)",
+      "what": "backcharge BC-4467: extracted $6,800.00 (new → extracted)",
+      "evidence": [
+        "BC-4467: replace damaged ceiling grid, L2, $6,800.00 per the Apex Ceilings invoice."
+      ]
+    },
+    {
+      "seq": 1,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Contra",
+      "what": "email E-1: ingested",
+      "evidence": [
+        "Summit - back-charges L2"
+      ]
+    }
+  ]
+}
