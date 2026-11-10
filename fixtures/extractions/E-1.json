@@ -15,7 +15,7 @@
     },
     {
       "ref": "BC-4468",
-      "description": "Debris haul-off after three written warnings",
+      "description": "Debris haul-off",
       "amountCents": 470000,
       "amountEvidence": {
         "emailId": "E-1",
@@ -26,5 +26,5 @@
       "disputeNoted": false
     }
   ],
-  "recordedAt": "2026-11-10T07:49:15.964Z"
+  "recordedAt": "2026-11-10T08:05:46.550Z"
 }
