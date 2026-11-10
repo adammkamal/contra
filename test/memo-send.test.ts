@@ -199,7 +199,7 @@ test("secrets: the refresh token, client secret and access token never appear in
       const now = () => Date.UTC(2026, 10, 10, 16);
       const client = new GmailClient(CONFIG, g.transport, now);
       const poller = new InboxPoller({ client, extract: fakeExtract().extract, now });
-      const api = createApiServer({ dbPath: join(mkdtempSync(join(tmpdir(), "contra-sec-")), "d.db"), start: START, emlDir: null, heartbeatMs: 20, memoSender: new GmailMemoSender(client, now), inbox: { poller, intervalMs: 60_000 } });
+      const api = createApiServer({ dbPath: join(mkdtempSync(join(tmpdir(), "contra-sec-")), "d.db"), liveDbPath: join(mkdtempSync(join(tmpdir(), "contra-sec-")), "live.db"), start: START, emlDir: null, heartbeatMs: 20, memoSender: new GmailMemoSender(client, now), inbox: { poller, intervalMs: 60_000 } });
       await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
       const port = (api.server.address() as AddressInfo).port;
       const base = `http://127.0.0.1:${port}`;
@@ -215,6 +215,7 @@ test("secrets: the refresh token, client secret and access token never appear in
         }
         await until(() => sse.text().includes("heartbeat"));
         seen.push(sse.text(), JSON.stringify(buildScreens(api.app())), JSON.stringify([...api.app().ctx.contra.audit.all()]));
+        seen.push(JSON.stringify(buildScreens(api.live()!)), JSON.stringify([...api.live()!.ctx.contra.audit.all()]));
       } finally {
         sse.close();
         await api.close();

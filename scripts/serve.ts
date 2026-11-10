@@ -21,8 +21,10 @@ const modelSettings = () => settingsFromEnv(process.env);
 
 const mode = (process.env.CONTRA_INBOX ?? "").trim();
 if (mode && mode !== "gmail") throw new Error(`CONTRA_INBOX must be "gmail" or unset, got "${mode}"`);
-let live: Pick<ApiOptions, "inbox" | "memoSender"> = {};
+let live: Pick<ApiOptions, "inbox" | "memoSender" | "liveDbPath"> = {};
 let liveNote = "inbox: sample data (set CONTRA_INBOX=gmail for the live inbox)";
+// Live mail goes to its own workspace and database; the scripted demo (data/demo.db) is never touched by the inbox.
+const LIVE_DB = "data/live.db";
 if (mode === "gmail") {
   const intervalMs = pollSecondsFromEnv(process.env) * 1000;
   const dailyCap = liveDailyCapFromEnv(process.env);
@@ -30,11 +32,11 @@ if (mode === "gmail") {
   if (cfg.ok) {
     const client = new GmailClient(cfg.config, fetch, Date.now);
     const poller = new InboxPoller({ client, extract: modelExtractor(modelSettings), now: Date.now, dailyCap });
-    live = { inbox: { poller, intervalMs }, memoSender: new GmailMemoSender(client, Date.now) };
+    live = { liveDbPath: LIVE_DB, inbox: { poller, intervalMs }, memoSender: new GmailMemoSender(client, Date.now) };
     liveNote = `inbox: Gmail, reading ${cfg.config.intake} every ${intervalMs / 1000}s; memos go to ${cfg.config.apInbox}\n  senders allowed: ${cfg.config.allowedSenders.join(", ") || `none (${NO_ALLOWED_SENDERS}: nothing will be ingested)`}; at most ${dailyCap} model calls per UTC day`;
   } else {
     // Not configured: the server keeps running with sample data and /api/health says why.
-    live = { inbox: { poller: new InboxPoller({ client: null, notConfigured: cfg.message, extract: modelExtractor(modelSettings), now: Date.now, dailyCap }), intervalMs } };
+    live = { liveDbPath: LIVE_DB, inbox: { poller: new InboxPoller({ client: null, notConfigured: cfg.message, extract: modelExtractor(modelSettings), now: Date.now, dailyCap }), intervalMs } };
     liveNote = `inbox: ${cfg.message}`;
   }
 }

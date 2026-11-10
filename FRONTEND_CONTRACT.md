@@ -23,6 +23,8 @@ buildScreens(app);                    // read
 runAction(app, action, { choice, reason }, { pmEmails }); // change state (one function for every button)
 backChargeDetail(app, "BC-4470");     // detail screen
 app.ctx.contra.creditMemo("VC-1");    // { filename, text }
+// Live inbox (optional): a second App on its own database, never the demo's. See "Workspaces".
+const live = (globalThis as any).__contraLive ??= new App("data/live.db", { workspace: "live" });
 ```
 
 **B. HTTP JSON API (any stack: Vite, plain React, another language).** Run `npm run api`.
@@ -37,22 +39,24 @@ runs: add your frontend's origin before calling the API from a browser. Requests
 `POST /api/reset` with an empty `{}` body. Anything else, or no Content-Type, is refused with 415 before the
 body is read.
 
+The first five routes take an optional `?workspace=demo|live` (default `demo`; see [Workspaces](#workspaces)).
+
 | Method and path | Returns |
 |---|---|
 | `GET /api/screens` | `Screens` |
 | `POST /api/action` with body `{ "action": <Action>, "input"?: { "choice"?: string, "reason"?: string } }` | `{ "ok": true, "screens": Screens }` |
-| `POST /api/reset` | `{ "ok": true, "screens": Screens }` (fresh demo) |
+| `POST /api/reset` | `{ "ok": true, "screens": Screens }` (that workspace starts over; the other is untouched) |
 | `GET /api/backcharge/:ref` | `BackChargeDetail` |
 | `GET /api/credit/:id/memo` | `{ "filename": string, "text": string }` |
-| `GET /api/health` | `{ "ok": true, "inbox": InboxStatus }` (see [Live inbox and memos](#live-inbox-and-memos)). No secrets. |
+| `GET /api/health` | `{ "ok": true, "workspaces": ["demo"] or ["demo", "live"], "inbox": InboxStatus }` (see [Live inbox and memos](#live-inbox-and-memos)). No secrets. |
 | `GET /api/events` | Server-Sent Events: `screens-changed` and `heartbeat` (see [Real-time updates](#real-time-updates)). |
 | `POST /api/try` with body `{ "subject", "body", "from"?, "to"? }` | `TryResult` (see [Try any email](#try-any-email)). Never changes demo state. |
 
 Errors are `{ "ok": false, "error": "<message to show the user>" }`:
-- **400:** the action isn't one the API knows, or its fields are wrong.
+- **400:** the action isn't one the API knows, or its fields are wrong, or `workspace` isn't `demo` or `live`.
 - **403:** the request's `Origin` isn't in `CONTRA_ALLOWED_ORIGINS`. Checked first, on every method;
   nothing ran.
-- **404:** unknown back-charge, credit or route.
+- **404:** unknown back-charge, credit or route, or `?workspace=live` on a server without a live inbox.
 - **409:** a rule refused it. This includes any action the screens aren't currently offering (a stale
   screen, a double-click or a hand-made request), which comes back as "… is not available right now".
   Nothing changed; refresh the screens.
@@ -71,10 +75,11 @@ Show the message; don't retry.
 
 | Field | Use it for |
 |---|---|
-| `now` | The demo clock (it moves when "advance a week" runs). |
+| `workspace` | `"demo"` or `"live"`: which workspace these screens are. In `"live"`, label the screens **"Live inbox"** so they're never mistaken for the scripted demo. |
+| `now` | The workspace's clock (it moves when "advance a week" runs; simulated in both workspaces). |
 | `extractionSource` | `"model"`, `"sample"`, `"mixed"` or `null`. When it is `"sample"`, the Inbox must say **"Sample extractions (hand-written), not model output"**. |
 | `emailSource` | `"eml"`, `"builtin"`, `"gmail"`, `"mixed"` or `null` (before ingest). Where the Inbox's PM emails were read from. Show it in the Inbox beside the extraction note: **"Emails: .eml files"** for `"eml"`, **"Emails: built-in sample"** for `"builtin"`, **"Emails: Gmail inbox"** for `"gmail"`, **"Emails: more than one source"** for `"mixed"`. |
-| `nextStep` | `{ text, action }` for the presenter bar. Highlight `action`'s button. `action` is `null` only at "Demo complete". |
+| `nextStep` | `{ text, action }` for the presenter bar. Highlight `action`'s button. In `demo`, `action` is `null` only at "Demo complete". In `live`, it is also `null` while waiting for mail ("Waiting for back-charge emails from the live inbox") and while the PM must choose a subcontract in an Inbox row; show the text without a button. |
 | `opener` | The missed back-charges screen. Always show **"Sample data"**. Totals are already formatted; rows carry `ref`, `status`, `amount` and `evidence`. |
 | `inbox[]` | `ref`, `emailSubject`, `vendorAsWritten`, `amount`, `sourceSentence` (show beside the amount), `linkExplanation[]`, `status`, `actions[]`. |
 | `outbox[]` | Notices: `id`, `total`, `refs`, `body` (shown as written, preformatted), `status`, `actions[]`. |
@@ -121,17 +126,49 @@ A button only appears when its action is legal right now. Don't add buttons the 
 ## Real-time updates
 
 `GET /api/events` is a Server-Sent Events stream (use `EventSource`; the same Origin allow-list applies).
-- `event: screens-changed`, `data: {"reason": "action" | "reset" | "inbox"}`: after every successful action,
-  every reset, and every inbox poll that ingested something. Re-read `GET /api/screens`; the event never
-  carries screen data itself.
+- `event: screens-changed`, `data: {"reason": "action" | "reset" | "inbox", "workspace": "demo" | "live"}`:
+  after every successful action, every reset, and every inbox poll that ingested something (always
+  `"live"`). One stream carries both workspaces: re-read `GET /api/screens?workspace=<workspace>` only
+  when it is the workspace on screen. The event never carries screen data itself.
 - `event: heartbeat`, `data: {}`: every 15 seconds, so the connection stays open. Ignore it.
+
+## Workspaces
+
+There are two separate sets of state, each its own App and database:
+
+| | `demo` (default) | `live` |
+|---|---|---|
+| Exists | Always | Only with `CONTRA_INBOX=gmail` (`/api/health` lists it in `workspaces`) |
+| Database | `data/demo.db` | `data/live.db` |
+| Seed | Jobs, subcontracts, aliases, Ramp vendors, the opener's history | The same |
+| Emails | The scripted demo's own (built-in or `fixtures/emails/*.eml`), its scripted sub reply and the $48,000 bill | Only mail from the live inbox. The scripted emails, reply and bill are refused there. |
+| `nextStep` | The demo script (SPEC section 3) | The same workflow for whatever arrived: confirm, notice, window, credit, memo |
+
+Live mail is written only to `live`; the core refuses it in `demo`. So the scripted demo's notice
+($15,500.00), credit ($11,500.00) and payment ($36,500.00) can't be changed through the inbox, even by an
+email about the demo's own subcontract.
+
+Addressing a workspace:
+- **HTTP:** add `?workspace=live` to `GET /api/screens`, `POST /api/action`, `POST /api/reset`,
+  `GET /api/backcharge/:ref` and `GET /api/credit/:id/memo`. No parameter (or `workspace=demo`) is the demo.
+  An action is checked against the screens of the workspace it is sent to, so a button from one workspace
+  sent to the other is refused with 409.
+- **SSE:** one stream, `GET /api/events`; each `screens-changed` names its `workspace`.
+- **Reset:** `POST /api/reset` resets the demo only; `POST /api/reset?workspace=live` resets live only.
+  Resetting live forgets what was ingested, so the next poll reads the intake's newest mail again (up to 20
+  messages, each one model call, counted against the daily cap).
+- **In process:** use the App you opened (`new App("data/live.db", { workspace: "live" })` for live). A
+  database opens only as the workspace it was made for.
+- `POST /api/try` always reads the demo's seed and changes neither workspace.
+- Samples: `contract/samples/live-00-waiting-for-mail.screens.json` and `live-01-after-an-email-arrives.screens.json`
+  (a made-up email with a hand-written extraction).
 
 ## Live inbox and memos
 
 With `CONTRA_INBOX=gmail`, the server polls the demo Gmail inbox and ingests only mail delivered to the PM
-intake address (`<local>+backcharges@<domain>`). Live emails appear in the Inbox like any other, with
-`emailSource` `"gmail"` or `"mixed"`; they never change `nextStep` (the presenter script follows the
-demo's own emails). Credit memos are sent to a stand-in AP inbox (`<local>+ramp-ap@<domain>`), not to Ramp.
+intake address (`<local>+backcharges@<domain>`), into the `live` workspace (`emailSource` `"gmail"`).
+Credit memos are sent to a stand-in AP inbox (`<local>+ramp-ap@<domain>`), not to Ramp, from either
+workspace's credit rows (and from `live`'s `nextStep`).
 
 `GET /api/health` → `inbox`:
 

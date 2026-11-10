@@ -21,7 +21,7 @@ import { CONFIG, fakeExtract, fakeGmail, gmailAuthPass, rfc822, type FakeMessage
 // Live intake spend and sender control. Every address and message here is made up; no network.
 
 const START = new Date("2026-11-07T15:00:00Z");
-const freshApp = () => new App(join(mkdtempSync(join(tmpdir(), "contra-senders-")), "d.db"), { start: START });
+const freshApp = () => new App(join(mkdtempSync(join(tmpdir(), "contra-senders-")), "d.db"), { start: START, workspace: "live" });
 const at = (iso: string) => () => Date.parse(iso);
 
 const msg = (id: string, o: { from?: string; authResults?: string[] } = {}): FakeMessage => ({

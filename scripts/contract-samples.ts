@@ -9,7 +9,9 @@ import { fileURLToPath } from "node:url";
 import { DEFAULT_EML_DIR, loadPmEmails } from "../ingest/eml.ts";
 import { App } from "../src/app.ts";
 import * as cmd from "../src/commands.ts";
+import { SAMPLE_EXTRACTIONS } from "../src/actors.ts";
 import type { MemoSender } from "../src/memo.ts";
+import { cents } from "../src/money.ts";
 import { backChargeDetail, buildScreens, nextStep } from "../src/view.ts";
 import { tryEmail, type TryInput } from "../server/try.ts";
 
@@ -74,5 +76,29 @@ for (const s of trySamples) {
   write(`try-${s.outcome}.json`, { request: s.request, response: { ok: true, ...result } });
 }
 app.close();
+
+// The live workspace (CONTRA_INBOX=gmail): its own App and database, waiting for mail, then after one email
+// from the live inbox. The email is made up and its extraction hand-written (logged as the sample, not the model).
+const live = new App(join(tmp, "live.db"), { start: new Date("2026-11-07T15:00:00Z"), memoSender, workspace: "live" });
+write("live-00-waiting-for-mail.screens.json", buildScreens(live));
+const sentence = "BC-7151: patch the stair core drywall damaged during framing, Summit, $900.00.";
+const liveEmail = {
+  id: "gmail-18c2f0a1b2c3d4e5",
+  from: "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+  to: "contra.demo+backcharges@example.com",
+  subject: "Summit MOB - back-charge for stair core drywall",
+  receivedAt: new Date("2026-11-07T15:00:00Z"),
+  body: `Hi,\n\n${sentence}\n\nThanks,\nDana`,
+  messageId: "<sample-live-1@apexbuilders.example>",
+};
+cmd.ingestInboxEmail(
+  live,
+  liveEmail,
+  [{ ref: "BC-7151", description: "Patch stair core drywall", amountCents: cents(90_000), amountEvidence: { emailId: liveEmail.id, sentence }, vendorNameAsWritten: "Ridgeline Drywall", jobRef: "Summit", disputeNoted: false }],
+  SAMPLE_EXTRACTIONS,
+);
+write("live-01-after-an-email-arrives.screens.json", buildScreens(live));
+live.close();
+
 rmSync(tmp, { recursive: true, force: true });
-console.log(`Wrote ${i + 1} screen states + 3 details + 1 memo + ${trySamples.length} try samples to contract/samples/`);
+console.log(`Wrote ${i + 1} screen states + 3 details + 1 memo + ${trySamples.length} try samples + 2 live-workspace screens to contract/samples/`);

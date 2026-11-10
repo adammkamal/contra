@@ -18,6 +18,14 @@ export const DEMO_BILL = "B-SUM-48K";
 
 export const DEFAULT_FIXTURES_DIR = "fixtures/extractions";
 
+/** Thrown when a command belongs to the other workspace (scripted demo steps in live, live mail in demo). */
+export class WrongWorkspace extends Error {}
+
+/** The scripted demo's own emails, reply and bill exist only in the demo workspace. */
+function demoOnly(app: App, what: string): void {
+  if (app.ctx.workspace !== "demo") throw new WrongWorkspace(`${what} is part of the scripted demo, not the ${app.ctx.workspace} workspace`);
+}
+
 /**
  * PM emails read outside src/ (ingest/eml.ts loads fixtures/emails/*.eml) and injected here, so src/
  * needs no mail-parsing dependency. Ids must match the seed's (E-1..E-3) for recorded extractions to apply.
@@ -45,6 +53,7 @@ export function ingestPmEmails(
   } = {},
 ): { refs: string[]; source: "model" | "sample" | "provided"; emailOrigin: EmailOrigin } {
   if (opts.emails && !opts.emailOrigin) throw new Error("provided emails need their origin");
+  demoOnly(app, "ingesting the demo's PM emails");
   return app.run(({ contra, seed }) => {
     const emails = opts.emails ?? seed.emails;
     const emailOrigin: EmailOrigin = opts.emails ? opts.emailOrigin! : "builtin";
@@ -65,8 +74,9 @@ export function ingestPmEmails(
 }
 
 /**
- * Ingests one email read from a live inbox, with the extraction made for it. Idempotent by Message-ID
- * (the core skips one it has seen: no back-charge, notice or audit entry). Returns whether it was new.
+ * Ingests one email read from a live inbox, with the extraction made for it, into the live workspace only
+ * (a demo App refuses it). Idempotent by Message-ID (the core skips one it has seen: no back-charge, notice
+ * or audit entry). Returns whether it was new.
  */
 export function ingestInboxEmail(
   app: App,
@@ -75,6 +85,8 @@ export function ingestInboxEmail(
   extractor: Actor,
   origin: EmailOrigin = "gmail",
 ): { ingested: boolean; refs: string[] } {
+  // Live mail never reaches the scripted demo: its notice, credit and payment can't change through the inbox.
+  if (app.ctx.workspace !== "live") throw new WrongWorkspace("live inbox mail goes only to the live workspace, never to the demo");
   if (!email.messageId) throw new Error(`inbox email ${email.id} has no Message-ID`);
   if (app.ctx.contra.hasMessage(email.messageId)) return { ingested: false, refs: [] };
   return app.run(({ contra }) => {
@@ -121,6 +133,7 @@ export function sendNotice(app: App, noticeId: string) {
 }
 
 export function ingestSubReply(app: App, noticeId: string, opts: { extraction?: ExtractedResponse; extractor?: Actor } = {}) {
+  demoOnly(app, "the sub's scripted reply");
   app.run(({ contra, clock }) => {
     const n = contra.notices.get(noticeId);
     if (!n || !n.sentAt) throw new Error(`notice ${noticeId} has not been sent`);
@@ -152,6 +165,7 @@ export function rejectCredit(app: App, creditId: string, why: string) {
 
 /** Simulates Ridgeline's $48,000 Summit bill arriving in (simulated) Ramp. */
 export function billArrives(app: App) {
+  demoOnly(app, "the demo bill");
   app.run(({ ramp, clock }) => {
     if (ramp.bills.some((b) => b.id === DEMO_BILL)) throw new Error("demo bill already exists");
     ramp.createBillViaApi({ id: DEMO_BILL, vendorId: "V-RIDGE", jobId: "SUM-01", amountCents: cents(4_800_000), accountingDate: clock.now(), origin: "native" });

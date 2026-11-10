@@ -1,7 +1,7 @@
 /**
  * Lists what the live inbox poll would ingest (npm run inbox:check): date, from, subject, and whether each
  * message would be skipped and why. Reads Gmail only: it ingests nothing and never calls the model.
- * "already ingested" is checked against data/demo.db when it exists (opened read-only for the check).
+ * "already ingested" is checked against data/live.db (the live workspace) when it exists (opened read-only for the check).
  */
 import { existsSync } from "node:fs";
 import { App } from "../src/app.ts";
@@ -17,8 +17,8 @@ if (!cfg.ok) {
   console.error(cfg.message);
   process.exit(2);
 }
-const DB = "data/demo.db";
-const app = existsSync(DB) ? new App(DB) : null;
+const DB = "data/live.db";
+const app = existsSync(DB) ? new App(DB, { workspace: "live" }) : null;
 const client = new GmailClient(cfg.config, fetch, Date.now);
 const poller = new InboxPoller({ client, extract: async () => ({ ok: false, reason: "inbox:check never extracts" }), now: Date.now });
 try {

@@ -6,7 +6,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { dirname } from "node:path";
-import { App } from "../src/app.ts";
+import { App, type Workspace } from "../src/app.ts";
 import { DEFAULT_EML_DIR, EmlError, loadPmEmails } from "../ingest/eml.ts";
 import { NotOffered, runAction, type ActionInput, type PmEmailSource } from "../src/commands.ts";
 import { IneligibleForCredit } from "../src/credits.ts";
@@ -156,7 +156,12 @@ export interface ApiOptions {
   try?: TryApiOptions;
   /** Delivers credit memos (sendCreditMemo). Without one, the action is never offered. */
   memoSender?: MemoSender | null;
-  /** Live inbox polling (CONTRA_INBOX=gmail). Without it, health reports the sample inbox. */
+  /**
+   * The live workspace's database (data/live.db with CONTRA_INBOX=gmail): same seed, none of the scripted
+   * demo's emails. Without it there is no live workspace. Required with `inbox`: live mail never goes to dbPath.
+   */
+  liveDbPath?: string | null;
+  /** Live inbox polling (CONTRA_INBOX=gmail) into the live workspace. Without it, health reports the sample inbox. */
   inbox?: { poller: Pick<InboxPoller, "poll" | "status">; intervalMs: number };
   /** Server-Sent Events heartbeat interval in ms. Default 15,000. */
   heartbeatMs?: number;
@@ -198,11 +203,40 @@ export function parseAction(x: unknown): Action | null {
   return o as unknown as Action;
 }
 
-export function createApiServer(opts: ApiOptions): { server: Server; app: () => App; pollNow: () => Promise<void>; close: () => Promise<void> } {
+export function createApiServer(opts: ApiOptions): {
+  server: Server;
+  /** The demo workspace's App. */
+  app: () => App;
+  /** The live workspace's App, or null when there is none. */
+  live: () => App | null;
+  pollNow: () => Promise<void>;
+  close: () => Promise<void>;
+} {
   const maxBody = opts.maxBodyBytes ?? 64 * 1024;
-  mkdirSync(dirname(opts.dbPath), { recursive: true });
-  const appOptions = { ...(opts.start ? { start: opts.start } : {}), memoSender: opts.memoSender ?? null };
-  let app = new App(opts.dbPath, appOptions);
+  if (opts.inbox && !opts.liveDbPath) throw new Error("a live inbox needs liveDbPath: live mail never goes to the demo database");
+  if (opts.liveDbPath && opts.liveDbPath === opts.dbPath) throw new Error("the live workspace needs its own database file");
+
+  // ---- Workspaces: "demo" (dbPath, the scripted demo) and, with liveDbPath, "live" (the live inbox's
+  // mail only). Two Apps, two databases; every route below picks one by ?workspace=, demo by default.
+  const appOptions = (workspace: Workspace) => ({ ...(opts.start ? { start: opts.start } : {}), memoSender: opts.memoSender ?? null, workspace });
+  const dbPaths = new Map<Workspace, string>([["demo", opts.dbPath]]);
+  if (opts.liveDbPath) dbPaths.set("live", opts.liveDbPath);
+  const apps = new Map<Workspace, App>();
+  for (const [ws, path] of dbPaths) {
+    mkdirSync(dirname(path), { recursive: true });
+    apps.set(ws, new App(path, appOptions(ws)));
+  }
+  const appFor = (ws: Workspace) => apps.get(ws)!;
+  /** ?workspace= : absent or "demo" is the demo; "live" only when this server has one. */
+  const workspaceOf = (url: URL): Workspace => {
+    const raw = url.searchParams.get("workspace");
+    if (raw === null || raw === "demo") return "demo";
+    if (raw === "live") {
+      if (!apps.has("live")) throw Object.assign(new Error("this server has no live workspace (start it with CONTRA_INBOX=gmail)"), { status: 404 });
+      return "live";
+    }
+    throw Object.assign(new Error('workspace must be "demo" or "live"'), { status: 400 });
+  };
 
   // ---- Server-Sent Events: "screens-changed" after every change, plus a heartbeat. Event data never
   // carries state or secrets: the client re-reads GET /api/screens.
@@ -211,18 +245,18 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
     const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
     for (const c of sseClients) c.write(msg);
   };
-  const changed = (reason: "action" | "reset" | "inbox") => broadcast("screens-changed", { reason });
+  const changed = (reason: "action" | "reset" | "inbox", workspace: Workspace) => broadcast("screens-changed", { reason, workspace });
   const heartbeat = setInterval(() => broadcast("heartbeat", {}), opts.heartbeatMs ?? 15_000);
   heartbeat.unref();
 
-  // ---- Inbox polling: never overlapping; the poller records its own errors and never throws.
+  // ---- Inbox polling into the live workspace only: never overlapping; the poller records its own errors and never throws.
   let polling = false;
   const pollNow = async () => {
     if (!opts.inbox || polling) return;
     polling = true;
     try {
-      const r = await opts.inbox.poller.poll(app);
-      if (r.ingested > 0) changed("inbox");
+      const r = await opts.inbox.poller.poll(appFor("live"));
+      if (r.ingested > 0) changed("inbox", "live");
     } catch {
       /* the poller records errors in its status; a timer must never throw */
     } finally {
@@ -241,11 +275,13 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
   };
   let pmEmails = loadEmails();
 
-  const reset = () => {
-    app.close();
-    for (const suffix of ["", "-wal", "-shm"]) if (existsSync(opts.dbPath + suffix)) rmSync(opts.dbPath + suffix);
-    app = new App(opts.dbPath, appOptions);
-    pmEmails = loadEmails();
+  /** Starts one workspace over (its database only; the other workspace is untouched). */
+  const reset = (ws: Workspace) => {
+    const path = dbPaths.get(ws)!;
+    appFor(ws).close();
+    for (const suffix of ["", "-wal", "-shm"]) if (existsSync(path + suffix)) rmSync(path + suffix);
+    apps.set(ws, new App(path, appOptions(ws)));
+    if (ws === "demo") pmEmails = loadEmails();
   };
 
   const allowed = new Set(opts.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS);
@@ -325,7 +361,7 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
       const path = url.pathname.replace(/\/+$/, "") || "/";
       if (req.method === "OPTIONS") return send(res, 204, null);
 
-      if (req.method === "GET" && path === "/api/health") return send(res, 200, { ok: true, inbox: inboxStatus() });
+      if (req.method === "GET" && path === "/api/health") return send(res, 200, { ok: true, workspaces: [...apps.keys()], inbox: inboxStatus() });
       if (req.method === "GET" && path === "/api/events") {
         res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
         res.write("retry: 3000\n\n");
@@ -333,21 +369,24 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
         req.on("close", () => sseClients.delete(res));
         return;
       }
-      if (req.method === "GET" && path === "/api/screens") return send(res, 200, buildScreens(app));
+      if (req.method === "GET" && path === "/api/screens") return send(res, 200, buildScreens(appFor(workspaceOf(url))));
       let m = /^\/api\/backcharge\/([A-Za-z0-9-]{1,20})$/.exec(path);
-      if (req.method === "GET" && m) return send(res, 200, backChargeDetail(app, decodeURIComponent(m[1]!)));
+      if (req.method === "GET" && m) return send(res, 200, backChargeDetail(appFor(workspaceOf(url)), decodeURIComponent(m[1]!)));
       m = /^\/api\/credit\/([A-Za-z0-9-]{1,20})\/memo$/.exec(path);
       if (req.method === "GET" && m) {
         const id = m[1]!;
+        const app = appFor(workspaceOf(url));
         if (!app.ctx.contra.credits.has(id)) return send(res, 404, { ok: false, error: `no credit ${id}` });
         return send(res, 200, app.ctx.contra.creditMemo(id));
       }
       if (req.method === "POST" && path === "/api/reset") {
-        reset();
-        changed("reset");
-        return send(res, 200, { ok: true, screens: buildScreens(app) });
+        const ws = workspaceOf(url);
+        reset(ws);
+        changed("reset", ws);
+        return send(res, 200, { ok: true, screens: buildScreens(appFor(ws)) });
       }
       if (req.method === "POST" && path === "/api/action") {
+        const ws = workspaceOf(url);
         const body = (await readJson(req)) as { action?: unknown; input?: unknown };
         const action = parseAction(body?.action);
         if (!action) return send(res, 400, { ok: false, error: "invalid action; send { action: <an Action from /api/screens>, input?: { choice?, reason? } }" });
@@ -356,8 +395,9 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
           ...(typeof rawInput.choice === "string" ? { choice: rawInput.choice } : {}),
           ...(typeof rawInput.reason === "string" ? { reason: rawInput.reason } : {}),
         };
+        const app = appFor(ws);
         await runAction(app, action, input, action.command === "ingestPmEmails" ? { pmEmails: await pmEmails } : {});
-        changed("action");
+        changed("action", ws);
         return send(res, 200, { ok: true, screens: buildScreens(app) });
       }
       if (req.method === "POST" && path === "/api/try") {
@@ -371,7 +411,7 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
         if (!slot.ok) return send(res, 429, { ok: false, error: slot.error });
         let result: Awaited<ReturnType<typeof tryEmail>>;
         try {
-          result = await tryEmail(app, input, settings, opts.try.callOptions ?? {});
+          result = await tryEmail(appFor("demo"), input, settings, opts.try.callOptions ?? {});
         } catch (e) {
           // The model being unavailable is a 503 with its message; anything else is a bug: a generic 500,
           // with no message or detail that could carry the email's text.
@@ -392,7 +432,8 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
 
   return {
     server,
-    app: () => app,
+    app: () => appFor("demo"),
+    live: () => apps.get("live") ?? null,
     pollNow,
     close: () =>
       new Promise<void>((resolve) => {
@@ -401,7 +442,7 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
         for (const c of sseClients) c.end();
         sseClients.clear();
         server.close(() => {
-          app.close();
+          for (const a of apps.values()) a.close();
           resolve();
         });
         server.closeAllConnections?.();

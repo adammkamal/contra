@@ -8,7 +8,16 @@ import { SqliteStore } from "./store/sqlite.ts";
 import type { Alias } from "./types.ts";
 import { Contra, type ContraState } from "./workflow.ts";
 
+/**
+ * "demo": the scripted demo (its own emails, reply and bill; SPEC section 3). "live": the same ERP,
+ * subcontract and Ramp seed, but none of the scripted emails, reply or bill; mail arrives only from the
+ * live inbox. Each workspace is its own database; a database opens only as the workspace it was made for.
+ */
+export type Workspace = "demo" | "live";
+
 interface AppState {
+  /** Absent in snapshots written before workspaces existed: those are demo. */
+  workspace?: Workspace;
   seedBaseMs: number;
   clockMs: number;
   contra: ContraState;
@@ -24,6 +33,7 @@ export interface Ctx {
   seed: ReturnType<typeof demoSeed>;
   /** Delivers credit memos; null when none is configured (then no memo can be sent). Injected like the clock. */
   memoSender: MemoSender | null;
+  workspace: Workspace;
 }
 
 /**
@@ -36,11 +46,18 @@ export class App {
   #ctx!: Ctx;
   #seedBaseMs!: number;
   readonly #memoSender: MemoSender | null;
+  readonly workspace: Workspace;
 
-  constructor(dbPath: string, opts: { start?: Date; memoSender?: MemoSender | null } = {}) {
+  constructor(dbPath: string, opts: { start?: Date; memoSender?: MemoSender | null; workspace?: Workspace } = {}) {
     this.#memoSender = opts.memoSender ?? null;
+    this.workspace = opts.workspace ?? "demo";
     this.store = new SqliteStore(dbPath);
-    if (!this.store.loadSnapshot()) {
+    const existing = this.store.loadSnapshot<AppState>();
+    if (existing && (existing.workspace ?? "demo") !== this.workspace) {
+      this.store.close();
+      throw new Error(`${dbPath} holds the ${existing.workspace ?? "demo"} workspace, not ${this.workspace}`);
+    }
+    if (!existing) {
       const start = opts.start ?? new SystemClock().now();
       this.#fresh(start);
       this.store.transaction(() => this.#save());
@@ -111,12 +128,13 @@ export class App {
     }
     const deps = { clock, log, erp, ramp };
     const contra = s ? Contra.restore(deps, s.contra) : new Contra(deps);
-    this.#ctx = { clock, contra, erp, ramp, seed, memoSender: this.#memoSender };
+    this.#ctx = { clock, contra, erp, ramp, seed, memoSender: this.#memoSender, workspace: this.workspace };
   }
 
   #save(): void {
     const { clock, contra, erp, ramp } = this.#ctx;
     const state: AppState = {
+      workspace: this.workspace,
       seedBaseMs: this.#seedBaseMs,
       clockMs: clock.now().getTime(),
       contra: contra.snapshot(),

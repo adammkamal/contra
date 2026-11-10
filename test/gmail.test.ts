@@ -8,15 +8,17 @@ import { parseEml } from "../ingest/eml.ts";
 import { createApiServer } from "../server/api.ts";
 import { EXPIRED, fromBase64url, GmailClient, gmailConfigFromEnv, InboxPoller, MAX_PER_POLL, memoFooter, memoMime, plusAddress, pollSecondsFromEnv, skipReason } from "../server/gmail.ts";
 import { App } from "../src/app.ts";
-import { ingestInboxEmail, runAction } from "../src/commands.ts";
-import { buildScreens, nextStep } from "../src/view.ts";
+import { billArrives, ingestInboxEmail, ingestPmEmails, runAction, WrongWorkspace } from "../src/commands.ts";
+import { buildScreens } from "../src/view.ts";
 import { CONFIG, fakeExtract, fakeGmail, gmailAuthPass, rfc822, sseClient, until, type FakeMessage } from "./gmail-fakes.ts";
 
 // Every email and address here is made up. No network: Gmail and Google's token endpoint are faked.
 
 const START = new Date("2026-11-07T15:00:00Z");
 const now = () => Date.UTC(2026, 10, 10, 16, 0, 0);
-const freshApp = () => new App(join(mkdtempSync(join(tmpdir(), "contra-gmail-")), "d.db"), { start: START });
+// Live mail goes only to the live workspace (a demo App refuses it).
+const freshApp = () => new App(join(mkdtempSync(join(tmpdir(), "contra-gmail-")), "d.db"), { start: START, workspace: "live" });
+const tmpDb = (name: string) => join(mkdtempSync(join(tmpdir(), "contra-gmail-")), name);
 
 const intakeMsg = (id: string, body = `Hi,\r\n\r\nBC-71${id.slice(-2).padStart(2, "0")}: patch drywall at the stair, Summit, $900.00.\r\n\r\nDana`): FakeMessage => ({
   id,
@@ -182,7 +184,7 @@ test("poll: polls never overlap; a second poll while one runs returns at once", 
 test("invalid_grant: the inbox reports expired, the poll doesn't throw, and the server keeps serving screens", async () => {
   const g = fakeGmail({ token: "invalid_grant", messages: [intakeMsg("m41")] });
   const poller = new InboxPoller({ client: new GmailClient(CONFIG, g.transport, now), extract: fakeExtract().extract, now });
-  const api = createApiServer({ dbPath: join(mkdtempSync(join(tmpdir(), "contra-gmail-")), "d.db"), start: START, emlDir: null, inbox: { poller, intervalMs: 60_000 } });
+  const api = createApiServer({ dbPath: tmpDb("d.db"), liveDbPath: tmpDb("live.db"), start: START, emlDir: null, inbox: { poller, intervalMs: 60_000 } });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
   const base = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
   try {
@@ -190,6 +192,7 @@ test("invalid_grant: the inbox reports expired, the poll doesn't throw, and the 
     const health = (await (await fetch(`${base}/api/health`)).json()) as { ok: boolean; inbox: Record<string, unknown> };
     assert.deepEqual(health, {
       ok: true,
+      workspaces: ["demo", "live"],
       inbox: {
         mode: "gmail", address: CONFIG.intake, lastPollAt: "2026-11-10T16:00:00.000Z", lastError: EXPIRED, status: EXPIRED,
         modelCalls: { today: 0, cap: 50, capReached: false, resetsAt: "2026-11-11T00:00:00.000Z" },
@@ -209,42 +212,133 @@ test("health: without the live inbox it reports sample mode and no address", asy
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
   try {
     const h = await (await fetch(`http://127.0.0.1:${(api.server.address() as AddressInfo).port}/api/health`)).json();
-    assert.deepEqual(h, { ok: true, inbox: { mode: "sample", address: null, lastPollAt: null, lastError: null, status: "off", modelCalls: null } });
+    assert.deepEqual(h, { ok: true, workspaces: ["demo"], inbox: { mode: "sample", address: null, lastPollAt: null, lastError: null, status: "off", modelCalls: null } });
   } finally {
     await api.close();
   }
 });
 
-test("live mail never steers the demo script, and the demo still ends at $11,500.00 / $36,500.00", async () => {
-  // A live email for an unknown vendor (needs review) arrives before the demo starts.
-  const g = fakeGmail({ messages: [intakeMsg("m51")] });
-  const poller = new InboxPoller({ client: new GmailClient(CONFIG, g.transport, now), extract: fakeExtract("Nobody We Know LLC", "Summit").extract, now });
-  const app = freshApp();
+test("workspaces (core): a demo App refuses live mail; a live App has the seed but none of the scripted demo", async () => {
+  const demo = new App(tmpDb("demo.db"), { start: START });
+  const livePath = tmpDb("live.db");
+  const live = new App(livePath, { start: START, workspace: "live" });
   try {
-    await poller.poll(app);
-    assert.equal(app.ctx.contra.backCharges.get("BC-7151")!.state, "needs_review");
-    assert.equal(buildScreens(app).emailSource, "gmail");
-    assert.equal(nextStep(app).text, "Ingest the PM's back-charge emails");
-    for (let i = 0; i < 40; i++) {
-      const a = nextStep(app).action;
-      if (!a) break;
-      await runAction(app, a);
-    }
-    const s = buildScreens(app);
-    assert.equal(s.nextStep.text, "Demo complete");
-    assert.deepEqual(s.credits.map((c) => c.amount), ["$11,500.00"]);
-    assert.equal(s.bills[0]!.paid, "$36,500.00");
-    assert.equal(s.emailSource, "mixed");
-    assert.equal(app.ctx.contra.backCharges.get("BC-7151")!.state, "needs_review"); // still waiting for a person
+    const email = await parseEml(Buffer.from(intakeMsg("m50").raw), "gmail-m50");
+    const x = await fakeExtract("Ridgeline Drywall", "Summit").extract(email);
+    assert.throws(() => ingestInboxEmail(demo, email, x.items, x.actor), WrongWorkspace);
+    assert.equal(demo.ctx.contra.emails.size, 0);
+    // Live: same ERP and Ramp seed, but the demo's own emails, the sub's reply and the bill are refused.
+    assert.deepEqual(live.ctx.erp.subcontracts.map((s) => s.id), demo.ctx.erp.subcontracts.map((s) => s.id));
+    assert.throws(() => ingestPmEmails(live, { fixturesDir: null }), WrongWorkspace);
+    assert.throws(() => billArrives(live), WrongWorkspace);
+    assert.equal(live.ctx.contra.emails.size, 0);
+    assert.equal(live.ctx.ramp.bills.filter((b) => !b.id.startsWith("B-OLD")).length, 0);
+    const s = buildScreens(live);
+    assert.equal(s.workspace, "live");
+    assert.deepEqual(s.nextStep, { text: "Waiting for back-charge emails from the live inbox", action: null });
+    await assert.rejects(async () => runAction(live, { command: "ingestPmEmails" }), /not available/);
+    assert.equal(buildScreens(demo).workspace, "demo");
   } finally {
-    app.close();
+    demo.close();
+    live.close();
   }
+  // A database opens only as the workspace it was made for.
+  assert.throws(() => new App(livePath, { start: START }), /holds the live workspace, not demo/);
+});
+
+test("isolation: a live email for Ridgeline on Summit lands in the live workspace only; the demo's $15,500 / $11,500 / $36,500 can't change", async () => {
+  // Ridgeline Drywall on Summit links to SC-SUM-0912, the demo's own subcontract: with one database it
+  // would have been swept into the demo's notice and credit.
+  const g = fakeGmail({ messages: [intakeMsg("m51", "Hi,\r\n\r\nBC-7151: patch the stair core drywall, Summit, $900.00.\r\n\r\nDana")] });
+  const poller = new InboxPoller({ client: new GmailClient(CONFIG, g.transport, now), extract: fakeExtract("Ridgeline Drywall", "Summit").extract, now });
+  const sent: string[] = [];
+  const memoSender = { destination: CONFIG.apInbox, send: async (m: { creditId: string }) => (sent.push(m.creditId), { messageId: `m-${sent.length}` }) };
+  const api = createApiServer({ dbPath: tmpDb("demo.db"), liveDbPath: tmpDb("live.db"), start: START, emlDir: null, memoSender, inbox: { poller, intervalMs: 60_000 } });
+  await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
+  type S = ReturnType<typeof buildScreens>;
+  const screens = async (ws = "demo") => (await (await fetch(`${base}/api/screens?workspace=${ws}`)).json()) as S;
+  const act = async (ws: string, action: unknown) => {
+    const r = await fetch(`${base}/api/action?workspace=${ws}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action }) });
+    assert.equal(r.status, 200, `${ws}: ${JSON.stringify(action)} -> ${r.status} ${await r.clone().text()}`);
+  };
+  const runToEnd = async (ws: string) => {
+    for (let i = 0; i < 40; i++) {
+      const a = (await screens(ws)).nextStep.action;
+      if (!a) return;
+      await act(ws, a);
+    }
+    throw new Error(`${ws} did not finish`);
+  };
+  try {
+    // The live email arrives before the demo starts.
+    await api.pollNow();
+    let live = await screens("live");
+    assert.deepEqual(live.inbox.map((r) => [r.ref, r.amount]), [["BC-7151", "$900.00"]]);
+    assert.equal(live.emailSource, "gmail");
+    let demo = await screens();
+    assert.deepEqual(demo.inbox, []);
+    assert.equal(demo.emailSource, null);
+
+    // The scripted demo runs to the end with exactly its own amounts.
+    await runToEnd("demo");
+    demo = await screens();
+    assert.equal(demo.nextStep.text, "Demo complete");
+    assert.deepEqual(demo.outbox.map((n) => n.total), ["$15,500.00"]);
+    assert.deepEqual(demo.credits.map((c) => c.amount), ["$11,500.00"]);
+    assert.equal(demo.bills[0]!.paid, "$36,500.00");
+    assert.ok(!demo.inbox.some((r) => r.ref === "BC-7151"));
+    const demoAfter = JSON.stringify(demo);
+
+    // The live item goes through its own workflow (notice, window, credit, memo) without touching the demo.
+    await runToEnd("live");
+    live = await screens("live");
+    assert.equal(live.nextStep.text, "Waiting for back-charge emails from the live inbox");
+    assert.deepEqual(live.outbox.map((n) => n.total), ["$900.00"]);
+    assert.deepEqual(live.credits.map((c) => [c.amount, c.memo?.label]), [["$900.00", `Memo sent to ${CONFIG.apInbox}`]]);
+    assert.deepEqual(sent, ["VC-1"]);
+    assert.equal(JSON.stringify(await screens()), demoAfter);
+
+    // A demo action can't reach the live workspace's items, and reset on demo never touches live.
+    const r = await fetch(`${base}/api/action`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: { command: "confirmLink", ref: "BC-7151" } }) });
+    assert.equal(r.status, 409);
+    const liveBefore = JSON.stringify(await screens("live"));
+    assert.equal((await fetch(`${base}/api/reset`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status, 200);
+    assert.equal(JSON.stringify(await screens("live")), liveBefore);
+    assert.deepEqual((await screens()).inbox, []);
+    // And reset on live never touches demo.
+    await runToEnd("demo");
+    const demoAgain = JSON.stringify(await screens());
+    assert.equal((await fetch(`${base}/api/reset?workspace=live`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status, 200);
+    assert.deepEqual((await screens("live")).inbox, []);
+    assert.equal(JSON.stringify(await screens()), demoAgain);
+    // Unknown workspace: 400.
+    assert.equal((await fetch(`${base}/api/screens?workspace=prod`)).status, 400);
+  } finally {
+    await api.close();
+  }
+});
+
+test("workspaces: without a live inbox there is no live workspace (404), and a live inbox needs its own database", async () => {
+  const api = createApiServer({ dbPath: tmpDb("d.db"), start: START, emlDir: null });
+  await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
+  try {
+    const r = await fetch(`http://127.0.0.1:${(api.server.address() as AddressInfo).port}/api/screens?workspace=live`);
+    assert.equal(r.status, 404);
+    assert.match(((await r.json()) as { error: string }).error, /no live workspace/);
+  } finally {
+    await api.close();
+  }
+  const poller = new InboxPoller({ client: null, extract: fakeExtract().extract, now });
+  assert.throws(() => createApiServer({ dbPath: tmpDb("d.db"), start: START, emlDir: null, inbox: { poller, intervalMs: 60_000 } }), /needs liveDbPath/);
+  const same = tmpDb("d.db");
+  assert.throws(() => createApiServer({ dbPath: same, liveDbPath: same, start: START, emlDir: null }), /its own database/);
 });
 
 test("SSE: screens-changed after an action, a reset and a poll that ingested, plus heartbeats", async () => {
   const g = fakeGmail({ messages: [intakeMsg("m61")] });
   const poller = new InboxPoller({ client: new GmailClient(CONFIG, g.transport, now), extract: fakeExtract().extract, now });
-  const api = createApiServer({ dbPath: join(mkdtempSync(join(tmpdir(), "contra-gmail-")), "d.db"), start: START, emlDir: null, heartbeatMs: 30, inbox: { poller, intervalMs: 60_000 } });
+  const api = createApiServer({ dbPath: tmpDb("d.db"), liveDbPath: tmpDb("live.db"), start: START, emlDir: null, heartbeatMs: 30, inbox: { poller, intervalMs: 60_000 } });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
   const port = (api.server.address() as AddressInfo).port;
   const base = `http://127.0.0.1:${port}`;
@@ -253,16 +347,20 @@ test("SSE: screens-changed after an action, a reset and a poll that ingested, pl
     await until(() => sse.text().includes("event: heartbeat"));
     const post = (path: string, body: unknown) => fetch(`${base}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     assert.equal((await post("/api/action", { action: { command: "ingestPmEmails" } })).status, 200);
-    await until(() => sse.text().includes('event: screens-changed\ndata: {"reason":"action"}'));
+    await until(() => sse.text().includes('event: screens-changed\ndata: {"reason":"action","workspace":"demo"}'));
     await api.pollNow();
-    await until(() => sse.text().includes('data: {"reason":"inbox"}'));
+    await until(() => sse.text().includes('data: {"reason":"inbox","workspace":"live"}'));
     await api.pollNow(); // nothing new: no event
     assert.equal((await post("/api/reset", {})).status, 200);
-    await until(() => sse.text().includes('data: {"reason":"reset"}'));
-    assert.equal(sse.text().split('{"reason":"inbox"}').length - 1, 1);
+    await until(() => sse.text().includes('data: {"reason":"reset","workspace":"demo"}'));
+    assert.equal((await post("/api/action?workspace=live", { action: { command: "confirmLink", ref: "BC-7161" } })).status, 200);
+    await until(() => sse.text().includes('data: {"reason":"action","workspace":"live"}'));
+    assert.equal((await post("/api/reset?workspace=live", {})).status, 200);
+    await until(() => sse.text().includes('data: {"reason":"reset","workspace":"live"}'));
+    assert.equal(sse.text().split('"reason":"inbox"').length - 1, 1);
     // A refused action changes nothing and emits nothing.
     assert.equal((await post("/api/action", { action: { command: "payBill", billId: "B-NONE" } })).status, 409);
-    assert.equal(sse.text().split("screens-changed").length - 1, 3);
+    assert.equal(sse.text().split("screens-changed").length - 1, 5);
   } finally {
     sse.close();
     await api.close();
