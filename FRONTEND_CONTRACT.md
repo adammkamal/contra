@@ -137,7 +137,7 @@ missing key uses no slot. Show the message and let the person try again later; d
 {
   model: string;            // the model that answered
   latencyMs: number;        // the model call only
-  note: string;             // what wouldProceed means; show it (see UI rules)
+  note: string;             // what each outcome means and what a credit still needs; show it (see UI rules)
   items: {
     ref: string;            // "BC-6612"
     amount: string;         // formatted, "$1,275.00"; never parse it
@@ -149,11 +149,24 @@ missing key uses no slot. Show the message and let the person try again later; d
     checks: { name: string; passed: boolean; detail: string }[]; // in order, already in words
     holdReasons: string[];  // already in words; empty when not held
     link: { subcontractId: string | null; explanation: string[] };
-    wouldProceed: boolean;  // linked and not held at ingest; NOT "would be credited"
+    outcome: "held_at_intake" | "will_hold_dispute" | "needs_link" | "ready_for_notice"; // never "credited"
   }[];
   rejected: { reason: string }[]; // model output the validator refused, in words
 }
 ```
+
+`outcome` is computed in code from `holdReasons` and `checks`, first match wins:
+
+| `outcome` | When | Show as |
+|---|---|---|
+| `held_at_intake` | `holdReasons` is not empty | **Held when the email came in**, then the hold reasons |
+| `will_hold_dispute` | not held, but the "No dispute noted in the email" check failed | **Will be held: dispute noted in the email** |
+| `needs_link` | not held, no dispute, but the "Linked to one subcontract" check failed | **PM must choose the subcontract** |
+| `ready_for_notice` | none of the above | **Ready for a notice to the sub** |
+
+No outcome means a credit: a credit still needs a notice to the sub, the response window to pass, the
+eligibility check and a controller's approval. `contract/samples/try-<outcome>.json` holds one
+`{ request, response }` per outcome (made-up emails with hand-written model output, so `model` says so).
 
 `checks` are, in order: the amount and its sentence are in the email word for word; (when the model noted
 a dispute) the dispute sentence is in the email; stated in the email's own text, not only in quoted or
@@ -169,9 +182,8 @@ the reasons and `subcontractId` is null.
   next to `sourceSentence`; never highlight a guess.
 - **Show the checks as words.** One line per check: the word **Passed** or **Failed**, then `name`, then
   `detail`. Color may decorate but never carries the result alone. Show `holdReasons` as written.
-- **Show the note beside `wouldProceed`.** Label it "Would proceed to linking" / "Would not proceed", and
-  show `note` next to it every time. `wouldProceed` never means a credit: a dispute holds the item later,
-  and a credit also needs a notice, the response window, eligibility and a controller's approval.
+- **Show the outcome in words, with the note.** Use the "Show as" wording above for each item's `outcome`,
+  and show `note` next to it every time. Never word any outcome as a credit or a deduction.
 - Show `rejected[].reason` as written, and an empty result ("No back-charge found") when both lists are
   empty.
 - Say it is a live model call and that nothing is saved.

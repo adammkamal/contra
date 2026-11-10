@@ -40,8 +40,27 @@ export interface TryItem {
   checks: TryCheck[];
   holdReasons: string[];
   link: { subcontractId: string | null; explanation: string[] };
-  /** Linked and not held at ingest. Not a credit: see TryResult.note. */
-  wouldProceed: boolean;
+  /** What Contra would do with the item next, computed from the checks above (see tryOutcome). Never a credit. */
+  outcome: TryOutcome;
+}
+
+/**
+ * - held_at_intake: a check held it at ingest (holdReasons says why); a person must look at it.
+ * - will_hold_dispute: not held at ingest, but a dispute is noted in the email, so eligibility holds it.
+ * - needs_link: not held and no dispute, but it couldn't be linked to one subcontract; a PM must choose.
+ * - ready_for_notice: linked, not held, no dispute: next comes the PM's confirmation and a notice to the sub.
+ */
+export type TryOutcome = "held_at_intake" | "will_hold_dispute" | "needs_link" | "ready_for_notice";
+
+export const DISPUTE_CHECK = "No dispute noted in the email";
+export const LINK_CHECK = "Linked to one subcontract";
+
+/** The outcome, from the item's hold reasons and checks only, in this order. */
+export function tryOutcome(holdReasons: readonly string[], checks: readonly TryCheck[]): TryOutcome {
+  if (holdReasons.length) return "held_at_intake";
+  if (checks.some((c) => c.name === DISPUTE_CHECK && !c.passed)) return "will_hold_dispute";
+  if (!checks.some((c) => c.name === LINK_CHECK && c.passed)) return "needs_link";
+  return "ready_for_notice";
 }
 
 export interface TryResult {
@@ -53,9 +72,11 @@ export interface TryResult {
 }
 
 export const TRY_NOTE =
-  "wouldProceed means Contra would link this item to a subcontract and not hold it at ingest. It does not mean a credit: " +
-  "a dispute in the email still holds it at the eligibility check, and a credit also needs a notice to the sub, the response window, " +
-  "eligibility and a controller's approval. Nothing was saved.";
+  "outcome is what Contra would do next, not a credit. held_at_intake: a check held the item when the email came in, and a person " +
+  "must look at it. will_hold_dispute: the item passes intake, but the email notes a dispute, so the eligibility check will hold it. " +
+  "needs_link: the item passes intake but couldn't be linked to one subcontract, so a PM must choose one. ready_for_notice: linked " +
+  "and nothing holds it, so the PM can confirm it and send the sub a notice. In every case a credit still needs a notice to the sub, " +
+  "the response window to pass, the eligibility check and a controller's approval. Nothing was saved.";
 
 /** The model call couldn't be made or failed (missing key, network, model error). The API answers 503 with the message. */
 export class TryUnavailable extends Error {
@@ -122,7 +143,7 @@ function checksFor(email: Email, x: ExtractedBackCharge, a: ReturnType<typeof as
       detail: held.has("unaccounted_reference") ? a.holdEvidence.find((e) => e.startsWith("email mentions"))! : a.evidenceOk ? "yes" : "not checked: the evidence didn't verify",
     },
     {
-      name: "No dispute noted in the email",
+      name: DISPUTE_CHECK,
       passed: !a.disputeInSource,
       detail: !a.disputeInSource
         ? "none found"
@@ -134,7 +155,7 @@ function checksFor(email: Email, x: ExtractedBackCharge, a: ReturnType<typeof as
   );
   const r = a.resolution;
   checks.push({
-    name: "Linked to one subcontract",
+    name: LINK_CHECK,
     passed: r?.kind === "linked",
     detail: !r ? "not attempted: a held item is not linked automatically" : r.kind === "linked" ? `${r.subcontractId}: ${r.explanation.join("; ")}` : r.reasons.join("; "),
   });
@@ -168,6 +189,8 @@ export async function tryEmail(app: App, input: TryInput, settings: TrySettings,
     const a = assessExtractedItem(email, x, data, refs);
     const r = a.resolution;
     const linked = r?.kind === "linked" ? r : null;
+    const holdReasons = a.holdReasons.map((h) => HOLD_WORDS[h]);
+    const checks = checksFor(email, x, a);
     return {
       ref: x.ref,
       amount: formatUsd(x.amountCents),
@@ -176,13 +199,13 @@ export async function tryEmail(app: App, input: TryInput, settings: TrySettings,
       jobRef: x.jobRef,
       sourceSentence: x.amountEvidence.sentence,
       highlight: findHighlight(email.body, x.amountEvidence.sentence),
-      checks: checksFor(email, x, a),
-      holdReasons: a.holdReasons.map((h) => HOLD_WORDS[h]),
+      checks,
+      holdReasons,
       link: {
         subcontractId: linked?.subcontractId ?? null,
         explanation: !r ? ["not attempted: a held item is not linked automatically"] : r.kind === "linked" ? r.explanation : r.reasons,
       },
-      wouldProceed: linked !== null && a.holdReasons.length === 0,
+      outcome: tryOutcome(holdReasons, checks),
     };
   });
   return {

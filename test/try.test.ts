@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createApiServer, TRY_LIMITS, type TryApiOptions } from "../server/api.ts";
-import { findHighlight, tryEmail, TRY_NOTE, type TryInput, type TrySettings } from "../server/try.ts";
+import { findHighlight, tryEmail, tryOutcome, TRY_NOTE, type TryInput, type TrySettings } from "../server/try.ts";
 import { App } from "../src/app.ts";
 import { runAction } from "../src/commands.ts";
 import { normalize } from "../src/span.ts";
@@ -44,13 +44,13 @@ const item = (over: Record<string, unknown> = {}) => ({
 
 const freshApp = () => new App(join(mkdtempSync(join(tmpdir(), "contra-try-")), "d.db"), { start: START });
 
-test("try: a normal email gives a linked item, its highlight, its checks in words and the wouldProceed note", async () => {
+test("try: a normal email gives a linked item, its highlight, its checks in words, outcome ready_for_notice and the note", async () => {
   const app = freshApp();
   try {
     const r = await tryEmail(app, HARBOR, OK, { fetcher: fetcherFor({ items: [item()] }), ...fast });
     assert.equal(r.model, "claude-test-1");
     assert.equal(r.note, TRY_NOTE);
-    assert.match(r.note, /does not mean a credit/);
+    assert.match(r.note, /not a credit/);
     assert.deepEqual(r.rejected, []);
     assert.equal(r.items.length, 1);
     const x = r.items[0]!;
@@ -58,7 +58,7 @@ test("try: a normal email gives a linked item, its highlight, its checks in word
     assert.equal(x.link.subcontractId, "SC-SUM-0700");
     assert.ok(x.link.explanation.length > 0);
     assert.deepEqual(x.holdReasons, []);
-    assert.equal(x.wouldProceed, true);
+    assert.equal(x.outcome, "ready_for_notice");
     assert.ok(x.checks.every((c) => c.passed && c.name.length > 0 && c.detail.length > 0), JSON.stringify(x.checks));
     const [start, end] = x.highlight!;
     assert.equal(HARBOR.body.slice(start, end), "BC-5521: ceiling tile and grid repair, level 3 corridor,\n$1,840.00 per the attached invoice.");
@@ -75,7 +75,7 @@ test("try: an email with text aimed at an AI is held with that reason and would 
     const r = await tryEmail(app, email, OK, { fetcher: fetcherFor({ items: [item()] }), ...fast });
     const x = r.items[0]!;
     assert.deepEqual(x.holdReasons, [HOLD_WORDS.suspicious_instructions]);
-    assert.equal(x.wouldProceed, false);
+    assert.equal(x.outcome, "held_at_intake");
     assert.equal(x.link.subcontractId, null);
     const c = x.checks.find((c) => c.name === "No text aimed at an AI or automated system")!;
     assert.equal(c.passed, false);
@@ -93,7 +93,7 @@ test("try: a sentence the email doesn't contain fails the span check, has no hig
     const x = r.items[0]!;
     assert.equal(x.highlight, null);
     assert.deepEqual(x.holdReasons, [HOLD_WORDS.unverified_evidence]);
-    assert.equal(x.wouldProceed, false);
+    assert.equal(x.outcome, "held_at_intake");
     const c = x.checks[0]!;
     assert.equal(c.name, "Amount and its sentence are in the email, word for word");
     assert.equal(c.passed, false);
@@ -103,18 +103,57 @@ test("try: a sentence the email doesn't contain fails the span check, has no hig
   }
 });
 
-test("try: a dispute in the email is a failed check, and the note says wouldProceed is not a credit", async () => {
+test("try: a disputed email that links cleanly comes back will_hold_dispute, not ready_for_notice", async () => {
   const app = freshApp();
   try {
     const email = { ...HARBOR, body: HARBOR.body.replace("Thanks,", "Harbor disputes BC-5521; their foreman says the line was capped.\n\nThanks,") };
     const r = await tryEmail(app, email, OK, { fetcher: fetcherFor({ items: [item()] }), ...fast });
-    const c = r.items[0]!.checks.find((c) => c.name === "No dispute noted in the email")!;
+    const x = r.items[0]!;
+    // Links cleanly and nothing holds it at intake...
+    assert.equal(x.link.subcontractId, "SC-SUM-0700");
+    assert.deepEqual(x.holdReasons, []);
+    // ...but the dispute check fails, so eligibility will hold it.
+    const c = x.checks.find((c) => c.name === "No dispute noted in the email")!;
     assert.equal(c.passed, false);
     assert.match(c.detail, /eligibility/);
-    assert.match(r.note, /dispute in the email still holds it/);
+    assert.equal(x.outcome, "will_hold_dispute");
+    assert.match(r.note, /will_hold_dispute: the item passes intake, but the email notes a dispute/);
   } finally {
     app.close();
   }
+});
+
+test("try: an item that isn't held but can't be linked to one subcontract comes back needs_link", async () => {
+  const app = freshApp();
+  try {
+    // "Ridgeline" alone matches two parties on Summit, so the resolver asks a PM to choose.
+    const r = await tryEmail(app, { ...HARBOR, to: "Ridgeline <office@ridgeline.example>" }, OK, {
+      fetcher: fetcherFor({ items: [item({ vendorNameAsWritten: "Ridgeline" })] }),
+      ...fast,
+    });
+    const x = r.items[0]!;
+    assert.deepEqual(x.holdReasons, []);
+    assert.equal(x.link.subcontractId, null);
+    assert.equal(x.outcome, "needs_link");
+  } finally {
+    app.close();
+  }
+});
+
+test("try: the note explains every outcome and what a credit still needs", () => {
+  for (const o of ["held_at_intake", "will_hold_dispute", "needs_link", "ready_for_notice"]) assert.match(TRY_NOTE, new RegExp(`${o}: `));
+  assert.match(TRY_NOTE, /a credit still needs a notice to the sub, the response window to pass, the eligibility check and a controller's approval/);
+});
+
+test("try: tryOutcome order: held before dispute before link", () => {
+  const check = (name: string, passed: boolean) => ({ name, passed, detail: "" });
+  const dispute = check("No dispute noted in the email", false);
+  const linked = check("Linked to one subcontract", true);
+  assert.equal(tryOutcome(["held"], [dispute, linked]), "held_at_intake");
+  assert.equal(tryOutcome([], [dispute, linked]), "will_hold_dispute");
+  assert.equal(tryOutcome([], [dispute, check("Linked to one subcontract", false)]), "will_hold_dispute");
+  assert.equal(tryOutcome([], [check("No dispute noted in the email", true), check("Linked to one subcontract", false)]), "needs_link");
+  assert.equal(tryOutcome([], [check("No dispute noted in the email", true), linked]), "ready_for_notice");
 });
 
 test("try: findHighlight tolerates whitespace and quote/dash typography, and returns null when absent", () => {
@@ -175,7 +214,7 @@ test("API /api/try: returns the result and changes no state", async () => {
     assert.equal(r.status, 200, JSON.stringify(r.body));
     assert.equal(r.body.ok, true);
     assert.equal(r.body.items[0].link.subcontractId, "SC-SUM-0700");
-    assert.equal(r.body.items[0].wouldProceed, true);
+    assert.equal(r.body.items[0].outcome, "ready_for_notice");
     assert.equal(r.body.note, TRY_NOTE);
     assert.equal(typeof r.body.latencyMs, "number");
     assert.equal(app().store.lastEventSeq(), seq);
