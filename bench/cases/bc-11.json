@@ -1,0 +1,12 @@
+{
+  "id": "bc-11",
+  "description": "'Ridgeline Drywall' on Summit; amount written without cents; corridor patch",
+  "email": {
+    "id": "bc-11",
+    "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    "to": "Ridgeline Drywall <office@ridgelinedrywall.example>",
+    "subject": "Summit - BC-5011 corridor patch",
+    "receivedAt": "2026-10-15T15:35:00.000Z",
+    "body": "Hi,\n\nThe L2 east corridor at Summit needed another round of patching after your crew's touch-up left visible seams.\n\nBC-5011: corridor patch, L2 east corridor, $2,750.\n\nThanks,\nDana Ortiz\nProject Manager, Apex Builders"
+  }
+}

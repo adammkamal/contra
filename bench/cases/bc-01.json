@@ -1,0 +1,12 @@
+{
+  "id": "bc-01",
+  "description": "Full legal name 'Ridgeline Interiors LLC' on Summit; site cleanup",
+  "email": {
+    "id": "bc-01",
+    "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    "to": "Ridgeline Interiors LLC <ap@ridgelineinteriors.example>",
+    "subject": "Summit - back-charge BC-5001, site cleanup",
+    "receivedAt": "2026-10-01T14:05:00.000Z",
+    "body": "Hi,\n\nRidgeline Interiors LLC left drywall scrap and empty mud buckets throughout L2 at Summit after last week's hang. Our labor crew spent Friday clearing it.\n\nBC-5001: site cleanup, L2, $1,450.00.\n\nThanks,\nDana Ortiz\nProject Manager, Apex Builders"
+  }
+}

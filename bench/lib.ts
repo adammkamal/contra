@@ -1,17 +1,28 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { cents, type Cents } from "../src/money.ts";
+import type { Rejected } from "../src/extract/validate.ts";
+import { cents } from "../src/money.ts";
 import type { RampVendor } from "../src/mocks/ramp.ts";
 import { normName, resolve, type ResolverData } from "../src/resolver.ts";
 import { disputeSentencesFor, verifyAmountEvidence } from "../src/span.ts";
 import type { Email, ExtractedBackCharge, Subcontract } from "../src/types.ts";
 
+/** A case file holds only the email. Extractions come from recordings, labels from bench/labels/. */
 export interface BenchCase {
   id: string;
   description: string;
   email: Email;
-  /** Extractor output for this email. Replaced by fixtures/extractions/<emailId>.json when present. */
-  extraction: ExtractedBackCharge;
+}
+
+/** One recorded extractor call: fixtures/bench-extractions/<caseId>/run-<n>.json. */
+export interface BenchRun {
+  model: string;
+  effort: string;
+  recordedAt: string;
+  items: ExtractedBackCharge[];
+  rejected: Rejected[];
+  /** Set when the call itself failed (network, model error...). Such a run is not scored. */
+  error?: string;
 }
 
 export interface BenchLabel {
@@ -30,13 +41,15 @@ export interface Outcome {
   wouldCredit: boolean;
 }
 
+/** Both systems send a run with 0 or several accepted items to a human. */
+export const REVIEW: Outcome = { decision: { kind: "review" }, wouldCredit: false };
+
 /** Contra: span check, deterministic resolver, dispute rules. Same rules as src/, nothing bench-specific. */
-export function contraDecide(c: BenchCase, data: ResolverData): Outcome {
-  const x = c.extraction;
-  if (!verifyAmountEvidence(c.email, x.amountEvidence, x.amountCents).ok) return { decision: { kind: "hold", why: "unverified" }, wouldCredit: false };
+export function contraDecide(email: Email, x: ExtractedBackCharge, data: ResolverData): Outcome {
+  if (!verifyAmountEvidence(email, x.amountEvidence, x.amountCents).ok) return { decision: { kind: "hold", why: "unverified" }, wouldCredit: false };
   const r = resolve(x, data);
   if (r.kind !== "linked") return { decision: { kind: "review" }, wouldCredit: false };
-  const disputed = x.disputeNoted || disputeSentencesFor(c.email.body, x.ref).length > 0;
+  const disputed = x.disputeNoted || disputeSentencesFor(email.body, x.ref).length > 0;
   return { decision: { kind: "link", subcontractId: r.subcontractId }, wouldCredit: !disputed };
 }
 
@@ -45,11 +58,11 @@ const tokens = (s: string) => new Set(normName(s).split(" ").filter(Boolean));
 /**
  * Baseline "field matcher": what a typical AP auto-match does. Fuzzy token overlap of the name as
  * written against vendor name AND remit-to; best score wins, ties go to the first vendor; no job
- * scoping beyond picking that vendor's subcontract on a job whose name shares a token; ignores
- * dispute language. Same extraction input as Contra, so the comparison isolates linking and rules.
+ * scoping beyond picking that vendor's subcontract on a job whose name shares a token. It honors the
+ * extraction's disputeNoted flag (no credit when set), so the comparison isolates matching.
  */
-export function baselineDecide(c: BenchCase, vendors: readonly RampVendor[], subcontracts: readonly Subcontract[], jobs: ResolverData["jobs"]): Outcome {
-  const want = tokens(c.extraction.vendorNameAsWritten);
+export function baselineDecide(x: ExtractedBackCharge, vendors: readonly RampVendor[], subcontracts: readonly Subcontract[], jobs: ResolverData["jobs"]): Outcome {
+  const want = tokens(x.vendorNameAsWritten);
   let best: RampVendor | null = null;
   let bestScore = 0;
   for (const v of vendors) {
@@ -58,7 +71,7 @@ export function baselineDecide(c: BenchCase, vendors: readonly RampVendor[], sub
     if (score > bestScore) [best, bestScore] = [v, score];
   }
   if (!best) return { decision: { kind: "review" }, wouldCredit: false };
-  const jobTok = tokens(c.extraction.jobRef);
+  const jobTok = tokens(x.jobRef);
   const ofVendor = subcontracts.filter((s) => s.paymentsVendorId === best!.id);
   const onJob = ofVendor.find((s) => {
     const j = jobs.find((j) => j.id === s.jobId)!;
@@ -66,55 +79,58 @@ export function baselineDecide(c: BenchCase, vendors: readonly RampVendor[], sub
   });
   const sc = onJob ?? ofVendor[0];
   if (!sc) return { decision: { kind: "review" }, wouldCredit: false };
-  return { decision: { kind: "link", subcontractId: sc.id }, wouldCredit: true };
+  return { decision: { kind: "link", subcontractId: sc.id }, wouldCredit: !x.disputeNoted };
 }
 
 export interface Score {
-  correct: boolean;
+  matching: boolean;
+  dispute: boolean;
   wrongLink: boolean;
   wrongCredit: boolean;
   routedToHuman: boolean;
 }
 
 /**
- * correct: linked to the labeled subcontract, or sent to review when the label says review,
- *   and (if disputed) not credited.
+ * matching: linked to the labeled subcontract, or not linked when the label says review.
+ * dispute: when the system links, its credit decision matches the label (credit iff not disputed).
+ *   A run that doesn't link has no credit decision to get wrong.
  * wrongLink: auto-linked to anything other than the label (including linking when label = review).
  * wrongCredit: would create a credit that a careful human would not (wrong party, disputed, or wrong amount).
+ * `extracted` is the extracted amount; it only matters when the system would credit.
  */
-export function score(o: Outcome, label: BenchLabel, extracted: Cents): Score {
+export function score(o: Outcome, label: BenchLabel, extracted: number): Score {
   const linked = o.decision.kind === "link" ? o.decision.subcontractId : null;
   const wrongLink = linked !== null && linked !== label.link;
-  const rightTarget = label.link === "review" ? o.decision.kind !== "link" : linked === label.link;
-  const wrongCredit = o.wouldCredit && (wrongLink || label.disputed || extracted !== label.amountCents);
   return {
-    correct: rightTarget && !(label.disputed && o.wouldCredit) && !wrongCredit,
+    matching: label.link === "review" ? linked === null : linked === label.link,
+    dispute: linked === null || o.wouldCredit === !label.disputed,
     wrongLink,
-    wrongCredit,
-    routedToHuman: o.decision.kind !== "link",
+    wrongCredit: o.wouldCredit && (wrongLink || label.disputed || extracted !== label.amountCents),
+    routedToHuman: linked === null,
   };
 }
 
 const reviveDates = (_k: string, v: unknown) => (typeof v === "string" && /^\d{4}-\d\d-\d\dT/.test(v) ? new Date(v) : v);
 
-export function loadCases(dir: string, fixturesDir?: string): BenchCase[] {
+export function loadCases(dir: string): BenchCase[] {
   return readdirSync(dir)
     .filter((f) => f.endsWith(".json"))
     .sort()
-    .map((f) => {
-      const c = JSON.parse(readFileSync(join(dir, f), "utf8"), reviveDates) as BenchCase;
-      c.extraction.amountCents = cents(c.extraction.amountCents);
-      if (fixturesDir) {
-        try {
-          const f = JSON.parse(readFileSync(join(fixturesDir, `${c.email.id}.json`), "utf8")) as { items: ExtractedBackCharge[] };
-          const live = f.items;
-          const match = live.find((x) => x.ref === c.extraction.ref) ?? live[0];
-          if (match) c.extraction = { ...match, amountCents: cents(match.amountCents) };
-        } catch {
-          /* no live fixture for this email: keep the recorded extraction */
-        }
-      }
-      return c;
+    .map((f) => JSON.parse(readFileSync(join(dir, f), "utf8"), reviveDates) as BenchCase);
+}
+
+/** Recorded runs for one case, in run order. Empty when the case has no recordings. */
+export function loadRuns(recordingsDir: string, caseId: string): BenchRun[] {
+  const dir = join(recordingsDir, caseId);
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .map((f) => /^run-(\d+)\.json$/.exec(f))
+    .filter((m): m is RegExpExecArray => m !== null)
+    .sort((a, b) => Number(a[1]) - Number(b[1]))
+    .map((m) => {
+      const r = JSON.parse(readFileSync(join(dir, m[0]), "utf8")) as BenchRun;
+      r.items = r.items.map((x) => ({ ...x, amountCents: cents(x.amountCents) }));
+      return r;
     });
 }
 

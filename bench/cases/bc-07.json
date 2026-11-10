@@ -1,0 +1,12 @@
+{
+  "id": "bc-07",
+  "description": "Only the lockbox 'Keystone Receivables' is named, Summit; damaged frames",
+  "email": {
+    "id": "bc-07",
+    "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    "to": "Keystone Receivables <remit@keystonereceivables.example>",
+    "subject": "Summit back-charge BC-5007",
+    "receivedAt": "2026-10-09T17:15:00.000Z",
+    "body": "Hello,\n\nWe received your remittance notice for Summit. Please note the following back-charge, which will be deducted from the next payment:\n\nBC-5007: replacement of damaged door frames, L2, $2,100.00.\n\nRegards,\nDana Ortiz\nProject Manager, Apex Builders"
+  }
+}

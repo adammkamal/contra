@@ -1,0 +1,12 @@
+{
+  "id": "bc-17",
+  "description": "Misspelled 'Ridgline Drywal' on Summit; cleanup",
+  "email": {
+    "id": "bc-17",
+    "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    "to": "ap@apexbuilders.example",
+    "subject": "Summit back-charge BC-5017",
+    "receivedAt": "2026-10-23T16:40:00.000Z",
+    "body": "Hi,\n\nBack-charge for Ridgline Drywal on Summit. They left the L4 patient rooms full of scrap and dust after hanging, and our laborers cleaned it up.\n\nBC-5017: cleanup, L4 patient rooms, $640.00.\n\nDana Ortiz\nProject Manager, Apex Builders"
+  }
+}

@@ -23,7 +23,7 @@ inline on purpose, so subagents get them even if file imports are not expanded.
 - The status word carries the meaning; color only decorates.
 
 ## Done means
-- `npm run check` passes (typecheck + all tests). `npm run bench` runs.
+- `npm run check` passes (typecheck + all tests). `npm run bench` runs on the recordings from `npm run bench:record` (it needs a label for every case).
 - New rule => a test that fails when the rule is removed. Break it once yourself to confirm.
 - AI changes => `npm run extract:live` passes 5/5 before fixtures are re-recorded.
 - Report the actual commands you ran and their results. Never claim a check you did not run.

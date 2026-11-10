@@ -1,0 +1,12 @@
+{
+  "id": "bc-06",
+  "description": "'Ridgeline Drywall' on Lakeview; debris haul-off",
+  "email": {
+    "id": "bc-06",
+    "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    "to": "Ridgeline Drywall <office@ridgelinedrywall.example>",
+    "subject": "Lakeview - BC-5006 debris",
+    "receivedAt": "2026-10-08T15:00:00.000Z",
+    "body": "Hi,\n\nRidgeline Drywall left scrap board and packaging piled at the Lakeview loading area. We had it hauled off on Tuesday.\n\nBC-5006: debris haul-off, $600.00.\n\nThanks,\nDana Ortiz\nProject Manager, Apex Builders"
+  }
+}

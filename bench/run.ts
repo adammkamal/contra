@@ -3,43 +3,96 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MockERP } from "../src/mocks/erp.ts";
 import { demoSeed } from "../src/seed.ts";
-import { baselineDecide, contraDecide, loadCases, loadLabels, score, type Score } from "./lib.ts";
+import { baselineDecide, contraDecide, loadCases, loadLabels, loadRuns, REVIEW, score, type Outcome, type Score } from "./lib.ts";
 
 const root = dirname(fileURLToPath(import.meta.url));
-const live = process.argv.includes("--live") ? join(root, "..", "fixtures", "extractions") : undefined;
+const recordings = join(root, "..", "fixtures", "bench-extractions");
 
 const seed = demoSeed(new Date("2026-11-07T15:00:00Z"));
 const erp = new MockERP({ jobs: seed.jobs, subcontracts: seed.subcontracts, aliases: [...seed.aliases] });
-const cases = loadCases(join(root, "cases"), live);
-const labels = loadLabels(join(root, "labels"));
+const cases = loadCases(join(root, "cases"));
+const runsByCase = new Map(cases.map((c) => [c.id, loadRuns(recordings, c.id)]));
 
+const unrecorded = cases.filter((c) => runsByCase.get(c.id)!.length === 0).map((c) => c.id);
+if (unrecorded.length) {
+  console.error(`No recordings for ${unrecorded.length === cases.length ? "any case" : unrecorded.join(", ")}: run npm run bench:record first`);
+  process.exit(1);
+}
+const labels = loadLabels(join(root, "labels"));
 const missing = cases.filter((c) => !labels.has(c.id)).map((c) => c.id);
 if (missing.length) {
   console.error(`Unlabeled cases (label them by hand in bench/labels/): ${missing.join(", ")}`);
   process.exit(1);
 }
-const notHuman = [...labels.values()].filter((l) => !l.labeledBy || l.labeledBy.startsWith("claude")).map((l) => l.id);
+const caseIds = new Set(cases.map((c) => c.id));
+const notHuman = [...labels.values()].filter((l) => caseIds.has(l.id) && (!l.labeledBy || l.labeledBy.startsWith("claude"))).map((l) => l.id);
 
-type Row = { id: string; contra: Score; baseline: Score; contraDecision: string; baselineDecision: string };
-const rows: Row[] = cases.map((c) => {
+type Sys = "contra" | "baseline";
+type RunRow = { caseId: string; run: number; items: number; failed?: string; contra?: Score; baseline?: Score; contraDecision: string; baselineDecision: string };
+
+const show = (o: Outcome) => (o.decision.kind === "link" ? `link ${o.decision.subcontractId}` : o.decision.kind) + (o.wouldCredit ? " +credit" : "");
+
+const rows: RunRow[] = [];
+for (const c of cases) {
   const label = labels.get(c.id)!;
-  const co = contraDecide(c, erp);
-  const bo = baselineDecide(c, seed.vendors, seed.subcontracts, seed.jobs);
-  const d = (o: typeof co) => (o.decision.kind === "link" ? `link ${o.decision.subcontractId}` : o.decision.kind);
-  return { id: c.id, contra: score(co, label, c.extraction.amountCents), baseline: score(bo, label, c.extraction.amountCents), contraDecision: d(co), baselineDecision: d(bo) };
-});
+  runsByCase.get(c.id)!.forEach((r, i) => {
+    const run = i + 1;
+    if (r.error) {
+      rows.push({ caseId: c.id, run, items: 0, failed: r.error, contraDecision: "failed", baselineDecision: "failed" });
+      return;
+    }
+    const x = r.items.length === 1 ? r.items[0]! : null;
+    const co = x ? contraDecide(c.email, x, erp) : REVIEW;
+    const bo = x ? baselineDecide(x, seed.vendors, seed.subcontracts, seed.jobs) : REVIEW;
+    const amount = x ? x.amountCents : 0;
+    const note = x ? "" : ` (${r.items.length} items)`;
+    rows.push({
+      caseId: c.id, run, items: r.items.length,
+      contra: score(co, label, amount), baseline: score(bo, label, amount),
+      contraDecision: show(co) + note, baselineDecision: show(bo) + note,
+    });
+  });
+}
 
-const agg = (k: "contra" | "baseline") => ({
-  cases: rows.length,
-  correct: rows.filter((r) => r[k].correct).length,
-  wrongLinks: rows.filter((r) => r[k].wrongLink).length,
-  wrongCredits: rows.filter((r) => r[k].wrongCredit).length,
-  routedToHuman: rows.filter((r) => r[k].routedToHuman).length,
-});
-const summary = { extractions: live ? "live fixtures where present" : "recorded in case files", contra: agg("contra"), baseline: agg("baseline"), nonHumanLabels: notHuman };
+const runCount = Math.max(...[...runsByCase.values()].map((r) => r.length));
+const perRun = (k: Sys) =>
+  Array.from({ length: runCount }, (_, i) => {
+    const rs = rows.filter((r) => r.run === i + 1 && r[k]);
+    return {
+      run: i + 1,
+      scored: rs.length,
+      failed: rows.filter((r) => r.run === i + 1 && r.failed).length,
+      matching: rs.filter((r) => r[k]!.matching).length,
+      dispute: rs.filter((r) => r[k]!.dispute).length,
+      wrongLinks: rs.filter((r) => r[k]!.wrongLink).length,
+      wrongCredits: rs.filter((r) => r[k]!.wrongCredit).length,
+      routedToHuman: rs.filter((r) => r[k]!.routedToHuman).length,
+    };
+  });
 
-console.table(rows.map((r) => ({ case: r.id, contra: r.contraDecision, "contra ok": r.contra.correct, baseline: r.baselineDecision, "baseline ok": r.baseline.correct })));
-console.table({ contra: summary.contra, baseline: summary.baseline });
+const unstable = (k: "contraDecision" | "baselineDecision") =>
+  cases.filter((c) => new Set(rows.filter((r) => r.caseId === c.id).map((r) => r[k])).size > 1).map((c) => c.id);
+
+const models = [...new Set([...runsByCase.values()].flat().map((r) => `${r.model} (${r.effort})`))];
+const summary = {
+  extractions: `fixtures/bench-extractions, ${runCount} run(s), ${models.join(", ")}`,
+  contra: perRun("contra"),
+  baseline: perRun("baseline"),
+  unstable: { contra: unstable("contraDecision"), baseline: unstable("baselineDecision") },
+  nonHumanLabels: notHuman,
+};
+
+console.log(`Extractions: ${summary.extractions}`);
+console.table(rows.map((r) => ({
+  case: r.caseId, run: r.run, items: r.failed ? "failed" : r.items,
+  contra: r.contraDecision, "c match": r.contra?.matching, "c dispute": r.contra?.dispute,
+  baseline: r.baselineDecision, "b match": r.baseline?.matching, "b dispute": r.baseline?.dispute,
+})));
+for (const k of ["contra", "baseline"] as const) {
+  console.log(`\n${k} (per run; matching = correct link or correct review)`);
+  console.table(summary[k]);
+}
+console.log(`\nUnstable cases (outcome differs between runs): contra ${summary.unstable.contra.join(", ") || "none"}; baseline ${summary.unstable.baseline.join(", ") || "none"}`);
 if (notHuman.length) {
   console.log(`\nNOT VALID FOR THE DEMO: ${notHuman.length} label(s) were not written by a human: ${notHuman.join(", ")}`);
 }

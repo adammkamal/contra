@@ -1,0 +1,12 @@
+{
+  "id": "bc-18",
+  "description": "'Ridgeline Drywall' on Summit; PM notes an earlier dispute and that Ridgeline has since agreed",
+  "email": {
+    "id": "bc-18",
+    "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    "to": "ap@apexbuilders.example",
+    "subject": "Summit - BC-5018 Ridgeline Drywall",
+    "receivedAt": "2026-10-26T15:15:00.000Z",
+    "body": "Hi,\n\nBack-charge for Ridgeline Drywall on Summit:\n\nBC-5018: repair damaged wall, L2 elevator lobby, $720.00.\n\nRidgeline had disputed this but has now agreed to it.\n\nDana Ortiz\nProject Manager, Apex Builders"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "bc-19",
+  "description": "'Ridgeline Drywall' on Summit; the back-charge is a row in a plain-text table",
+  "email": {
+    "id": "bc-19",
+    "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    "to": "Ridgeline Drywall <office@ridgelinedrywall.example>",
+    "subject": "Summit back-charge BC-5019",
+    "receivedAt": "2026-10-27T14:00:00.000Z",
+    "body": "Hi,\n\nBack-charge for Summit below.\n\nBC # | Description | Amount\nBC-5019 | Cleanup L4 | $1,300.00\n\nThanks,\nDana Ortiz\nProject Manager, Apex Builders"
+  }
+}

@@ -10,6 +10,7 @@
     "test": "tsx --test \"test/*.test.ts\"",
     "check": "npm run typecheck && npm test",
     "bench": "tsx bench/run.ts",
+    "bench:record": "tsx scripts/bench-record.ts",
     "extract:live": "tsx scripts/extract-live.ts",
     "hooks": "node scripts/install-hooks.mjs",
     "api": "tsx scripts/serve.ts",
