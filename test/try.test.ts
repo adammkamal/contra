@@ -353,3 +353,23 @@ test("CONTRA_TRY_DAILY_CAP: defaults to 200, takes a positive whole number, refu
   assert.equal(tryDailyCapFromEnv({ CONTRA_TRY_DAILY_CAP: " 50 " }), 50);
   for (const bad of ["0", "-1", "1.5", "lots", "1e3"]) assert.throws(() => tryDailyCapFromEnv({ CONTRA_TRY_DAILY_CAP: bad }), /positive whole number/, bad);
 });
+
+test("API /api/try: an unexpected error inside tryEmail is a generic 500, not 409, and frees the slot", async () => {
+  // An extractor option that makes wrap() throw: a bug, not the model being unavailable.
+  await withApi({ settings: () => OK, callOptions: { fetcher: fetcherFor({ items: [item()] }), boundary: () => "not valid!", ...fast } }, async (base) => {
+    for (let i = 0; i < 2; i++) {
+      const r = await postTry(base, HARBOR);
+      assert.equal(r.status, 500);
+      assert.deepEqual(r.body, { ok: false, error: "internal error" });
+    }
+  });
+});
+
+test("API /api/try: a request over 256 KB gets a 413 response (not a dropped connection), and the server keeps working", async () => {
+  await withApi(settled, async (base) => {
+    const big = await fetch(`${base}/api/try`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ subject: "s", body: "b".repeat(TRY_LIMITS.requestBytes) }) });
+    assert.equal(big.status, 413);
+    assert.match(((await big.json()) as { error: string }).error, /body too large/);
+    assert.equal((await postTry(base, HARBOR)).status, 200);
+  });
+});

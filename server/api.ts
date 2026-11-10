@@ -13,7 +13,7 @@ import { IneligibleForCredit } from "../src/credits.ts";
 import { IllegalTransition } from "../src/state.ts";
 import { backChargeDetail, buildScreens, type Action } from "../src/view.ts";
 import type { ExtractOptions } from "../src/extract/index.ts";
-import { tryEmail, type TryInput, type TrySettings } from "./try.ts";
+import { tryEmail, TryUnavailable, type TryInput, type TrySettings } from "./try.ts";
 
 /** POST /api/try: the model call is paid for with the demo's key, so it is capped and rate-limited. */
 export interface TryApiOptions {
@@ -226,15 +226,22 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
   const readJson = (req: IncomingMessage, limit = maxBody): Promise<unknown> =>
     new Promise((resolve, reject) => {
       let size = 0;
+      let tooLarge = false;
       const chunks: Buffer[] = [];
+      // Over the limit: stop keeping data and answer 413. Destroying the request at once would close the
+      // socket before the 413 is written, so the rest of the upload is read and dropped, up to 4x the limit.
       req.on("data", (c: Buffer) => {
         size += c.length;
-        if (size > limit) {
-          reject(Object.assign(new Error("body too large"), { status: 413 }));
-          req.destroy();
-        } else chunks.push(c);
+        if (size <= limit) return void chunks.push(c);
+        if (!tooLarge) {
+          tooLarge = true;
+          chunks.length = 0;
+          reject(Object.assign(new Error(`body too large (limit ${limit} bytes)`), { status: 413 }));
+        }
+        if (size > limit * 4) req.destroy();
       });
       req.on("end", () => {
+        if (size > limit) return;
         if (size === 0) return resolve({});
         try {
           resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
@@ -296,12 +303,18 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
         if (!settings.ok) return send(res, 503, { ok: false, error: settings.message });
         const slot = limiter.acquire(req.socket.remoteAddress ?? "unknown"); // the socket address, never X-Forwarded-For (a client can set it)
         if (!slot.ok) return send(res, 429, { ok: false, error: slot.error });
+        let result: Awaited<ReturnType<typeof tryEmail>>;
         try {
-          const result = await tryEmail(app, input, settings, opts.try.callOptions ?? {});
-          return send(res, 200, { ok: true, ...result });
+          result = await tryEmail(app, input, settings, opts.try.callOptions ?? {});
+        } catch (e) {
+          // The model being unavailable is a 503 with its message; anything else is a bug: a generic 500,
+          // with no message or detail that could carry the email's text.
+          if (e instanceof TryUnavailable) return send(res, 503, { ok: false, error: e.message });
+          return send(res, 500, { ok: false, error: "internal error" });
         } finally {
           slot.release();
         }
+        return send(res, 200, { ok: true, ...result });
       }
       return send(res, 404, { ok: false, error: `no route ${req.method} ${path}` });
     } catch (e) {
