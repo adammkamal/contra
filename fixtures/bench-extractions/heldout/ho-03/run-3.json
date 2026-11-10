@@ -1,0 +1,20 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T08:09:08.624Z",
+  "items": [
+    {
+      "ref": "BC-6103",
+      "description": "Corner bead repair and refinishing, east corridor",
+      "amountCents": 64000,
+      "amountEvidence": {
+        "emailId": "ho-03",
+        "sentence": "BC-6103: corner bead repair, east corridor, $640.00."
+      },
+      "vendorNameAsWritten": "Ridgeline Drywall",
+      "jobRef": "Lakeview",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": []
+}

@@ -1,0 +1,12 @@
+{
+  "id": "ho-07",
+  "description": "'Ridgeline Drywall' on Lakeview; broken tiles back-charge, and the email also mentions retainage held separately",
+  "email": {
+    "id": "ho-07",
+    "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    "to": "Ridgeline Drywall <office@ridgelinedrywall.example>",
+    "subject": "Lakeview - BC-6107 broken tiles",
+    "receivedAt": "2026-10-22T14:15:00.000Z",
+    "body": "Hi,\n\nTiles in the L2 restrooms at Lakeview were cracked when your crew stacked board on them. We had them replaced.\n\nBC-6107: broken tiles, L2 restrooms, $780.00.\n\nAlso, we're holding $5,000 retainage, separate from this.\n\nThanks,\nDana Ortiz\nProject Manager, Apex Builders"
+  }
+}

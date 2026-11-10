@@ -39,3 +39,21 @@ for (const f of files) {
     assert.deepEqual(bad, []);
   });
 }
+
+const heldoutDir = join(import.meta.dirname, "..", "bench", "heldout", "cases");
+for (const f of readdirSync(heldoutDir).filter((f) => f.endsWith(".json")).sort()) {
+  const raw = JSON.parse(readFileSync(join(heldoutDir, f), "utf8")) as Record<string, unknown>;
+  const id = f.replace(/\.json$/, "");
+
+  test(`held-out case ${id}: id, description, a complete email and no answer fields`, () => {
+    assert.match(id, /^ho-\d\d$/);
+    assert.deepEqual(Object.keys(raw).sort(), ["description", "email", "id"]);
+    assert.equal(raw.id, id);
+    const email = raw.email as Record<string, unknown>;
+    assert.deepEqual(Object.keys(email).sort(), [...EMAIL_FIELDS].sort());
+    for (const k of EMAIL_FIELDS) assert.ok(typeof email[k] === "string" && (email[k] as string).trim().length > 0, `email.${k}`);
+    assert.equal(email.id, id);
+    assert.ok(!Number.isNaN(new Date(email.receivedAt as string).getTime()), "receivedAt parses");
+    assert.deepEqual(keysDeep(raw).filter((k) => FORBIDDEN.has(k)), []);
+  });
+}

@@ -1,0 +1,20 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T08:08:54.175Z",
+  "items": [
+    {
+      "ref": "BC-6101",
+      "description": "Cleanup of taping debris and empty compound boxes left by crew on L3",
+      "amountCents": 85000,
+      "amountEvidence": {
+        "emailId": "ho-01",
+        "sentence": "BC-6101: cleanup, L3, $850.00."
+      },
+      "vendorNameAsWritten": "Ridgeline Drywall",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": []
+}

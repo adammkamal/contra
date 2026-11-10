@@ -1,0 +1,12 @@
+{
+  "id": "ho-06",
+  "description": "Email to 'Harbor Mechanical' on Summit about money owed to them for an approved change order",
+  "email": {
+    "id": "ho-06",
+    "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    "to": "Harbor Mechanical <ap@harbormech.example>",
+    "subject": "Summit - change order payment",
+    "receivedAt": "2026-10-19T15:25:00.000Z",
+    "body": "Hi,\n\nQuick update on Summit. We owe you $3,400 for the approved change order; payment goes out Friday.\n\nThanks,\nDana Ortiz\nProject Manager, Apex Builders"
+  }
+}

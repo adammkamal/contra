@@ -1,0 +1,12 @@
+{
+  "id": "ho-05",
+  "description": "Back-charge to 'Apex Interior Systems' on Summit; damaged ceiling tiles",
+  "email": {
+    "id": "ho-05",
+    "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    "to": "Apex Interior Systems <office@apexinteriorsystems.example>",
+    "subject": "Summit - BC-6105 ceiling tiles",
+    "receivedAt": "2026-10-15T14:40:00.000Z",
+    "body": "Hi,\n\nApex Interior Systems damaged ceiling tiles in the L1 lobby while moving lifts. We replaced them.\n\nBC-6105: damaged ceiling tiles, L1 lobby, $950.00.\n\nThanks,\nDana Ortiz\nProject Manager, Apex Builders"
+  }
+}

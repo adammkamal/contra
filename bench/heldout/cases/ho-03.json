@@ -1,0 +1,12 @@
+{
+  "id": "ho-03",
+  "description": "Job named only in the subject (Lakeview); body to 'Ridgeline Drywall', corner bead repair",
+  "email": {
+    "id": "ho-03",
+    "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    "to": "Ridgeline Drywall <office@ridgelinedrywall.example>",
+    "subject": "Lakeview - BC-6103",
+    "receivedAt": "2026-10-09T13:50:00.000Z",
+    "body": "Hi,\n\nSeveral outside corners in the east corridor were dented and the corner bead had to be replaced and refinished.\n\nBC-6103: corner bead repair, east corridor, $640.00.\n\nThanks,\nDana Ortiz\nProject Manager, Apex Builders"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T08:09:16.598Z",
+  "items": [],
+  "rejected": [
+    {
+      "index": 0,
+      "reason": "BC-6104: amountText \"USD 1,200\" is not exactly one $ amount"
+    }
+  ]
+}

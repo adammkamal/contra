@@ -1,0 +1,20 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T08:09:01.019Z",
+  "items": [
+    {
+      "ref": "BC-6102",
+      "description": "Cleanup of pipe offcuts and insulation scraps, L2 mechanical room",
+      "amountCents": 72500,
+      "amountEvidence": {
+        "emailId": "ho-02",
+        "sentence": "BC-6102: cleanup, L2 mechanical room, $725.00."
+      },
+      "vendorNameAsWritten": "Harbor Mechanical",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": []
+}
