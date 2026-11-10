@@ -12,6 +12,63 @@ import { NotOffered, runAction, type ActionInput, type PmEmailSource } from "../
 import { IneligibleForCredit } from "../src/credits.ts";
 import { IllegalTransition } from "../src/state.ts";
 import { backChargeDetail, buildScreens, type Action } from "../src/view.ts";
+import type { ExtractOptions } from "../src/extract/index.ts";
+import { tryEmail, type TryInput, type TrySettings } from "./try.ts";
+
+/** POST /api/try: the model call is paid for with the demo's key, so it is capped and rate-limited. */
+export interface TryApiOptions {
+  /** Read on each request, so a key added to .env.local after start-up is picked up. */
+  settings: () => TrySettings;
+  /** Passed to the extractor (tests inject a fake fetcher). */
+  callOptions?: ExtractOptions;
+  /** Model calls allowed per rolling hour. Default 30. */
+  maxPerHour?: number;
+  /** Milliseconds, for the hourly window. Default Date.now. */
+  now?: () => number;
+}
+
+export const TRY_LIMITS = { subject: 300, body: 20_000, address: 300, requestBytes: 256 * 1024 } as const;
+
+/** Strict shape check for POST /api/try. Returns the input, or a message for a 400. */
+export function parseTryInput(x: unknown): TryInput | string {
+  if (!x || typeof x !== "object" || Array.isArray(x)) return "send { subject, body, from?, to? } as JSON";
+  const o = x as Record<string, unknown>;
+  const extra = Object.keys(o).filter((k) => !["subject", "body", "from", "to"].includes(k));
+  if (extra.length) return `unexpected fields: ${extra.slice(0, 5).join(", ")}`;
+  if (typeof o.subject !== "string") return "subject must be a string";
+  if (o.subject.length > TRY_LIMITS.subject) return `subject is longer than ${TRY_LIMITS.subject} characters`;
+  if (typeof o.body !== "string" || o.body.trim().length === 0) return "body must be a non-empty string";
+  if (o.body.length > TRY_LIMITS.body) return `body is longer than ${TRY_LIMITS.body.toLocaleString("en-US")} characters`;
+  for (const k of ["from", "to"] as const) {
+    if (o[k] === undefined) continue;
+    if (typeof o[k] !== "string") return `${k} must be a string`;
+    if ((o[k] as string).length > TRY_LIMITS.address) return `${k} is longer than ${TRY_LIMITS.address} characters`;
+  }
+  return {
+    subject: o.subject,
+    body: o.body,
+    ...(typeof o.from === "string" ? { from: o.from } : {}),
+    ...(typeof o.to === "string" ? { to: o.to } : {}),
+  };
+}
+
+/** At most one model call in flight and maxPerHour per rolling hour, in memory. A refused request uses no slot. */
+export function tryLimiter(maxPerHour: number, now: () => number) {
+  let inFlight = false;
+  const started: number[] = [];
+  return {
+    /** Takes a slot, or returns why not. Call release() when the call is done. */
+    acquire(): { ok: true; release: () => void } | { ok: false; error: string } {
+      if (inFlight) return { ok: false, error: "another email is being checked; try again when it finishes" };
+      const t = now();
+      while (started.length && started[0]! <= t - 3_600_000) started.shift();
+      if (started.length >= maxPerHour) return { ok: false, error: `limit of ${maxPerHour} emails per hour reached; try again later` };
+      inFlight = true;
+      started.push(t);
+      return { ok: true, release: () => (inFlight = false) };
+    },
+  };
+}
 
 export interface ApiOptions {
   dbPath: string;
@@ -23,6 +80,8 @@ export interface ApiOptions {
    * Default fixtures/emails; when it's missing or empty, or this is null, the built-in sample is used.
    */
   emlDir?: string | null;
+  /** Enables POST /api/try. Without it the route answers 503. */
+  try?: TryApiOptions;
 }
 
 const COMMANDS: Record<Action["command"], Record<string, "string" | "number" | "string[]">> = {
@@ -92,13 +151,15 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
     res.end(json);
   };
 
-  const readJson = (req: IncomingMessage): Promise<unknown> =>
+  const limiter = tryLimiter(opts.try?.maxPerHour ?? 30, opts.try?.now ?? Date.now);
+
+  const readJson = (req: IncomingMessage, limit = maxBody): Promise<unknown> =>
     new Promise((resolve, reject) => {
       let size = 0;
       const chunks: Buffer[] = [];
       req.on("data", (c: Buffer) => {
         size += c.length;
-        if (size > maxBody) {
+        if (size > limit) {
           reject(Object.assign(new Error("body too large"), { status: 413 }));
           req.destroy();
         } else chunks.push(c);
@@ -154,6 +215,22 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
         };
         runAction(app, action, input, action.command === "ingestPmEmails" ? { pmEmails: await pmEmails } : {});
         return send(res, 200, { ok: true, screens: buildScreens(app) });
+      }
+      if (req.method === "POST" && path === "/api/try") {
+        // Read-only: no runAction, no reset; tryEmail only reads the app. Order: 400, then 429, then the model call.
+        const input = parseTryInput(await readJson(req, TRY_LIMITS.requestBytes));
+        if (typeof input === "string") return send(res, 400, { ok: false, error: input });
+        if (!opts.try) return send(res, 503, { ok: false, error: "trying an email is not enabled on this server" });
+        const settings = opts.try.settings();
+        if (!settings.ok) return send(res, 503, { ok: false, error: settings.message });
+        const slot = limiter.acquire();
+        if (!slot.ok) return send(res, 429, { ok: false, error: slot.error });
+        try {
+          const result = await tryEmail(app, input, settings, opts.try.callOptions ?? {});
+          return send(res, 200, { ok: true, ...result });
+        } finally {
+          slot.release();
+        }
       }
       return send(res, 404, { ok: false, error: `no route ${req.method} ${path}` });
     } catch (e) {

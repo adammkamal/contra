@@ -32,7 +32,7 @@ export type Action =
   | { command: "turnOnCredits"; billId: string }
   | { command: "payBill"; billId: string };
 
-const HOLD_WORDS: Record<HoldReason, string> = {
+export const HOLD_WORDS: Record<HoldReason, string> = {
   dispute_noted_in_source: "dispute noted in the PM's email",
   disputed_by_sub: "disputed by the sub",
   no_clause: "no back-charge clause",

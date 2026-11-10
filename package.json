@@ -12,6 +12,7 @@
     "bench": "tsx bench/run.ts",
     "bench:record": "tsx scripts/bench-record.ts",
     "extract:live": "tsx scripts/extract-live.ts",
+    "try:live": "tsx scripts/try-live.ts",
     "hooks": "node scripts/install-hooks.mjs",
     "api": "tsx scripts/serve.ts",
     "contract:samples": "tsx scripts/contract-samples.ts"
