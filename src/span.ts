@@ -1,4 +1,4 @@
-import { findUsdAmounts, type Cents } from "./money.ts";
+import { findUsdAmounts, unreadableUsd, type Cents } from "./money.ts";
 import type { Email, Evidence } from "./types.ts";
 
 /**
@@ -63,7 +63,10 @@ export function verifySpan(email: Email, ev: Evidence, opts: { excludeQuoted?: b
 export function verifyAmountEvidence(email: Email, ev: Evidence, amount: Cents): SpanResult {
   const span = verifySpan(email, ev);
   if (!span.ok) return span;
-  const amounts = findUsdAmounts(normalize(ev.sentence));
+  const sentence = normalize(ev.sentence);
+  const unreadable = unreadableUsd(sentence);
+  if (unreadable.length) return { ok: false, reason: `evidence has an amount that can't be read exactly: ${unreadable.join(", ")}` };
+  const amounts = findUsdAmounts(sentence);
   if (amounts.length !== 1) return { ok: false, reason: `evidence has ${amounts.length} dollar amounts; need exactly 1` };
   if (amounts[0] !== amount) return { ok: false, reason: `evidence says ${amounts[0]} cents, extraction says ${amount}` };
   return { ok: true };

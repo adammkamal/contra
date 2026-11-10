@@ -1,4 +1,4 @@
-import { findUsdAmounts } from "../money.ts";
+import { findUsdAmounts, unreadableUsd } from "../money.ts";
 import { normalize } from "../span.ts";
 import type { Email, ExtractedBackCharge, ExtractedResponse } from "../types.ts";
 
@@ -47,6 +47,10 @@ export function parseBackCharges(input: unknown, email: Email): { items: Extract
     const jobRef = str(raw.jobRef, 120);
     if (!description || !amountText || !amountSentence || !vendor || !jobRef) return bad(`${ref}: missing or oversized field`);
     if (typeof raw.disputeNoted !== "boolean") return bad(`${ref}: disputeNoted must be true or false`);
+    // An amount that can't be read exactly (in the copied text or anywhere in its sentence) is never
+    // guessed or truncated: "$1,200.5" must not pass as "$1,200" just because that is a substring.
+    const unreadable = [...new Set([...unreadableUsd(amountText), ...unreadableUsd(amountSentence)])];
+    if (unreadable.length) return bad(`${ref}: amount can't be read exactly: ${unreadable.map((u) => `"${u}"`).join(", ")}`);
     const amounts = findUsdAmounts(amountText);
     if (amounts.length !== 1) return bad(`${ref}: amountText "${amountText}" is not exactly one $ amount`);
     if (!normalize(amountSentence).includes(normalize(amountText))) return bad(`${ref}: amountText not inside amountSentence`);
