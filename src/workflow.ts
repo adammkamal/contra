@@ -117,7 +117,9 @@ export class Contra {
     if (email.messageId && this.hasMessage(email.messageId)) return [];
     this.emails.set(email.id, email);
     const attachments = email.attachmentCount ? [`${email.attachmentCount} attachment(s), not read`] : [];
-    this.d.log.append({ actor: SYSTEM, entity: "email", entityId: email.id, action: EMAIL_INGESTED[origin], from: null, to: null, evidence: [email.subject, ...attachments] });
+    // Live mail: when Gmail received it (the host sets receivedAt from Gmail's internalDate).
+    const received = origin === "gmail" ? [`received ${email.receivedAt.toISOString()}`] : [];
+    this.d.log.append({ actor: SYSTEM, entity: "email", entityId: email.id, action: EMAIL_INGESTED[origin], from: null, to: null, evidence: [email.subject, ...received, ...attachments] });
     const out: BackCharge[] = [];
 
     for (const x of extracted) {

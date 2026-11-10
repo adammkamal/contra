@@ -156,6 +156,8 @@ export interface MessageMeta {
   /** The message carries X-Contra-Generated (Contra sent it). */
   generated: boolean;
   sizeEstimate: number;
+  /** When Gmail received the message (its internalDate, epoch ms), or null if Gmail didn't say. */
+  internalDate: number | null;
 }
 
 const base64url = (b: Buffer | string) => Buffer.from(b).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -284,7 +286,7 @@ export class GmailClient {
   async metadata(id: string): Promise<MessageMeta> {
     const q = new URLSearchParams({ format: "metadata" });
     for (const h of ["Message-ID", "Date", "From", "Subject", "Delivered-To", "Authentication-Results", GENERATED_HEADER]) q.append("metadataHeaders", h);
-    const json = (await this.#api(`/messages/${encodeURIComponent(id)}?${q}`)) as { sizeEstimate?: unknown; payload?: { headers?: { name?: unknown; value?: unknown }[] } } | null;
+    const json = (await this.#api(`/messages/${encodeURIComponent(id)}?${q}`)) as { sizeEstimate?: unknown; internalDate?: unknown; payload?: { headers?: { name?: unknown; value?: unknown }[] } } | null;
     const headers = new Map<string, string[]>();
     for (const h of json?.payload?.headers ?? []) {
       if (typeof h.name !== "string" || typeof h.value !== "string") continue;
@@ -303,6 +305,7 @@ export class GmailClient {
       authResults: headers.get("authentication-results") ?? [],
       generated: headers.has(GENERATED_HEADER.toLowerCase()),
       sizeEstimate: typeof json?.sizeEstimate === "number" ? json.sizeEstimate : 0,
+      internalDate: typeof json?.internalDate === "string" && /^\d{1,15}$/.test(json.internalDate) ? Number(json.internalDate) : null,
     };
   }
 
@@ -439,7 +442,7 @@ export class InboxPoller {
       const known = this.#skipped.get(id);
       if (known) {
         // Skipped for good earlier in this process: not fetched again.
-        out.push({ gmailId: id, messageId: null, date: "", from: "", fromAddress: null, subject: "", deliveredTo: [], authResults: [], generated: false, sizeEstimate: 0, skip: known });
+        out.push({ gmailId: id, messageId: null, date: "", from: "", fromAddress: null, subject: "", deliveredTo: [], authResults: [], generated: false, sizeEstimate: 0, internalDate: null, skip: known });
         continue;
       }
       const meta = await client.metadata(id);
@@ -486,7 +489,9 @@ export class InboxPoller {
           this.#skipped.set(m.gmailId, e instanceof EmlError ? `unreadable: ${e.message}` : "unreadable message");
           continue;
         }
-        email = { ...email, messageId: email.messageId ?? messageKey(m) };
+        // Received time: Gmail's internalDate (when Gmail got it), not the sender's Date header. Only if Gmail
+        // gave none does the Date header stand.
+        email = { ...email, messageId: email.messageId ?? messageKey(m), ...(m.internalDate !== null ? { receivedAt: new Date(m.internalDate) } : {}) };
         this.#calls++; // counted before the call: a failed call (or a retry on a later poll) costs the same
         const x = await this.opts.extract(email);
         if (!x.ok) {

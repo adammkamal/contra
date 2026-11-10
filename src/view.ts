@@ -352,7 +352,7 @@ function liveNextStep(app: App): { text: string; action: Action | null } {
   if (linked) return { text: `Draft the back-charge notice for ${linked.subcontractId}`, action: { command: "draftNotice", subcontractId: linked.subcontractId! } };
   const noticed = bcs.filter((b) => b.state === "noticed");
   if (noticed.length) {
-    if (noticed.every((b) => contra.explainEligibility(b.ref).status === "pending")) return { text: "Wait for the response window: advance a week (simulated clock)", action: { command: "advanceDays", days: 7 } };
+    if (noticed.every((b) => contra.explainEligibility(b.ref).status === "pending")) return { text: "Wait for the response window: advance a week (moves this workspace 7 days ahead of real time)", action: { command: "advanceDays", days: 7 } };
     return { text: "Check eligibility", action: { command: "evaluateAll" } };
   }
   const credits = [...contra.credits.values()];

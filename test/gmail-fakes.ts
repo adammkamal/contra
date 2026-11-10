@@ -22,7 +22,12 @@ export interface FakeMessage {
   raw: string;
   /** Overrides the size Gmail reports (sizeEstimate). */
   size?: number;
+  /** When Gmail received it (internalDate, epoch ms). Default: FAKE_INTERNAL_DATE. */
+  internalDate?: number;
 }
+
+/** The default internalDate: deliberately not the messages' Date header (15:00 UTC). */
+export const FAKE_INTERNAL_DATE = Date.parse("2026-11-10T15:04:30Z");
 
 /** What Gmail writes above a message whose sender passed DKIM and SPF for `domain` (made-up values). */
 export const gmailAuthPass = (domain: string, local = "dana.ortiz") =>
@@ -97,7 +102,7 @@ export function fakeGmail(o: { messages?: FakeMessage[]; token?: TokenMode; list
     if (!msg) return new Response(echo, { status: 404 });
     if (u.searchParams.get("format") === "metadata") {
       const wanted = new Set(u.searchParams.getAll("metadataHeaders").map((h) => h.toLowerCase()));
-      return Response.json({ id: msg.id, sizeEstimate: msg.size ?? Buffer.byteLength(msg.raw), payload: { headers: headersOf(msg.raw).filter((h) => wanted.has(h.name.toLowerCase())) } });
+      return Response.json({ id: msg.id, sizeEstimate: msg.size ?? Buffer.byteLength(msg.raw), internalDate: String(msg.internalDate ?? FAKE_INTERNAL_DATE), payload: { headers: headersOf(msg.raw).filter((h) => wanted.has(h.name.toLowerCase())) } });
     }
     if (u.searchParams.get("format") === "raw") return Response.json({ id: msg.id, raw: b64url(msg.raw) });
     return new Response(echo, { status: 400 });

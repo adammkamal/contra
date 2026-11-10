@@ -17,7 +17,7 @@ import { CONFIG, fakeExtract, fakeGmail, gmailAuthPass, rfc822, sseClient, until
 const START = new Date("2026-11-07T15:00:00Z");
 const now = () => Date.UTC(2026, 10, 10, 16, 0, 0);
 // Live mail goes only to the live workspace (a demo App refuses it).
-const freshApp = () => new App(join(mkdtempSync(join(tmpdir(), "contra-gmail-")), "d.db"), { start: START, workspace: "live" });
+const freshApp = () => new App(join(mkdtempSync(join(tmpdir(), "contra-gmail-")), "d.db"), { start: START, workspace: "live", realClock: { now: () => new Date(now()) } });
 const tmpDb = (name: string) => join(mkdtempSync(join(tmpdir(), "contra-gmail-")), name);
 
 const intakeMsg = (id: string, body = `Hi,\r\n\r\nBC-71${id.slice(-2).padStart(2, "0")}: patch drywall at the stair, Summit, $900.00.\r\n\r\nDana`): FakeMessage => ({
@@ -77,7 +77,7 @@ test("poll: the query targets only the intake address; ramp-ap mail, X-Contra-Ge
 test("skipReason: a message is ingested only when delivered to the intake address, not generated, small and new", () => {
   const m = {
     gmailId: "a", messageId: "<a@x>", date: "", from: "", fromAddress: "dana.ortiz@apexbuilders.example", subject: "",
-    deliveredTo: [CONFIG.intake], authResults: [gmailAuthPass("apexbuilders.example")], generated: false, sizeEstimate: 10,
+    deliveredTo: [CONFIG.intake], authResults: [gmailAuthPass("apexbuilders.example")], generated: false, sizeEstimate: 10, internalDate: null,
   };
   assert.equal(skipReason(m, CONFIG, () => false), null);
   assert.match(skipReason({ ...m, deliveredTo: [CONFIG.apInbox] }, CONFIG, () => false)!, /not delivered/);
@@ -221,7 +221,7 @@ test("health: without the live inbox it reports sample mode and no address", asy
 test("workspaces (core): a demo App refuses live mail; a live App has the seed but none of the scripted demo", async () => {
   const demo = new App(tmpDb("demo.db"), { start: START });
   const livePath = tmpDb("live.db");
-  const live = new App(livePath, { start: START, workspace: "live" });
+  const live = new App(livePath, { start: START, workspace: "live", realClock: { now: () => new Date(now()) } });
   try {
     const email = await parseEml(Buffer.from(intakeMsg("m50").raw), "gmail-m50");
     const x = await fakeExtract("Ridgeline Drywall", "Summit").extract(email);
@@ -253,7 +253,7 @@ test("isolation: a live email for Ridgeline on Summit lands in the live workspac
   const poller = new InboxPoller({ client: new GmailClient(CONFIG, g.transport, now), extract: fakeExtract("Ridgeline Drywall", "Summit").extract, now });
   const sent: string[] = [];
   const memoSender = { destination: CONFIG.apInbox, send: async (m: { creditId: string }) => (sent.push(m.creditId), { messageId: `m-${sent.length}` }) };
-  const api = createApiServer({ dbPath: tmpDb("demo.db"), liveDbPath: tmpDb("live.db"), start: START, emlDir: null, memoSender, inbox: { poller, intervalMs: 60_000 } });
+  const api = createApiServer({ dbPath: tmpDb("demo.db"), liveDbPath: tmpDb("live.db"), realClock: { now: () => new Date(now()) }, start: START, emlDir: null, memoSender, inbox: { poller, intervalMs: 60_000 } });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
   const base = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
   type S = ReturnType<typeof buildScreens>;

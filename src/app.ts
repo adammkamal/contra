@@ -1,4 +1,4 @@
-import { ManualClock, SystemClock } from "./clock.ts";
+import { ManualClock, OffsetClock, SystemClock, type Clock, type WorkspaceClock } from "./clock.ts";
 import type { MemoSender } from "./memo.ts";
 import { MockERP } from "./mocks/erp.ts";
 import { MockRamp, type RampBill, type RampCredit } from "./mocks/ramp.ts";
@@ -12,6 +12,8 @@ import { Contra, type ContraState } from "./workflow.ts";
  * "demo": the scripted demo (its own emails, reply and bill; SPEC section 3). "live": the same ERP,
  * subcontract and Ramp seed, but none of the scripted emails, reply or bill; mail arrives only from the
  * live inbox. Each workspace is its own database; a database opens only as the workspace it was made for.
+ * Clocks: demo keeps its simulated clock (stored as clockMs). Live runs on the real clock, injected by the
+ * host, plus an offset that starts at 0 and only "advance a week" changes (stored as offsetMs).
  */
 export type Workspace = "demo" | "live";
 
@@ -19,14 +21,17 @@ interface AppState {
   /** Absent in snapshots written before workspaces existed: those are demo. */
   workspace?: Workspace;
   seedBaseMs: number;
+  /** The workspace clock's reading when saved. Demo resumes from it; for live it is informational. */
   clockMs: number;
+  /** Live only: ms added to the real clock (advanceDays). */
+  offsetMs?: number;
   contra: ContraState;
   erp: { aliases: Alias[]; synced: string[] };
   ramp: { bills: RampBill[]; credits: RampCredit[] };
 }
 
 export interface Ctx {
-  clock: ManualClock;
+  clock: WorkspaceClock;
   contra: Contra;
   erp: MockERP;
   ramp: MockRamp;
@@ -47,10 +52,17 @@ export class App {
   #seedBaseMs!: number;
   readonly #memoSender: MemoSender | null;
   readonly workspace: Workspace;
+  readonly #realClock: Clock | null;
 
-  constructor(dbPath: string, opts: { start?: Date; memoSender?: MemoSender | null; workspace?: Workspace } = {}) {
+  /**
+   * `realClock` is required for the live workspace (its time is the real time plus its offset) and unused by
+   * the demo. For live, `start` only dates the seed; it never sets the clock.
+   */
+  constructor(dbPath: string, opts: { start?: Date; memoSender?: MemoSender | null; workspace?: Workspace; realClock?: Clock } = {}) {
     this.#memoSender = opts.memoSender ?? null;
     this.workspace = opts.workspace ?? "demo";
+    this.#realClock = this.workspace === "live" ? (opts.realClock ?? null) : null;
+    if (this.workspace === "live" && !this.#realClock) throw new Error("the live workspace needs the real clock, injected by the host (realClock)");
     this.store = new SqliteStore(dbPath);
     const existing = this.store.loadSnapshot<AppState>();
     if (existing && (existing.workspace ?? "demo") !== this.workspace) {
@@ -58,7 +70,7 @@ export class App {
       throw new Error(`${dbPath} holds the ${existing.workspace ?? "demo"} workspace, not ${this.workspace}`);
     }
     if (!existing) {
-      const start = opts.start ?? new SystemClock().now();
+      const start = opts.start ?? this.#realClock?.now() ?? new SystemClock().now();
       this.#fresh(start);
       this.store.transaction(() => this.#save());
     } else {
@@ -112,7 +124,7 @@ export class App {
   }
 
   #build(s: AppState | null, clockMs: number): void {
-    const clock = new ManualClock(new Date(clockMs));
+    const clock: WorkspaceClock = this.#realClock ? new OffsetClock(this.#realClock, s?.offsetMs ?? 0) : new ManualClock(new Date(clockMs));
     const seed = demoSeed(new Date(this.#seedBaseMs));
     const log = this.store.auditLog(clock);
     const erp = new MockERP({ jobs: seed.jobs, subcontracts: seed.subcontracts, aliases: s ? s.erp.aliases : [...seed.aliases] });
@@ -137,6 +149,7 @@ export class App {
       workspace: this.workspace,
       seedBaseMs: this.#seedBaseMs,
       clockMs: clock.now().getTime(),
+      ...(clock instanceof OffsetClock ? { offsetMs: clock.offsetMs } : {}),
       contra: contra.snapshot(),
       erp: { aliases: erp.aliases, synced: erp.syncedIds() },
       ramp: { bills: ramp.bills, credits: ramp.credits },

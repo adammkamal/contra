@@ -42,8 +42,37 @@ export function describeWindow(w: { amount: number; unit: "hours" | "calendar_da
   return `${w.amount} ${label}`;
 }
 
+/** A workspace's clock: reads the time, and "advance a week" moves it ahead. */
+export interface WorkspaceClock extends Clock {
+  advanceDays(days: number): void;
+}
+
+/**
+ * The live workspace's clock: the real time plus an offset that starts at 0. Only advanceDays changes the
+ * offset. The real clock is injected by the host (server/), so src/ never reads the clock itself.
+ */
+export class OffsetClock implements WorkspaceClock {
+  #offsetMs: number;
+  constructor(
+    private readonly real: Clock,
+    offsetMs = 0,
+  ) {
+    if (!Number.isSafeInteger(offsetMs)) throw new Error(`clock offset must be a whole number of ms, got ${offsetMs}`);
+    this.#offsetMs = offsetMs;
+  }
+  get offsetMs(): number {
+    return this.#offsetMs;
+  }
+  now(): Date {
+    return new Date(this.real.now().getTime() + this.#offsetMs);
+  }
+  advanceDays(days: number): void {
+    this.#offsetMs += days * DAY_MS;
+  }
+}
+
 /** Demo and test clock. "A week later" is advanceDays(7). */
-export class ManualClock implements Clock {
+export class ManualClock implements WorkspaceClock {
   #t: number;
   constructor(start: Date) {
     this.#t = start.getTime();

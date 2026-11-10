@@ -18,7 +18,7 @@ if (!cfg.ok) {
   process.exit(2);
 }
 const DB = "data/live.db";
-const app = existsSync(DB) ? new App(DB, { workspace: "live" }) : null;
+const app = existsSync(DB) ? new App(DB, { workspace: "live", realClock: { now: () => new Date() } }) : null;
 const client = new GmailClient(cfg.config, fetch, Date.now);
 const poller = new InboxPoller({ client, extract: async () => ({ ok: false, reason: "inbox:check never extracts" }), now: Date.now });
 try {

@@ -79,7 +79,8 @@ app.close();
 
 // The live workspace (CONTRA_INBOX=gmail): its own App and database, waiting for mail, then after one email
 // from the live inbox. The email is made up and its extraction hand-written (logged as the sample, not the model).
-const live = new App(join(tmp, "live.db"), { start: new Date("2026-11-07T15:00:00Z"), memoSender, workspace: "live" });
+// The live clock is the real clock plus an offset; a fixed "real" clock keeps the sample reproducible.
+const live = new App(join(tmp, "live.db"), { memoSender, workspace: "live", realClock: { now: () => new Date("2026-11-07T15:00:00Z") } });
 write("live-00-waiting-for-mail.screens.json", buildScreens(live));
 const sentence = "BC-7151: patch the stair core drywall damaged during framing, Summit, $900.00.";
 const liveEmail = {

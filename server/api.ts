@@ -7,6 +7,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { dirname } from "node:path";
 import { App, type Workspace } from "../src/app.ts";
+import type { Clock } from "../src/clock.ts";
 import { DEFAULT_EML_DIR, EmlError, loadPmEmails } from "../ingest/eml.ts";
 import { NotOffered, runAction, type ActionInput, type PmEmailSource } from "../src/commands.ts";
 import { IneligibleForCredit } from "../src/credits.ts";
@@ -161,6 +162,8 @@ export interface ApiOptions {
    * demo's emails. Without it there is no live workspace. Required with `inbox`: live mail never goes to dbPath.
    */
   liveDbPath?: string | null;
+  /** The real clock for the live workspace (its time is this plus its offset). Default: the system clock. */
+  realClock?: Clock;
   /** Live inbox polling (CONTRA_INBOX=gmail) into the live workspace. Without it, health reports the sample inbox. */
   inbox?: { poller: Pick<InboxPoller, "poll" | "status">; intervalMs: number };
   /** Server-Sent Events heartbeat interval in ms. Default 15,000. */
@@ -218,7 +221,8 @@ export function createApiServer(opts: ApiOptions): {
 
   // ---- Workspaces: "demo" (dbPath, the scripted demo) and, with liveDbPath, "live" (the live inbox's
   // mail only). Two Apps, two databases; every route below picks one by ?workspace=, demo by default.
-  const appOptions = (workspace: Workspace) => ({ ...(opts.start ? { start: opts.start } : {}), memoSender: opts.memoSender ?? null, workspace });
+  const realClock: Clock = opts.realClock ?? { now: () => new Date() };
+  const appOptions = (workspace: Workspace) => ({ ...(opts.start ? { start: opts.start } : {}), memoSender: opts.memoSender ?? null, workspace, ...(workspace === "live" ? { realClock } : {}) });
   const dbPaths = new Map<Workspace, string>([["demo", opts.dbPath]]);
   if (opts.liveDbPath) dbPaths.set("live", opts.liveDbPath);
   const apps = new Map<Workspace, App>();

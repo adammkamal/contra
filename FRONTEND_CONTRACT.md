@@ -81,7 +81,7 @@ Show the message; don't retry.
 | Field | Use it for |
 |---|---|
 | `workspace` | `"demo"` or `"live"`: which workspace these screens are. In `"live"`, label the screens **"Live inbox"** so they're never mistaken for the scripted demo. |
-| `now` | The workspace's clock (it moves when "advance a week" runs; simulated in both workspaces). |
+| `now` | The workspace's clock. Demo: simulated, starting at the demo's start time. Live: the real time plus an offset. "Advance a week" adds 7 days in either workspace and nothing else changes the live offset. |
 | `extractionSource` | `"model"`, `"sample"`, `"mixed"` or `null`. When it is `"sample"`, the Inbox must say **"Sample extractions (hand-written), not model output"**. |
 | `emailSource` | `"eml"`, `"builtin"`, `"gmail"`, `"mixed"` or `null` (before ingest). Where the Inbox's PM emails were read from. Show it in the Inbox beside the extraction note: **"Emails: .eml files"** for `"eml"`, **"Emails: built-in sample"** for `"builtin"`, **"Emails: Gmail inbox"** for `"gmail"`, **"Emails: more than one source"** for `"mixed"`. |
 | `nextStep` | `{ text, action }` for the presenter bar. Highlight `action`'s button. In `demo`, `action` is `null` only at "Demo complete". In `live`, it is also `null` while waiting for mail ("Waiting for back-charge emails from the live inbox") and while the PM must choose a subcontract in an Inbox row; show the text without a button. |
@@ -148,6 +148,8 @@ There are two separate sets of state, each its own App and database:
 | Seed | Jobs, subcontracts, aliases, Ramp vendors, the opener's history | The same |
 | Emails | The scripted demo's own (built-in or `fixtures/emails/*.eml`), its scripted sub reply and the $48,000 bill | Only mail from the live inbox. The scripted emails, reply and bill are refused there. |
 | `nextStep` | The demo script (SPEC section 3) | The same workflow for whatever arrived: confirm, notice, window, credit, memo |
+| Clock (`now`) | Simulated, from the demo's start time; saved in `data/demo.db` | Real time plus an offset that starts at 0; only "advance a week" adds to it; the offset is saved in `data/live.db` and survives restarts |
+| Email times | From the seed | When Gmail received the message (its `internalDate`), shown in the email's audit evidence as `received <ISO time>` |
 
 Live mail is written only to `live`; the core refuses it in `demo`. So the scripted demo's notice
 ($15,500.00), credit ($11,500.00) and payment ($36,500.00) can't be changed through the inbox, even by an
