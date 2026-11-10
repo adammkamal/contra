@@ -141,7 +141,13 @@ demo's own emails). Credit memos are sent to a stand-in AP inbox (`<local>+ramp-
 | `address` | The PM intake address being read, or `null` |
 | `lastPollAt` | ISO time of the last poll, or `null` |
 | `lastError` | The last problem, in words, or `null` |
-| `status` | `"off"`, `"starting"`, `"ok"`, `"error"`, `"expired: run npm run gmail:auth"` or `"not configured: …"`. Show it as written. Expired is normal (Google expires the demo's sign-in after 7 days); the screens keep working. |
+| `status` | `"off"`, `"starting"`, `"ok"`, `"error"`, `"expired: run npm run gmail:auth"`, `"not configured: …"` or `"paused: the daily cap of N model calls is reached; …"`. Show it as written. Expired is normal (Google expires the demo's sign-in after 7 days); the screens keep working. |
+| `modelCalls` | `{ today, cap, capReached, resetsAt }`: live extraction's model calls this UTC day against `CONTRA_LIVE_DAILY_CAP` (default 50; failed calls and retries count), and when the count resets (ISO, midnight UTC). `null` without a live inbox. When the cap is reached, new mail waits in Gmail and is extracted after the reset; it is never dropped. |
+
+Only mail from a sender on `CONTRA_INTAKE_ALLOWED_SENDERS` (comma-separated addresses or `@domain` entries;
+empty means nothing is ingested) whose domain passed Gmail's own DKIM or SPF check is extracted.
+`npm run inbox:check` lists each message's skip reason ("no allowed senders configured", "sender not
+allowed (…)", "sender not authenticated", …), so a wrong allow-list shows on every message.
 
 ## Detail screen: `BackChargeDetail`
 

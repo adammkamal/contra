@@ -13,6 +13,7 @@ export const CONFIG: GmailConfig = {
   refreshToken: SECRETS.refreshToken,
   intake: "demo.tester+backcharges@example.com",
   apInbox: "demo.tester+ramp-ap@example.com",
+  allowedSenders: ["@apexbuilders.example"],
 };
 
 export interface FakeMessage {
@@ -23,13 +24,22 @@ export interface FakeMessage {
   size?: number;
 }
 
-/** An RFC 822 message with CRLF line endings. */
-export function rfc822(o: { messageId: string; deliveredTo: string; subject: string; body: string; extraHeaders?: string[] }): string {
+/** What Gmail writes above a message whose sender passed DKIM and SPF for `domain` (made-up values). */
+export const gmailAuthPass = (domain: string, local = "dana.ortiz") =>
+  `mx.google.com; dkim=pass header.i=@${domain} header.s=s1 header.b=AbCdEf12; spf=pass (google.com: domain of ${local}@${domain} designates 192.0.2.10 as permitted sender) smtp.mailfrom=${local}@${domain}; dmarc=pass (p=NONE sp=NONE dis=NONE) header.from=${domain}`;
+
+/**
+ * An RFC 822 message with CRLF line endings. By default it is from dana.ortiz@apexbuilders.example and Gmail's
+ * Authentication-Results (first, as Gmail adds it) passes for that domain; `authResults: []` leaves it out.
+ */
+export function rfc822(o: { messageId: string; deliveredTo: string; subject: string; body: string; extraHeaders?: string[]; from?: string; authResults?: string[] }): string {
+  const from = o.from ?? "Dana Ortiz <dana.ortiz@apexbuilders.example>";
   return [
+    ...(o.authResults ?? [gmailAuthPass("apexbuilders.example")]).map((v) => `Authentication-Results: ${v}`),
     `Delivered-To: ${o.deliveredTo}`,
     `Message-ID: <${o.messageId}>`,
     "Date: Tue, 10 Nov 2026 15:00:00 +0000",
-    "From: Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    `From: ${from}`,
     `To: ${o.deliveredTo}`,
     `Subject: ${o.subject}`,
     ...(o.extraHeaders ?? []),

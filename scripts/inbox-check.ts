@@ -5,7 +5,7 @@
  */
 import { existsSync } from "node:fs";
 import { App } from "../src/app.ts";
-import { GmailClient, gmailConfigFromEnv, InboxPoller, MAX_PER_POLL } from "../server/gmail.ts";
+import { GmailClient, gmailConfigFromEnv, InboxPoller, MAX_PER_POLL, NO_ALLOWED_SENDERS } from "../server/gmail.ts";
 
 try {
   process.loadEnvFile(".env.local");
@@ -24,6 +24,11 @@ const poller = new InboxPoller({ client, extract: async () => ({ ok: false, reas
 try {
   const planned = await poller.plan((key) => app?.ctx.contra.hasMessage(key) ?? false);
   console.log(`Intake ${cfg.config.intake}: newest ${planned.length} message(s) (at most ${MAX_PER_POLL}); memos go to ${cfg.config.apInbox}`);
+  console.log(
+    cfg.config.allowedSenders.length
+      ? `Allowed senders (CONTRA_INTAKE_ALLOWED_SENDERS): ${cfg.config.allowedSenders.join(", ")}; each must also pass Gmail's DKIM or SPF check for its domain`
+      : `Allowed senders: none. ${NO_ALLOWED_SENDERS}: set CONTRA_INTAKE_ALLOWED_SENDERS in .env.local, or nothing is ingested`,
+  );
   if (!app) console.log(`(${DB} not found: "already ingested" can't be checked)`);
   for (const m of planned) {
     console.log(`- ${m.date || "(no date)"} | ${m.from || "(no sender)"} | ${m.subject || "(no subject)"}\n    ${m.skip ? `skip: ${m.skip}` : "would ingest (one model call)"}`);

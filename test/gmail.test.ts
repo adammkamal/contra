@@ -10,7 +10,7 @@ import { EXPIRED, fromBase64url, GmailClient, gmailConfigFromEnv, InboxPoller, M
 import { App } from "../src/app.ts";
 import { ingestInboxEmail, runAction } from "../src/commands.ts";
 import { buildScreens, nextStep } from "../src/view.ts";
-import { CONFIG, fakeExtract, fakeGmail, rfc822, sseClient, until, type FakeMessage } from "./gmail-fakes.ts";
+import { CONFIG, fakeExtract, fakeGmail, gmailAuthPass, rfc822, sseClient, until, type FakeMessage } from "./gmail-fakes.ts";
 
 // Every email and address here is made up. No network: Gmail and Google's token endpoint are faked.
 
@@ -73,12 +73,15 @@ test("poll: the query targets only the intake address; ramp-ap mail, X-Contra-Ge
 });
 
 test("skipReason: a message is ingested only when delivered to the intake address, not generated, small and new", () => {
-  const m = { gmailId: "a", messageId: "<a@x>", date: "", from: "", subject: "", deliveredTo: [CONFIG.intake], generated: false, sizeEstimate: 10 };
-  assert.equal(skipReason(m, CONFIG.intake, () => false), null);
-  assert.match(skipReason({ ...m, deliveredTo: [CONFIG.apInbox] }, CONFIG.intake, () => false)!, /not delivered/);
-  assert.match(skipReason({ ...m, deliveredTo: [] }, CONFIG.intake, () => false)!, /not delivered/);
-  assert.match(skipReason({ ...m, generated: true }, CONFIG.intake, () => false)!, /X-Contra-Generated/);
-  assert.equal(skipReason(m, CONFIG.intake, (k) => k === "<a@x>"), "already ingested");
+  const m = {
+    gmailId: "a", messageId: "<a@x>", date: "", from: "", fromAddress: "dana.ortiz@apexbuilders.example", subject: "",
+    deliveredTo: [CONFIG.intake], authResults: [gmailAuthPass("apexbuilders.example")], generated: false, sizeEstimate: 10,
+  };
+  assert.equal(skipReason(m, CONFIG, () => false), null);
+  assert.match(skipReason({ ...m, deliveredTo: [CONFIG.apInbox] }, CONFIG, () => false)!, /not delivered/);
+  assert.match(skipReason({ ...m, deliveredTo: [] }, CONFIG, () => false)!, /not delivered/);
+  assert.match(skipReason({ ...m, generated: true }, CONFIG, () => false)!, /X-Contra-Generated/);
+  assert.equal(skipReason(m, CONFIG, (k) => k === "<a@x>"), "already ingested");
 });
 
 test("raw: base64url format=raw round-trips through parseEml, keeping the Message-ID; attachments are counted, not read", async () => {
@@ -97,7 +100,7 @@ test("raw: base64url format=raw round-trips through parseEml, keeping the Messag
   assert.equal(email.attachmentCount, undefined);
 
   const withFile = [
-    `Delivered-To: ${CONFIG.intake}`, "Message-ID: <att-1@pm.example>", "Date: Tue, 10 Nov 2026 15:00:00 +0000",
+    `Authentication-Results: ${gmailAuthPass("apexbuilders.example", "dana")}`, `Delivered-To: ${CONFIG.intake}`, "Message-ID: <att-1@pm.example>", "Date: Tue, 10 Nov 2026 15:00:00 +0000",
     "From: Dana <dana@apexbuilders.example>", `To: ${CONFIG.intake}`, "Subject: With photo", "MIME-Version: 1.0",
     'Content-Type: multipart/mixed; boundary="b1"', "", "--b1", "Content-Type: text/plain; charset=utf-8", "",
     "BC-7106: clean the lobby, Summit, $300.00.", "--b1", "Content-Type: image/png", 'Content-Disposition: attachment; filename="photo.png"',
@@ -185,7 +188,13 @@ test("invalid_grant: the inbox reports expired, the poll doesn't throw, and the 
   try {
     await api.pollNow();
     const health = (await (await fetch(`${base}/api/health`)).json()) as { ok: boolean; inbox: Record<string, unknown> };
-    assert.deepEqual(health, { ok: true, inbox: { mode: "gmail", address: CONFIG.intake, lastPollAt: "2026-11-10T16:00:00.000Z", lastError: EXPIRED, status: EXPIRED } });
+    assert.deepEqual(health, {
+      ok: true,
+      inbox: {
+        mode: "gmail", address: CONFIG.intake, lastPollAt: "2026-11-10T16:00:00.000Z", lastError: EXPIRED, status: EXPIRED,
+        modelCalls: { today: 0, cap: 50, capReached: false, resetsAt: "2026-11-11T00:00:00.000Z" },
+      },
+    });
     assert.equal(EXPIRED, "expired: run npm run gmail:auth");
     const screens = await fetch(`${base}/api/screens`);
     assert.equal(screens.status, 200);
@@ -200,7 +209,7 @@ test("health: without the live inbox it reports sample mode and no address", asy
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
   try {
     const h = await (await fetch(`http://127.0.0.1:${(api.server.address() as AddressInfo).port}/api/health`)).json();
-    assert.deepEqual(h, { ok: true, inbox: { mode: "sample", address: null, lastPollAt: null, lastError: null, status: "off" } });
+    assert.deepEqual(h, { ok: true, inbox: { mode: "sample", address: null, lastPollAt: null, lastError: null, status: "off", modelCalls: null } });
   } finally {
     await api.close();
   }
