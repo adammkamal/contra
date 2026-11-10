@@ -24,9 +24,24 @@ export function sum(xs: readonly Cents[]): Cents {
   return xs.reduce<Cents>((acc, x) => add(acc, x), ZERO);
 }
 
-const AMOUNT_RE = /\$\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{2}))?(?!\d)/g;
+/** The number of an amount: "1,200", "1200", "1,200.50". Thousands commas in groups of 3; cents optional, exactly 2 digits. */
+const NUM = String.raw`(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{2}))?(?!\d)`;
 
-/** Parses a USD amount like "$11,500" or "$4,700.00" using string math only (no floats). */
+/**
+ * Each pattern is one currency marker with its number:
+ * - "$" or "US$" before it: "$1,200", "$ 1,200.00", "US$1,200" (one amount, not "US" plus "$1,200")
+ * - "USD" before it: "USD 1,200", "USD1,200.00"
+ * - "USD" after it: "1,200 USD", "1,200.00USD" (not when the number is part of a word like "BC-1200")
+ * Every marker counts as its own amount, so a number written with both "$" and "USD" ("$1,200 USD",
+ * "USD $1,200") is two amounts: a sentence that mixes them is never read as exactly one.
+ */
+const AMOUNT_RES: readonly RegExp[] = [
+  new RegExp(String.raw`(?:\bUS)?\$\s?${NUM}`, "gi"),
+  new RegExp(String.raw`\bUSD\s?(?:\$\s?)?${NUM}`, "gi"),
+  new RegExp(String.raw`(?<![\w.,-])${NUM}\s?USD\b`, "gi"),
+];
+
+/** Parses one USD amount ("$11,500", "$4,700.00", "USD 1,200", "1,200 USD", "US$1,200") using string math only (no floats). */
 export function parseUsd(text: string): Cents {
   const all = findUsdAmounts(text);
   if (all.length !== 1) {
@@ -35,15 +50,17 @@ export function parseUsd(text: string): Cents {
   return all[0]!;
 }
 
-/** Every "$" amount in the text, in order. */
+/** Every USD amount in the text ("$", "US$" or "USD" with a number; one per marker), in order. */
 export function findUsdAmounts(text: string): Cents[] {
-  const out: Cents[] = [];
-  for (const m of text.matchAll(AMOUNT_RE)) {
-    const whole = m[1]!.replaceAll(",", "");
-    const frac = m[2] ?? "00";
-    out.push(cents(Number.parseInt(whole, 10) * 100 + Number.parseInt(frac, 10)));
+  const found: { at: number; amount: Cents }[] = [];
+  for (const re of AMOUNT_RES) {
+    for (const m of text.matchAll(re)) {
+      const whole = m[1]!.replaceAll(",", "");
+      const frac = m[2] ?? "00";
+      found.push({ at: m.index, amount: cents(Number.parseInt(whole, 10) * 100 + Number.parseInt(frac, 10)) });
+    }
   }
-  return out;
+  return found.sort((a, b) => a.at - b.at).map((f) => f.amount);
 }
 
 export function formatUsd(c: Cents): string {
