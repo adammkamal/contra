@@ -33,6 +33,7 @@ src/clock.ts         injectable clock
 src/audit.ts         append-only event log
 src/state.ts         back-charge and credit state machines
 src/span.ts          verbatim source check
+src/intake.ts        per-item ingest checks (span, dispute, link); shared with bench/
 src/resolver.ts      job -> subcontract party -> alias linkage
 src/eligibility.ts   deterministic eligibility rules
 src/credits.ts       credit proposal from eligible items

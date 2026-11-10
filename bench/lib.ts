@@ -3,8 +3,8 @@ import { join } from "node:path";
 import type { Rejected } from "../src/extract/validate.ts";
 import { cents } from "../src/money.ts";
 import type { RampVendor } from "../src/mocks/ramp.ts";
-import { normName, resolve, type ResolverData } from "../src/resolver.ts";
-import { disputeSentencesFor, verifyAmountEvidence } from "../src/span.ts";
+import { assessExtractedItem } from "../src/intake.ts";
+import { normName, type ResolverData } from "../src/resolver.ts";
 import type { Email, ExtractedBackCharge, Subcontract } from "../src/types.ts";
 
 /** A case file holds only the email. Extractions come from recordings, labels from bench/labels/. */
@@ -44,13 +44,13 @@ export interface Outcome {
 /** Both systems send a run with 0 or several accepted items to a human. */
 export const REVIEW: Outcome = { decision: { kind: "review" }, wouldCredit: false };
 
-/** Contra: span check, deterministic resolver, dispute rules. Same rules as src/, nothing bench-specific. */
+/** Contra: the product's own ingest checks (src/intake.ts assessExtractedItem), mapped to an outcome. Nothing bench-specific. */
 export function contraDecide(email: Email, x: ExtractedBackCharge, data: ResolverData): Outcome {
-  if (!verifyAmountEvidence(email, x.amountEvidence, x.amountCents).ok) return { decision: { kind: "hold", why: "unverified" }, wouldCredit: false };
-  const r = resolve(x, data);
+  const a = assessExtractedItem(email, x, data);
+  if (a.holdReasons.length) return { decision: { kind: "hold", why: a.holdReasons.join(", ") }, wouldCredit: false };
+  const r = a.resolution!;
   if (r.kind !== "linked") return { decision: { kind: "review" }, wouldCredit: false };
-  const disputed = x.disputeNoted || disputeSentencesFor(email.body, x.ref).length > 0;
-  return { decision: { kind: "link", subcontractId: r.subcontractId }, wouldCredit: !disputed };
+  return { decision: { kind: "link", subcontractId: r.subcontractId }, wouldCredit: !a.disputeInSource };
 }
 
 const tokens = (s: string) => new Set(normName(s).split(" ").filter(Boolean));

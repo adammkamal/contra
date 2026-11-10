@@ -4,8 +4,9 @@ import { creditAmountFor } from "./credits.ts";
 import { evaluateEligibility, type EligibilityResult } from "./eligibility.ts";
 import { renderCreditMemo } from "./memo.ts";
 import { formatUsd, sub as subCents, sum, type Cents } from "./money.ts";
-import { ambiguousWith, resolve, type Resolution } from "./resolver.ts";
-import { disputeSentencesFor, normalize, verifyAmountEvidence, verifySpan } from "./span.ts";
+import { assessExtractedItem } from "./intake.ts";
+import { ambiguousWith, type Resolution } from "./resolver.ts";
+import { disputeSentencesFor, normalize, verifySpan } from "./span.ts";
 import { transitionBackCharge, transitionCredit, transitionNotice } from "./state.ts";
 import type { MockERP } from "./mocks/erp.ts";
 import { planApplication, type PaymentsPlatform, type PlannedApplication } from "./mocks/ramp.ts";
@@ -116,11 +117,9 @@ export class Contra {
         continue;
       }
 
-      const amountCheck = verifyAmountEvidence(email, x.amountEvidence, x.amountCents);
-      const disputeCheck = x.disputeNoted && x.disputeEvidence ? verifySpan(email, x.disputeEvidence) : { ok: true as const };
-      const backstop = disputeSentencesFor(email.body, x.ref);
-      this.#evidenceOk.set(x.ref, amountCheck.ok && disputeCheck.ok);
-      this.#sourceDispute.set(x.ref, x.disputeNoted || backstop.length > 0);
+      const a = assessExtractedItem(email, x, this.d.erp);
+      this.#evidenceOk.set(x.ref, a.evidenceOk);
+      this.#sourceDispute.set(x.ref, a.disputeInSource);
 
       const bc: BackCharge = {
         ref: x.ref,
@@ -141,14 +140,13 @@ export class Contra {
         action: `extracted ${formatUsd(x.amountCents)}`,
         from: null,
         to: "extracted",
-        evidence: [x.amountEvidence.sentence, ...(x.disputeEvidence ? [x.disputeEvidence.sentence] : []), ...backstop],
+        evidence: [x.amountEvidence.sentence, ...(x.disputeEvidence ? [x.disputeEvidence.sentence] : []), ...a.backstop],
       });
 
-      if (!amountCheck.ok || !disputeCheck.ok) {
-        const why = [!amountCheck.ok ? amountCheck.reason : "", !disputeCheck.ok ? disputeCheck.reason : ""].filter(Boolean);
-        this.#hold(bc, ["unverified_evidence"], why);
+      if (a.holdReasons.length) {
+        this.#hold(bc, a.holdReasons, a.holdEvidence);
       } else {
-        const r = resolve(x, this.d.erp);
+        const r = a.resolution!;
         this.proposals.set(x.ref, r);
         if (r.kind === "linked") bc.linkExplanation = r.explanation;
         else transitionBackCharge(this.d.log, bc, "needs_review", SYSTEM, "resolver could not link", r.reasons);
