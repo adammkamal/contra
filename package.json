@@ -13,6 +13,8 @@
     "bench:record": "tsx scripts/bench-record.ts",
     "extract:live": "tsx scripts/extract-live.ts",
     "try:live": "tsx scripts/try-live.ts",
+    "gmail:auth": "tsx scripts/gmail-auth.ts",
+    "inbox:check": "tsx scripts/inbox-check.ts",
     "hooks": "node scripts/install-hooks.mjs",
     "api": "tsx scripts/serve.ts",
     "contract:samples": "tsx scripts/contract-samples.ts"
