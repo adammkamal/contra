@@ -166,7 +166,7 @@ test("try: findHighlight tolerates whitespace and quote/dash typography, and ret
 test("try: read-only: audit log's last seq and buildScreens are byte-identical before and after", async () => {
   const app = freshApp();
   try {
-    runAction(app, buildScreens(app).nextStep.action!); // ingest the demo emails, so there is state to protect
+    await runAction(app, buildScreens(app).nextStep.action!); // ingest the demo emails, so there is state to protect
     const seq = app.store.lastEventSeq();
     const screens = JSON.stringify(buildScreens(app));
     const erp = JSON.stringify([app.ctx.erp.jobs, app.ctx.erp.subcontracts, app.ctx.erp.aliases]);

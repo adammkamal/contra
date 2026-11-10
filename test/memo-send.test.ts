@@ -129,7 +129,7 @@ test("a memo left queued (stopped between send and record) is never re-sent auto
     // Simulate a crash after queueing: the queue step committed, the send's result never recorded.
     app().run(({ contra }) => contra.queueMemo("VC-1", sender.destination, AP));
     assert.equal(isOffered(app(), SEND), false);
-    assert.throws(() => runAction(app(), SEND), NotOffered);
+    await assert.rejects(runAction(app(), SEND), NotOffered);
     assert.match(buildScreens(app()).credits[0]!.memo!.label, /check that inbox before sending again/);
     assert.equal(calls(), 0);
     // The transition table itself refuses queued -> queued.

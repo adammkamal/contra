@@ -267,7 +267,7 @@ export function createApiServer(opts: ApiOptions): {
   pollTimer?.unref();
   const inboxStatus = (): InboxStatus => opts.inbox?.poller.status() ?? SAMPLE_INBOX;
 
-  // mailparser is async and runAction is sync, so the files are read up front and awaited before an action.
+  // mailparser is async, so the files are read up front and awaited before an action (runAction itself is awaited too).
   const loadEmails = (): Promise<PmEmailSource | null> => {
     const p = opts.emlDir === null ? Promise.resolve(null) : loadPmEmails(opts.emlDir ?? DEFAULT_EML_DIR);
     p.catch(() => {}); // reported when an action awaits it, not as an unhandled rejection

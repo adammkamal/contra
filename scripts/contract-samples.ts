@@ -35,7 +35,7 @@ for (;;) {
   const step = nextStep(app);
   if (!step.action) break;
   if (step.action.command === "ingestPmEmails") cmd.ingestPmEmails(app, { fixturesDir: null, ...(pmEmails ? { emails: pmEmails.emails, emailOrigin: pmEmails.origin } : {}) });
-  else cmd.runAction(app, step.action);
+  else await cmd.runAction(app, step.action);
   i++;
   write(`${String(i).padStart(2, "0")}-after-${slug(step.text)}.screens.json`, buildScreens(app));
   if (i > 40) throw new Error("demo did not finish");

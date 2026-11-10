@@ -189,16 +189,18 @@ export interface ActionInput {
 
 /**
  * The single dispatcher every frontend uses (Next server action or HTTP API). Exhaustive: adding an
- * Action variant without a case here is a type error. Every action is synchronous except
- * sendCreditMemo, which returns a Promise that settles once the send is recorded: hosts await the result.
+ * Action variant without a case here is a type error. Always returns a Promise, for every action: it
+ * resolves once the action is recorded, and every refusal (NotOffered, a rule, a bad choice) is a
+ * rejection, never a synchronous throw. Hosts must await it. Most actions are recorded before it returns;
+ * sendCreditMemo settles only after the send's result is recorded.
  */
-export function runAction(
+export async function runAction(
   app: App,
   action: import("./view.ts").Action,
   input: ActionInput = {},
   /** Injected by the host: where "Ingest PM emails" reads from. Absent or null: the built-in sample. */
   sources: { pmEmails?: PmEmailSource | null } = {},
-): void | Promise<void> {
+): Promise<void> {
   if (!isOffered(app, action)) throw new NotOffered(`${action.command} is not available right now (refresh the screen)`);
   switch (action.command) {
     case "ingestPmEmails":
@@ -242,7 +244,8 @@ export function runAction(
       payBill(app, action.billId);
       return;
     case "sendCreditMemo":
-      return sendCreditMemo(app, action.creditId).then(() => undefined);
+      await sendCreditMemo(app, action.creditId);
+      return;
     default: {
       const never: never = action;
       throw new Error(`unknown action ${JSON.stringify(never)}`);

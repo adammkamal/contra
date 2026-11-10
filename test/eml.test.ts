@@ -94,14 +94,14 @@ test("eml: Date header sets receivedAt; From/To without a display name stay bare
 });
 
 /** Follows nextStep to the end; ingest reads `emails` when given. Same recorded extractions either way. */
-function runDemo(emails: Email[] | null): Screens {
+async function runDemo(emails: Email[] | null): Promise<Screens> {
   const app = new App(join(tmp(), "d.db"), { start: START });
   const pmEmails = emails ? { origin: "eml" as const, emails } : null;
   for (let i = 0; i < 40; i++) {
     const a = nextStep(app).action;
     if (!a) break;
     if (a.command === "ingestPmEmails") assert.equal(cmd.ingestPmEmails(app, pmEmails ? { emails: pmEmails.emails, emailOrigin: "eml" } : {}).source, "model");
-    else cmd.runAction(app, a, {}, { pmEmails });
+    else await cmd.runAction(app, a, {}, { pmEmails });
   }
   const s = buildScreens(app);
   app.close();
@@ -109,8 +109,8 @@ function runDemo(emails: Email[] | null): Screens {
 }
 
 test("eml: ingesting from .eml files and from the seed ends in the same demo state", async () => {
-  const fromEml = runDemo(await parsed());
-  const fromSeed = runDemo(null);
+  const fromEml = await runDemo(await parsed());
+  const fromSeed = await runDemo(null);
   for (const s of [fromEml, fromSeed]) {
     assert.equal(s.nextStep.action, null);
     assert.deepEqual(s.credits.map((c) => c.amount), ["$11,500.00"]);

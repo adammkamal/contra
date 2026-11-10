@@ -236,7 +236,7 @@ test("workspaces (core): a demo App refuses live mail; a live App has the seed b
     const s = buildScreens(live);
     assert.equal(s.workspace, "live");
     assert.deepEqual(s.nextStep, { text: "Waiting for back-charge emails from the live inbox", action: null });
-    await assert.rejects(async () => runAction(live, { command: "ingestPmEmails" }), /not available/);
+    await assert.rejects(runAction(live, { command: "ingestPmEmails" }), /not available/);
     assert.equal(buildScreens(demo).workspace, "demo");
   } finally {
     demo.close();

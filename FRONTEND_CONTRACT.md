@@ -20,12 +20,17 @@ const app = (globalThis as any).__contra ??= new App("data/demo.db");
 // PM emails from fixtures/emails/*.eml (null when the folder is missing: built-in sample). Async: load once.
 const pmEmails = (globalThis as any).__contraEmails ??= await loadPmEmails();
 buildScreens(app);                    // read
-runAction(app, action, { choice, reason }, { pmEmails }); // change state (one function for every button)
+await runAction(app, action, { choice, reason }, { pmEmails }); // change state (one function for every button); always a Promise
 backChargeDetail(app, "BC-4470");     // detail screen
 app.ctx.contra.creditMemo("VC-1");    // { filename, text }
 // Live inbox (optional): a second App on its own database, never the demo's. See "Workspaces".
 const live = (globalThis as any).__contraLive ??= new App("data/live.db", { workspace: "live" });
 ```
+
+`runAction` returns a Promise for every action. Always `await` it, and catch refusals with
+`try { await runAction(...) } catch (e) { ... }`: a refused action (not offered, a rule, a bad choice) is a
+rejected Promise, never a synchronous throw, so a `try`/`catch` without `await` catches nothing and the
+refusal becomes an unhandled rejection. Re-read `buildScreens(app)` after the await, not before.
 
 **B. HTTP JSON API (any stack: Vite, plain React, another language).** Run `npm run api`.
 It listens on `http://127.0.0.1:4100` (set `CONTRA_PORT` to change). CORS headers are sent only to the
@@ -114,7 +119,7 @@ Render each `actions[]` entry as a button, and when clicked send exactly that ob
 | `billArrives` | none | Bill arrives |
 | `turnOnCredits` | `billId` | Turn on credits |
 | `payBill` | `billId` | Pay (simulated) |
-| `sendCreditMemo` | `creditId` | Send credit memo. Appears only when the server has a memo sender (live mode, `CONTRA_INBOX=gmail`), for a credit with a recorded approval whose memo isn't sent, or whose last send failed (the retry). The response comes back after the send is recorded (a few seconds); disable the button meanwhile. In-process hosts must `await runAction(...)`: for this action it returns a Promise. |
+| `sendCreditMemo` | `creditId` | Send credit memo. Appears only when the server has a memo sender (live mode, `CONTRA_INBOX=gmail`), for a credit with a recorded approval whose memo isn't sent, or whose last send failed (the retry). The response comes back after the send is recorded (a few seconds); disable the button meanwhile. In process, `await runAction(...)` settles only then. |
 
 **Test ids** (the browser test selects on these): `data-testid="{command}-{id}"`, where id is the
 action's `ref`, `noticeId`, `creditId`, `billId` or `subcontractId`. Use just `{command}` when the

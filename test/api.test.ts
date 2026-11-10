@@ -124,8 +124,39 @@ test("runAction: an offered picker still refuses a choice outside its options", 
   assert.equal(picker.command, "chooseSubcontract");
   const options = (picker as any).options as string[];
   assert.ok(options.includes("SC-SUM-0912") && options.includes("SC-SUM-0820"));
-  assert.throws(() => cmd.runAction(app, picker, { choice: "SC-SUM-0700" }), /choose one of/); // Harbor: real, not offered
-  cmd.runAction(app, picker, { choice: "SC-SUM-0912" });
+  await assert.rejects(cmd.runAction(app, picker, { choice: "SC-SUM-0700" }), /choose one of/); // Harbor: real, not offered
+  await cmd.runAction(app, picker, { choice: "SC-SUM-0912" });
   assert.equal(app.ctx.contra.backCharges.get("BC-4467")!.subcontractId, "SC-SUM-0912");
+  app.close();
+});
+
+test("runAction returns a Promise for every action, and every refusal is a rejection, never a synchronous throw", async () => {
+  const { App } = await import("../src/app.ts");
+  const cmd = await import("../src/commands.ts");
+  const { buildScreens, nextStep } = await import("../src/view.ts");
+  const memoSender = { destination: "ap@example.com", send: async () => ({ messageId: "m-1" }) };
+  const app = new App(join(mkdtempSync(join(tmpdir(), "contra-")), "d.db"), { start: START, memoSender });
+  const seen = new Set<string>();
+  const call = (a: Parameters<typeof cmd.runAction>[1], input = {}) => {
+    let p: unknown;
+    assert.doesNotThrow(() => (p = cmd.runAction(app, a, input)), `${a.command} threw synchronously`);
+    assert.ok(p instanceof Promise, `${a.command} did not return a Promise`);
+    seen.add(a.command);
+    return p as Promise<void>;
+  };
+  // Refusals: not offered, a rule (a rejection without a reason), a bad picker choice.
+  await assert.rejects(call({ command: "payBill", billId: "B-NONE" }), cmd.NotOffered);
+  for (let i = 0; i < 40; i++) {
+    const a = nextStep(app).action;
+    if (!a) break;
+    if (a.command === "approveCredit") {
+      await assert.rejects(call({ command: "rejectCredit", creditId: a.creditId }, { reason: "  " }), /needs a reason/);
+    }
+    await call(a);
+  }
+  const send = buildScreens(app).credits[0]!.actions.find((a) => a.command === "sendCreditMemo")!;
+  await call(send);
+  assert.equal(buildScreens(app).credits[0]!.memo!.label, "Memo sent to ap@example.com");
+  assert.ok(seen.size >= 12, [...seen].join(", "));
   app.close();
 });
