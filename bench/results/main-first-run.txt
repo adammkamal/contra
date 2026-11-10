@@ -1,0 +1,94 @@
+Main benchmark, first scored run (npm run bench).
+Scored at commit 1518dcc ("Benchmark labels: 20 human-reviewed cases", 2026-11-09 20:13:31 -0800): the file was
+written 1 second after that commit, and re-running npm run bench at 1518dcc reproduces the output below exactly.
+The code was changed after these results, so later scores on this set are not held-out.
+---
+
+> bench
+> tsx bench/run.ts
+
+Extractions: fixtures/bench-extractions, 3 run(s), claude-opus-5-5 (medium)
+┌─────────┬─────────┬─────┬───────┬────────────────────────────┬─────────┬───────────┬────────────────────────────┬─────────┬───────────┐
+│ (index) │ case    │ run │ items │ contra                     │ c match │ c dispute │ baseline                   │ b match │ b dispute │
+├─────────┼─────────┼─────┼───────┼────────────────────────────┼─────────┼───────────┼────────────────────────────┼─────────┼───────────┤
+│ 0       │ 'bc-01' │ 1   │ 1     │ 'link SC-SUM-0912 +credit' │ true    │ true      │ 'link SC-SUM-0912 +credit' │ true    │ true      │
+│ 1       │ 'bc-01' │ 2   │ 1     │ 'link SC-SUM-0912 +credit' │ true    │ true      │ 'link SC-SUM-0912 +credit' │ true    │ true      │
+│ 2       │ 'bc-01' │ 3   │ 1     │ 'link SC-SUM-0912 +credit' │ true    │ true      │ 'link SC-SUM-0912 +credit' │ true    │ true      │
+│ 3       │ 'bc-02' │ 1   │ 1     │ 'link SC-SUM-0912 +credit' │ true    │ true      │ 'link SC-SUM-0912 +credit' │ true    │ true      │
+│ 4       │ 'bc-02' │ 2   │ 1     │ 'link SC-SUM-0912 +credit' │ true    │ true      │ 'link SC-SUM-0912 +credit' │ true    │ true      │
+│ 5       │ 'bc-02' │ 3   │ 1     │ 'link SC-SUM-0912 +credit' │ true    │ true      │ 'link SC-SUM-0912 +credit' │ true    │ true      │
+│ 6       │ 'bc-03' │ 1   │ 1     │ 'review'                   │ true    │ true      │ 'link SC-SUM-0912 +credit' │ false   │ true      │
+│ 7       │ 'bc-03' │ 2   │ 1     │ 'review'                   │ true    │ true      │ 'link SC-SUM-0912 +credit' │ false   │ true      │
+│ 8       │ 'bc-03' │ 3   │ 1     │ 'review'                   │ true    │ true      │ 'link SC-SUM-0912 +credit' │ false   │ true      │
+│ 9       │ 'bc-04' │ 1   │ 1     │ 'link SC-SUM-0820 +credit' │ true    │ true      │ 'link SC-SUM-0820 +credit' │ true    │ true      │
+│ 10      │ 'bc-04' │ 2   │ 1     │ 'link SC-SUM-0820 +credit' │ true    │ true      │ 'link SC-SUM-0820 +credit' │ true    │ true      │
+│ 11      │ 'bc-04' │ 3   │ 1     │ 'link SC-SUM-0820 +credit' │ true    │ true      │ 'link SC-SUM-0820 +credit' │ true    │ true      │
+│ 12      │ 'bc-05' │ 1   │ 1     │ 'link SC-SUM-0700 +credit' │ true    │ true      │ 'link SC-SUM-0700 +credit' │ true    │ true      │
+│ 13      │ 'bc-05' │ 2   │ 1     │ 'link SC-SUM-0700 +credit' │ true    │ true      │ 'link SC-SUM-0700 +credit' │ true    │ true      │
+│ 14      │ 'bc-05' │ 3   │ 1     │ 'link SC-SUM-0700 +credit' │ true    │ true      │ 'link SC-SUM-0700 +credit' │ true    │ true      │
+│ 15      │ 'bc-06' │ 1   │ 1     │ 'link SC-LAK-0301 +credit' │ true    │ true      │ 'link SC-LAK-0301 +credit' │ true    │ true      │
+│ 16      │ 'bc-06' │ 2   │ 1     │ 'link SC-LAK-0301 +credit' │ true    │ true      │ 'link SC-LAK-0301 +credit' │ true    │ true      │
+│ 17      │ 'bc-06' │ 3   │ 1     │ 'link SC-LAK-0301 +credit' │ true    │ true      │ 'link SC-LAK-0301 +credit' │ true    │ true      │
+│ 18      │ 'bc-07' │ 1   │ 1     │ 'review'                   │ true    │ true      │ 'link SC-SUM-0912 +credit' │ false   │ true      │
+│ 19      │ 'bc-07' │ 2   │ 1     │ 'review'                   │ true    │ true      │ 'link SC-SUM-0912 +credit' │ false   │ true      │
+│ 20      │ 'bc-07' │ 3   │ 1     │ 'review'                   │ true    │ true      │ 'link SC-SUM-0912 +credit' │ false   │ true      │
+│ 21      │ 'bc-08' │ 1   │ 1     │ 'review'                   │ true    │ true      │ 'link SC-SUM-0912 +credit' │ false   │ true      │
+│ 22      │ 'bc-08' │ 2   │ 0     │ 'review (0 items)'         │ true    │ true      │ 'review (0 items)'         │ true    │ true      │
+│ 23      │ 'bc-08' │ 3   │ 0     │ 'review (0 items)'         │ true    │ true      │ 'review (0 items)'         │ true    │ true      │
+│ 24      │ 'bc-09' │ 1   │ 1     │ 'link SC-SUM-0912'         │ true    │ true      │ 'link SC-SUM-0912'         │ true    │ true      │
+│ 25      │ 'bc-09' │ 2   │ 1     │ 'link SC-SUM-0912'         │ true    │ true      │ 'link SC-SUM-0912'         │ true    │ true      │
+│ 26      │ 'bc-09' │ 3   │ 1     │ 'link SC-SUM-0912'         │ true    │ true      │ 'link SC-SUM-0912'         │ true    │ true      │
+│ 27      │ 'bc-10' │ 1   │ 1     │ 'link SC-SUM-0700'         │ true    │ true      │ 'link SC-SUM-0700'         │ true    │ true      │
+│ 28      │ 'bc-10' │ 2   │ 1     │ 'link SC-SUM-0700'         │ true    │ true      │ 'link SC-SUM-0700'         │ true    │ true      │
+│ 29      │ 'bc-10' │ 3   │ 1     │ 'link SC-SUM-0700'         │ true    │ true      │ 'link SC-SUM-0700'         │ true    │ true      │
+│ 30      │ 'bc-11' │ 1   │ 1     │ 'link SC-SUM-0912 +credit' │ true    │ true      │ 'link SC-SUM-0912 +credit' │ true    │ true      │
+│ 31      │ 'bc-11' │ 2   │ 1     │ 'link SC-SUM-0912 +credit' │ true    │ true      │ 'link SC-SUM-0912 +credit' │ true    │ true      │
+│ 32      │ 'bc-11' │ 3   │ 1     │ 'link SC-SUM-0912 +credit' │ true    │ true      │ 'link SC-SUM-0912 +credit' │ true    │ true      │
+│ 33      │ 'bc-12' │ 1   │ 1     │ 'link SC-SUM-0912 +credit' │ false   │ true      │ 'link SC-SUM-0912 +credit' │ false   │ true      │
+│ 34      │ 'bc-12' │ 2   │ 1     │ 'link SC-SUM-0912 +credit' │ false   │ true      │ 'link SC-SUM-0912 +credit' │ false   │ true      │
+│ 35      │ 'bc-12' │ 3   │ 1     │ 'link SC-SUM-0912 +credit' │ false   │ true      │ 'link SC-SUM-0912 +credit' │ false   │ true      │
+│ 36      │ 'bc-13' │ 1   │ 1     │ 'link SC-SUM-0912 +credit' │ true    │ true      │ 'link SC-SUM-0912 +credit' │ true    │ true      │
+│ 37      │ 'bc-13' │ 2   │ 1     │ 'link SC-SUM-0912 +credit' │ true    │ true      │ 'link SC-SUM-0912 +credit' │ true    │ true      │
+│ 38      │ 'bc-13' │ 3   │ 1     │ 'link SC-SUM-0912 +credit' │ true    │ true      │ 'link SC-SUM-0912 +credit' │ true    │ true      │
+│ 39      │ 'bc-14' │ 1   │ 1     │ 'review'                   │ true    │ true      │ 'review'                   │ true    │ true      │
+│ 40      │ 'bc-14' │ 2   │ 1     │ 'review'                   │ true    │ true      │ 'review'                   │ true    │ true      │
+│ 41      │ 'bc-14' │ 3   │ 1     │ 'review'                   │ true    │ true      │ 'review'                   │ true    │ true      │
+│ 42      │ 'bc-15' │ 1   │ 1     │ 'link SC-SUM-0912 +credit' │ false   │ true      │ 'link SC-SUM-0912 +credit' │ false   │ true      │
+│ 43      │ 'bc-15' │ 2   │ 1     │ 'link SC-SUM-0912 +credit' │ false   │ true      │ 'link SC-SUM-0912 +credit' │ false   │ true      │
+│ 44      │ 'bc-15' │ 3   │ 1     │ 'link SC-SUM-0912 +credit' │ false   │ true      │ 'link SC-SUM-0912 +credit' │ false   │ true      │
+│ 45      │ 'bc-16' │ 1   │ 1     │ 'link SC-SUM-0820 +credit' │ true    │ true      │ 'link SC-SUM-0820 +credit' │ true    │ true      │
+│ 46      │ 'bc-16' │ 2   │ 1     │ 'link SC-SUM-0820 +credit' │ true    │ true      │ 'link SC-SUM-0820 +credit' │ true    │ true      │
+│ 47      │ 'bc-16' │ 3   │ 1     │ 'link SC-SUM-0820 +credit' │ true    │ true      │ 'link SC-SUM-0820 +credit' │ true    │ true      │
+│ 48      │ 'bc-17' │ 1   │ 1     │ 'review'                   │ false   │ true      │ 'review'                   │ false   │ true      │
+│ 49      │ 'bc-17' │ 2   │ 1     │ 'review'                   │ false   │ true      │ 'review'                   │ false   │ true      │
+│ 50      │ 'bc-17' │ 3   │ 1     │ 'review'                   │ false   │ true      │ 'review'                   │ false   │ true      │
+│ 51      │ 'bc-18' │ 1   │ 1     │ 'link SC-SUM-0912 +credit' │ true    │ true      │ 'link SC-SUM-0912 +credit' │ true    │ true      │
+│ 52      │ 'bc-18' │ 2   │ 1     │ 'link SC-SUM-0912 +credit' │ true    │ true      │ 'link SC-SUM-0912 +credit' │ true    │ true      │
+│ 53      │ 'bc-18' │ 3   │ 1     │ 'link SC-SUM-0912 +credit' │ true    │ true      │ 'link SC-SUM-0912 +credit' │ true    │ true      │
+│ 54      │ 'bc-19' │ 1   │ 1     │ 'link SC-SUM-0912 +credit' │ true    │ true      │ 'link SC-SUM-0912 +credit' │ true    │ true      │
+│ 55      │ 'bc-19' │ 2   │ 1     │ 'link SC-SUM-0912 +credit' │ true    │ true      │ 'link SC-SUM-0912 +credit' │ true    │ true      │
+│ 56      │ 'bc-19' │ 3   │ 1     │ 'link SC-SUM-0912 +credit' │ true    │ true      │ 'link SC-SUM-0912 +credit' │ true    │ true      │
+│ 57      │ 'bc-20' │ 1   │ 1     │ 'review'                   │ true    │ true      │ 'link SC-SUM-0700 +credit' │ false   │ true      │
+│ 58      │ 'bc-20' │ 2   │ 1     │ 'review'                   │ true    │ true      │ 'link SC-SUM-0700 +credit' │ false   │ true      │
+│ 59      │ 'bc-20' │ 3   │ 1     │ 'review'                   │ true    │ true      │ 'link SC-SUM-0700 +credit' │ false   │ true      │
+└─────────┴─────────┴─────┴───────┴────────────────────────────┴─────────┴───────────┴────────────────────────────┴─────────┴───────────┘
+
+contra (per run; matching = correct link or correct review)
+┌─────────┬─────┬────────┬────────┬──────────┬─────────┬────────────┬──────────────┬───────────────┐
+│ (index) │ run │ scored │ failed │ matching │ dispute │ wrongLinks │ wrongCredits │ routedToHuman │
+├─────────┼─────┼────────┼────────┼──────────┼─────────┼────────────┼──────────────┼───────────────┤
+│ 0       │ 1   │ 20     │ 0      │ 17       │ 20      │ 2          │ 2            │ 6             │
+│ 1       │ 2   │ 20     │ 0      │ 17       │ 20      │ 2          │ 2            │ 6             │
+│ 2       │ 3   │ 20     │ 0      │ 17       │ 20      │ 2          │ 2            │ 6             │
+└─────────┴─────┴────────┴────────┴──────────┴─────────┴────────────┴──────────────┴───────────────┘
+
+baseline (per run; matching = correct link or correct review)
+┌─────────┬─────┬────────┬────────┬──────────┬─────────┬────────────┬──────────────┬───────────────┐
+│ (index) │ run │ scored │ failed │ matching │ dispute │ wrongLinks │ wrongCredits │ routedToHuman │
+├─────────┼─────┼────────┼────────┼──────────┼─────────┼────────────┼──────────────┼───────────────┤
+│ 0       │ 1   │ 20     │ 0      │ 13       │ 20      │ 6          │ 6            │ 2             │
+│ 1       │ 2   │ 20     │ 0      │ 14       │ 20      │ 5          │ 5            │ 3             │
+│ 2       │ 3   │ 20     │ 0      │ 14       │ 20      │ 5          │ 5            │ 3             │
+└─────────┴─────┴────────┴────────┴──────────┴─────────┴────────────┴──────────────┴───────────────┘
+
+Unstable cases (outcome differs between runs): contra bc-08; baseline bc-08
