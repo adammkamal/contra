@@ -95,7 +95,9 @@ test("API: two-part actions need their input; reset starts clean; CORS preflight
     assert.equal(reset.body.screens.inbox.length, 0);
     const pre = await fetch(`${base}/api/action`, { method: "OPTIONS" });
     assert.equal(pre.status, 204);
-    assert.equal(pre.headers.get("access-control-allow-origin"), "*");
+    assert.equal(pre.headers.get("access-control-allow-origin"), null); // no Origin, no CORS headers (never "*")
+    const local = await fetch(`${base}/api/action`, { method: "OPTIONS", headers: { origin: "http://localhost:3000" } });
+    assert.equal(local.headers.get("access-control-allow-origin"), "http://localhost:3000");
     const big = await fetch(`${base}/api/action`, { method: "POST", body: "x".repeat(70_000) }).catch(() => null);
     assert.ok(big === null || big.status === 413);
   });

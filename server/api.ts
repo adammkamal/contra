@@ -70,10 +70,39 @@ export function tryLimiter(maxPerHour: number, now: () => number) {
   };
 }
 
+/**
+ * Browser origins that get CORS headers when CONTRA_ALLOWED_ORIGINS is unset: the repo's only frontend
+ * (contra-ui) runs `next dev`, which serves http://localhost:3000. Any other origin gets no CORS headers.
+ */
+export const DEFAULT_ALLOWED_ORIGINS: readonly string[] = ["http://localhost:3000"];
+
+/** CONTRA_ALLOWED_ORIGINS: comma-separated origins ("https://demo.example.com,http://localhost:3000"). Throws on anything that isn't an origin. */
+export function allowedOriginsFromEnv(env: Record<string, string | undefined>): string[] {
+  const raw = (env.CONTRA_ALLOWED_ORIGINS ?? "").trim();
+  if (!raw) return [...DEFAULT_ALLOWED_ORIGINS];
+  return raw
+    .split(",")
+    .map((s) => s.trim().replace(/\/+$/, ""))
+    .filter(Boolean)
+    .map((o) => {
+      let parsed: URL | null = null;
+      try {
+        parsed = new URL(o);
+      } catch {
+        /* reported below */
+      }
+      if (!parsed || parsed.origin !== o || !/^https?:$/.test(parsed.protocol)) {
+        throw new Error(`CONTRA_ALLOWED_ORIGINS: "${o}" is not an origin like https://demo.example.com`);
+      }
+      return o;
+    });
+}
+
 export interface ApiOptions {
   dbPath: string;
   start?: Date;
-  corsOrigin?: string;
+  /** Origins that get CORS headers (exact match). Default DEFAULT_ALLOWED_ORIGINS. Other origins get none. */
+  allowedOrigins?: readonly string[];
   maxBodyBytes?: number;
   /**
    * Folder of PM .eml files for "Ingest PM emails" (read through ingest/eml.ts, re-read on reset).
@@ -139,13 +168,21 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
     pmEmails = loadEmails();
   };
 
+  const allowed = new Set(opts.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS);
+  /** CORS headers only for an allowed Origin; a disallowed or missing Origin gets none. */
+  const setCors = (req: IncomingMessage, res: ServerResponse) => {
+    res.setHeader("vary", "Origin");
+    const origin = req.headers.origin;
+    if (!origin || !allowed.has(origin)) return;
+    res.setHeader("access-control-allow-origin", origin);
+    res.setHeader("access-control-allow-methods", "GET, POST, OPTIONS");
+    res.setHeader("access-control-allow-headers", "content-type");
+  };
+
   const send = (res: ServerResponse, status: number, body: unknown) => {
     const json = JSON.stringify(body);
     res.writeHead(status, {
       "content-type": "application/json; charset=utf-8",
-      "access-control-allow-origin": opts.corsOrigin ?? "*",
-      "access-control-allow-methods": "GET, POST, OPTIONS",
-      "access-control-allow-headers": "content-type",
       "cache-control": "no-store",
     });
     res.end(json);
@@ -185,6 +222,7 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
   };
 
   const server = createServer(async (req, res) => {
+    setCors(req, res);
     try {
       const url = new URL(req.url ?? "/", "http://localhost");
       const path = url.pathname.replace(/\/+$/, "") || "/";

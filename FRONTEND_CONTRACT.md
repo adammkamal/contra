@@ -26,7 +26,11 @@ app.ctx.contra.creditMemo("VC-1");    // { filename, text }
 ```
 
 **B. HTTP JSON API (any stack: Vite, plain React, another language).** Run `npm run api`.
-It listens on `http://127.0.0.1:4100` (set `CONTRA_PORT` to change), with CORS open for local development.
+It listens on `http://127.0.0.1:4100` (set `CONTRA_PORT` to change). CORS headers are sent only to the
+origins in `CONTRA_ALLOWED_ORIGINS` (comma-separated, exact match, e.g.
+`http://localhost:5173,https://demo.example.com`); unset, that is `http://localhost:3000` (`next dev`).
+A page served from any other origin gets no CORS headers, so the browser won't let it read responses:
+add your frontend's origin before calling the API from a browser.
 
 | Method and path | Returns |
 |---|---|
