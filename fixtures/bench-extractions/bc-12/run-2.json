@@ -1,11 +1,11 @@
 {
   "model": "claude-opus-5-5",
   "effort": "medium",
-  "recordedAt": "2026-11-10T07:50:43.226Z",
+  "recordedAt": "2026-11-10T10:19:50.206Z",
   "items": [
     {
       "ref": "BC-5012",
-      "description": "Wall repair and refinishing, L3 exam rooms, damaged when crew stacked board against walls",
+      "description": "Wall repair and refinishing in L3 exam rooms, damaged when crew stacked board against them",
       "amountCents": 500000,
       "amountEvidence": {
         "emailId": "bc-12",
@@ -16,5 +16,18 @@
       "disputeNoted": false
     }
   ],
-  "rejected": []
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": "BC-5012",
+        "description": "Wall repair and refinishing in L3 exam rooms, damaged when crew stacked board against them",
+        "amountText": "$5,000.00",
+        "amountSentence": "BC-5012: wall repair, L3 exam rooms, $5,000.00.",
+        "vendorNameAsWritten": "Ridgeline Drywall",
+        "jobRef": "Summit",
+        "disputeNoted": false
+      }
+    ]
+  }
 }

@@ -1,11 +1,11 @@
 {
   "model": "claude-opus-5-5",
   "effort": "medium",
-  "recordedAt": "2026-11-10T08:09:19.062Z",
+  "recordedAt": "2026-11-10T10:21:30.367Z",
   "items": [
     {
       "ref": "BC-6105",
-      "description": "Damaged ceiling tiles in L1 lobby while moving lifts; replaced by GC",
+      "description": "Damaged ceiling tiles, L1 lobby, damaged while moving lifts; replaced by GC",
       "amountCents": 95000,
       "amountEvidence": {
         "emailId": "ho-05",
@@ -16,5 +16,18 @@
       "disputeNoted": false
     }
   ],
-  "rejected": []
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": "BC-6105",
+        "description": "Damaged ceiling tiles, L1 lobby, damaged while moving lifts; replaced by GC",
+        "amountText": "$950.00",
+        "amountSentence": "BC-6105: damaged ceiling tiles, L1 lobby, $950.00.",
+        "vendorNameAsWritten": "Apex Interior Systems",
+        "jobRef": "Summit",
+        "disputeNoted": false
+      }
+    ]
+  }
 }

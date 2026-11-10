@@ -1,7 +1,7 @@
 {
   "model": "claude-opus-5-5",
   "effort": "medium",
-  "recordedAt": "2026-11-10T07:51:05.351Z",
+  "recordedAt": "2026-11-10T10:20:13.985Z",
   "items": [
     {
       "ref": "BC-5015",
@@ -16,5 +16,18 @@
       "disputeNoted": false
     }
   ],
-  "rejected": []
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": "BC-5015",
+        "description": "Stair 2 cleanup - stair left covered in joint compound after taping",
+        "amountText": "$890.00",
+        "amountSentence": "BC-5015: stair 2 cleanup, $890.00.",
+        "vendorNameAsWritten": "Ridgeline Drywall",
+        "jobRef": "Summit",
+        "disputeNoted": false
+      }
+    ]
+  }
 }

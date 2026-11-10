@@ -1,11 +1,11 @@
 {
   "model": "claude-opus-5-5",
   "effort": "medium",
-  "recordedAt": "2026-11-10T08:09:32.598Z",
+  "recordedAt": "2026-11-10T10:21:45.203Z",
   "items": [
     {
       "ref": "BC-6107",
-      "description": "Broken tiles in L2 restrooms cracked when crew stacked board on them; tiles replaced",
+      "description": "Broken tiles in L2 restrooms, cracked when crew stacked board on them; replaced",
       "amountCents": 78000,
       "amountEvidence": {
         "emailId": "ho-07",
@@ -16,5 +16,18 @@
       "disputeNoted": false
     }
   ],
-  "rejected": []
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": "BC-6107",
+        "description": "Broken tiles in L2 restrooms, cracked when crew stacked board on them; replaced",
+        "amountText": "$780.00",
+        "amountSentence": "BC-6107: broken tiles, L2 restrooms, $780.00.",
+        "vendorNameAsWritten": "Ridgeline Drywall",
+        "jobRef": "Lakeview",
+        "disputeNoted": false
+      }
+    ]
+  }
 }

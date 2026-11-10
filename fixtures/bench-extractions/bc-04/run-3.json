@@ -1,7 +1,7 @@
 {
   "model": "claude-opus-5-5",
   "effort": "medium",
-  "recordedAt": "2026-11-10T07:49:48.129Z",
+  "recordedAt": "2026-11-10T10:18:54.817Z",
   "items": [
     {
       "ref": "BC-5004",
@@ -16,5 +16,18 @@
       "disputeNoted": false
     }
   ],
-  "rejected": []
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": "BC-5004",
+        "description": "Replace broken storefront lite, main entry",
+        "amountText": "$3,200.00",
+        "amountSentence": "BC-5004: replace broken storefront lite, main entry, $3,200.00.",
+        "vendorNameAsWritten": "Ridgeline Glass & Glazing",
+        "jobRef": "Summit",
+        "disputeNoted": false
+      }
+    ]
+  }
 }
