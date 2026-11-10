@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { createApiServer, TRY_LIMITS, type TryApiOptions } from "../server/api.ts";
+import { createApiServer, DEFAULT_TRY_DAILY_CAP, TRY_LIMITS, tryDailyCapFromEnv, tryLimiter, type TryApiOptions } from "../server/api.ts";
 import { findHighlight, tryEmail, tryOutcome, TRY_NOTE, type TryInput, type TrySettings } from "../server/try.ts";
 import { App } from "../src/app.ts";
 import { runAction } from "../src/commands.ts";
@@ -300,4 +300,56 @@ test("API /api/try: 503 with the message when the key is missing, the model fail
   await withApi(undefined, async (base) => {
     assert.equal((await postTry(base, HARBOR)).status, 503);
   });
+});
+
+test("limits: the hourly limit is per client IP; the daily cap counts every client together", () => {
+  let t = Date.UTC(2026, 10, 10, 12, 0, 0);
+  const lim = tryLimiter({ maxPerHour: 2, dailyCap: 5 }, () => t);
+  const take = (ip: string) => {
+    const s = lim.acquire(ip);
+    if (s.ok) s.release();
+    return s.ok ? "ok" : s.error;
+  };
+  assert.equal(take("10.0.0.1"), "ok");
+  assert.equal(take("10.0.0.1"), "ok");
+  assert.match(take("10.0.0.1"), /per hour from your address/);
+  assert.equal(take("10.0.0.2"), "ok"); // another address has its own hour
+  assert.equal(take("10.0.0.2"), "ok");
+  assert.equal(take("10.0.0.3"), "ok"); // 5th call today, across all addresses
+  assert.match(take("10.0.0.4"), /daily demo cap of 5 emails/);
+  t += 3_600_000; // an hour later the hourly windows are free, but the day's cap still holds
+  assert.match(take("10.0.0.1"), /daily demo cap/);
+});
+
+test("API /api/try: the daily demo cap is 429 until midnight UTC on the injected clock, and counts like the hourly limit", async () => {
+  let t = Date.UTC(2026, 10, 10, 23, 59, 0);
+  await withApi({ ...settled, dailyCap: 3, maxPerHour: 100, now: () => t }, async (base) => {
+    // Bad input (400) uses no slot, exactly as for the hourly limit.
+    for (let i = 0; i < 5; i++) assert.equal((await postTry(base, { subject: "x" })).status, 400);
+    for (let i = 0; i < 3; i++) assert.equal((await postTry(base, HARBOR)).status, 200, `call ${i + 1}`);
+    const capped = await postTry(base, HARBOR);
+    assert.equal(capped.status, 429);
+    assert.match(capped.body.error, /daily demo cap of 3 emails/);
+    assert.match(capped.body.error, /midnight UTC/);
+    t = Date.UTC(2026, 10, 10, 23, 59, 59, 999);
+    assert.equal((await postTry(base, HARBOR)).status, 429);
+    t = Date.UTC(2026, 10, 11, 0, 0, 0, 0);
+    assert.equal((await postTry(base, HARBOR)).status, 200);
+  });
+  // A failed model call used the key, so it counts; a missing key (503 before the limiter) doesn't.
+  const failing = (async () => new Response("{}", { status: 500 })) as unknown as typeof fetch;
+  await withApi({ settings: () => OK, callOptions: { fetcher: failing, ...fast }, dailyCap: 1, now: () => t }, async (base) => {
+    assert.equal((await postTry(base, HARBOR)).status, 503);
+    assert.match((await postTry(base, HARBOR)).body.error, /daily demo cap/);
+  });
+  await withApi({ settings: () => ({ ok: false, message: "no key" }), dailyCap: 1, now: () => t }, async (base) => {
+    for (let i = 0; i < 3; i++) assert.equal((await postTry(base, HARBOR)).body.error, "no key");
+  });
+});
+
+test("CONTRA_TRY_DAILY_CAP: defaults to 200, takes a positive whole number, refuses anything else", () => {
+  assert.equal(DEFAULT_TRY_DAILY_CAP, 200);
+  assert.equal(tryDailyCapFromEnv({}), 200);
+  assert.equal(tryDailyCapFromEnv({ CONTRA_TRY_DAILY_CAP: " 50 " }), 50);
+  for (const bad of ["0", "-1", "1.5", "lots", "1e3"]) assert.throws(() => tryDailyCapFromEnv({ CONTRA_TRY_DAILY_CAP: bad }), /positive whole number/, bad);
 });

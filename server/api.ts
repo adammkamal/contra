@@ -21,10 +21,22 @@ export interface TryApiOptions {
   settings: () => TrySettings;
   /** Passed to the extractor (tests inject a fake fetcher). */
   callOptions?: ExtractOptions;
-  /** Model calls allowed per rolling hour. Default 30. */
+  /** Model calls allowed per client IP per rolling hour. Default 30. */
   maxPerHour?: number;
-  /** Milliseconds, for the hourly window. Default Date.now. */
+  /** Model calls allowed per UTC day, all clients together (CONTRA_TRY_DAILY_CAP). Default 200. */
+  dailyCap?: number;
+  /** The one clock the limits read, in epoch milliseconds (UTC). Default Date.now. */
   now?: () => number;
+}
+
+export const DEFAULT_TRY_DAILY_CAP = 200;
+
+/** CONTRA_TRY_DAILY_CAP: a positive whole number; unset means 200. Throws on anything else. */
+export function tryDailyCapFromEnv(env: Record<string, string | undefined>): number {
+  const raw = (env.CONTRA_TRY_DAILY_CAP ?? "").trim();
+  if (!raw) return DEFAULT_TRY_DAILY_CAP;
+  if (!/^\d+$/.test(raw) || !Number.isSafeInteger(Number(raw)) || Number(raw) < 1) throw new Error(`CONTRA_TRY_DAILY_CAP must be a positive whole number, got "${raw}"`);
+  return Number(raw);
 }
 
 export const TRY_LIMITS = { subject: 300, body: 20_000, address: 300, requestBytes: 256 * 1024 } as const;
@@ -52,19 +64,40 @@ export function parseTryInput(x: unknown): TryInput | string {
   };
 }
 
-/** At most one model call in flight and maxPerHour per rolling hour, in memory. A refused request uses no slot. */
-export function tryLimiter(maxPerHour: number, now: () => number) {
+const HOUR_MS = 3_600_000;
+const DAY_MS = 86_400_000;
+
+/**
+ * In-memory spend limits for POST /api/try, all read from one injected clock (epoch ms):
+ * at most one model call in flight (all clients), maxPerHour per client IP per rolling hour, and
+ * dailyCap per UTC day for all clients together (resets at 00:00 UTC). Each model call counts once
+ * toward both limits; a refused request uses no slot. A restart resets the counts.
+ */
+export function tryLimiter(limits: { maxPerHour: number; dailyCap: number }, now: () => number) {
   let inFlight = false;
-  const started: number[] = [];
+  const perIp = new Map<string, number[]>();
+  let day = -1;
+  let dayCount = 0;
   return {
-    /** Takes a slot, or returns why not. Call release() when the call is done. */
-    acquire(): { ok: true; release: () => void } | { ok: false; error: string } {
+    /** Takes a slot for this client, or returns why not. Call release() when the call is done. */
+    acquire(ip: string): { ok: true; release: () => void } | { ok: false; error: string } {
       if (inFlight) return { ok: false, error: "another email is being checked; try again when it finishes" };
       const t = now();
-      while (started.length && started[0]! <= t - 3_600_000) started.shift();
-      if (started.length >= maxPerHour) return { ok: false, error: `limit of ${maxPerHour} emails per hour reached; try again later` };
+      const today = Math.floor(t / DAY_MS);
+      if (today !== day) [day, dayCount] = [today, 0];
+      if (dayCount >= limits.dailyCap) {
+        return { ok: false, error: `the daily demo cap of ${limits.dailyCap} emails is reached for everyone; it resets at midnight UTC` };
+      }
+      if (perIp.size > 10_000) for (const [k, v] of perIp) if (v.every((s) => s <= t - HOUR_MS)) perIp.delete(k);
+      const mine = (perIp.get(ip) ?? []).filter((s) => s > t - HOUR_MS);
+      if (mine.length >= limits.maxPerHour) {
+        perIp.set(ip, mine);
+        return { ok: false, error: `limit of ${limits.maxPerHour} emails per hour from your address reached; try again later` };
+      }
       inFlight = true;
-      started.push(t);
+      mine.push(t);
+      perIp.set(ip, mine);
+      dayCount++;
       return { ok: true, release: () => (inFlight = false) };
     },
   };
@@ -188,7 +221,7 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
     res.end(json);
   };
 
-  const limiter = tryLimiter(opts.try?.maxPerHour ?? 30, opts.try?.now ?? Date.now);
+  const limiter = tryLimiter({ maxPerHour: opts.try?.maxPerHour ?? 30, dailyCap: opts.try?.dailyCap ?? DEFAULT_TRY_DAILY_CAP }, opts.try?.now ?? Date.now);
 
   const readJson = (req: IncomingMessage, limit = maxBody): Promise<unknown> =>
     new Promise((resolve, reject) => {
@@ -261,7 +294,7 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
         if (!opts.try) return send(res, 503, { ok: false, error: "trying an email is not enabled on this server" });
         const settings = opts.try.settings();
         if (!settings.ok) return send(res, 503, { ok: false, error: settings.message });
-        const slot = limiter.acquire();
+        const slot = limiter.acquire(req.socket.remoteAddress ?? "unknown"); // the socket address, never X-Forwarded-For (a client can set it)
         if (!slot.ok) return send(res, 429, { ok: false, error: slot.error });
         try {
           const result = await tryEmail(app, input, settings, opts.try.callOptions ?? {});

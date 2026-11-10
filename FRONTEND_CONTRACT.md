@@ -131,9 +131,14 @@ and the ERP data are unchanged, so this can be used at any point in the demo. In
 | `body` | string, not blank, at most 20,000 characters |
 | `from`, `to` | optional strings, at most 300 characters each. The extractor may read the sub's name from `to`. |
 
-**Limits.** One request in flight at a time and 30 model calls per rolling hour per server (in memory),
-because each call spends the demo's API key. Over either limit: 429. A 400 (bad input) or a 503 for a
-missing key uses no slot. Show the message and let the person try again later; don't retry automatically.
+**Limits**, because each call spends the demo's API key (all in memory; a server restart resets them):
+- one request in flight at a time, for everyone;
+- 30 model calls per rolling hour per client IP address;
+- a daily demo cap for everyone together, `CONTRA_TRY_DAILY_CAP` (default 200), that resets at midnight UTC.
+
+Over any limit: 429, and the message says which (the daily cap's message says it is the daily demo cap).
+A 400 (bad input) or a 503 for a missing key uses no slot; a model call that fails does. Show the message
+and let the person try again later; don't retry automatically.
 
 **Response** (`TryResult`, plus `"ok": true` over HTTP):
 
