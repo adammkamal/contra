@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Rejected } from "../src/extract/validate.ts";
+import { parseBackCharges, type Rejected } from "../src/extract/validate.ts";
 import { cents } from "../src/money.ts";
 import type { RampVendor } from "../src/mocks/ramp.ts";
 import { assessExtractedItem } from "../src/intake.ts";
@@ -21,6 +21,12 @@ export interface BenchRun {
   recordedAt: string;
   items: ExtractedBackCharge[];
   rejected: Rejected[];
+  /**
+   * The model's tool input before validation. When present, loadRuns re-validates it with the current
+   * parseBackCharges and uses that result instead of the stored items/rejected (which reflect the
+   * validator at recording time). Older recordings don't have it; their stored items are used as is.
+   */
+  rawToolInput?: unknown;
   /** Set when the call itself failed (network, model error...). Such a run is not scored. */
   error?: string;
 }
@@ -158,9 +164,13 @@ export function loadCases(dir: string): BenchCase[] {
     .map((f) => JSON.parse(readFileSync(join(dir, f), "utf8"), reviveDates) as BenchCase);
 }
 
-/** Recorded runs for one case, in run order. Empty when the case has no recordings. */
-export function loadRuns(recordingsDir: string, caseId: string): BenchRun[] {
-  const dir = join(recordingsDir, caseId);
+/**
+ * Recorded runs for one case, in run order. Empty when the case has no recordings. A run with
+ * `rawToolInput` is re-validated against the case's email, so validator changes are measured
+ * without new model calls; a run without it keeps its stored items.
+ */
+export function loadRuns(recordingsDir: string, c: BenchCase): BenchRun[] {
+  const dir = join(recordingsDir, c.id);
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .map((f) => /^run-(\d+)\.json$/.exec(f))
@@ -168,6 +178,7 @@ export function loadRuns(recordingsDir: string, caseId: string): BenchRun[] {
     .sort((a, b) => Number(a[1]) - Number(b[1]))
     .map((m) => {
       const r = JSON.parse(readFileSync(join(dir, m[0]), "utf8")) as BenchRun;
+      if (!r.error && r.rawToolInput !== undefined) return { ...r, ...parseBackCharges(r.rawToolInput, c.email) };
       r.items = r.items.map((x) => ({ ...x, amountCents: cents(x.amountCents) }));
       return r;
     });

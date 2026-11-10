@@ -16,8 +16,12 @@ without a label for every case, it exits listing the unlabeled cases.
 - `cases/` — one JSON per case: `{ id, description, email }`, and `email.id` equals the case id. No
   extractor output and nothing about the expected answer (test/bench-cases.test.ts enforces it).
 - `../fixtures/bench-extractions/<caseId>/run-<n>.json` — what the live extractor returned for that
-  case: `{ model, effort, recordedAt, items, rejected }`, plus `error` when the call failed.
-  `bench:record` replaces a case's runs on each recording. The demo's `fixtures/extractions/` is never read.
+  case: `{ model, effort, recordedAt, items, rejected, rawToolInput }`, plus `error` when the call failed.
+  `rawToolInput` is the model's output before validation; `npm run bench` re-runs the current validator
+  (`parseBackCharges`) on it, so validator changes are measured without new model calls. `items` and
+  `rejected` are what the validator returned at recording time, and are used only for older recordings
+  that have no `rawToolInput`. `bench:record` replaces a case's runs on each recording. The demo's
+  `fixtures/extractions/` is never read.
 - `labels/` — **protected, human-written only.** One JSON per case: `link` (a subcontract ID, or
   `"review"` if a careful person would not auto-link), `disputed`, `amountCents`, `labeledBy` (your name).
   The run prints **NOT VALID FOR THE DEMO** while any label for a current case isn't human-written.

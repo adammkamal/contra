@@ -5,7 +5,8 @@
  *   npm run bench:record -- --runs 5
  *   npm run bench:record -- --set heldout   # held-out set (default: main)
  * Writes fixtures/bench-extractions/<caseId>/run-<n>.json (held-out: fixtures/bench-extractions/heldout/<caseId>/). A failed call is recorded (with `error`)
- * and the recording continues. Never touches fixtures/extractions/ (the demo's).
+ * and the recording continues. Each run also stores the model's raw tool input (`rawToolInput`), which `npm run bench`
+ * re-validates with the current validator. Never touches fixtures/extractions/ (the demo's).
  */
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
@@ -60,7 +61,7 @@ for (const c of cases) {
     try {
       const r = await extractBackCharges(cfg.settings, c.email);
       rec = r.ok
-        ? { model: r.actor.kind === "llm" ? r.actor.model : cfg.settings.model, effort, recordedAt: new Date(Date.now()).toISOString(), items: r.items, rejected: r.rejected }
+        ? { model: r.actor.kind === "llm" ? r.actor.model : cfg.settings.model, effort, recordedAt: new Date(Date.now()).toISOString(), items: r.items, rejected: r.rejected, rawToolInput: r.rawToolInput }
         : { model: cfg.settings.model, effort, recordedAt: new Date(Date.now()).toISOString(), items: [], rejected: [], error: r.reason };
     } catch (e) {
       rec = { model: cfg.settings.model, effort, recordedAt: new Date(Date.now()).toISOString(), items: [], rejected: [], error: e instanceof Error ? e.message : String(e) };

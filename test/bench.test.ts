@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { cents } from "../src/money.ts";
 import { join } from "node:path";
-import { baselineDecide, parseSet, REVIEW, score, setPaths, type BenchLabel, type Outcome } from "../bench/lib.ts";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { baselineDecide, contraDecide, loadRuns, parseSet, REVIEW, score, setPaths, type BenchCase, type BenchLabel, type BenchRun, type Outcome } from "../bench/lib.ts";
+import { parseBackCharges } from "../src/extract/validate.ts";
+import { MockERP } from "../src/mocks/erp.ts";
 import { demoSeed } from "../src/seed.ts";
 import type { ExtractedBackCharge } from "../src/types.ts";
 
@@ -91,5 +95,91 @@ test("--set: each set has its own cases, labels, recordings and results", () => 
   assert.deepEqual(setPaths(r, "heldout"), {
     cases: join(r, "bench", "heldout", "cases"), labels: join(r, "bench", "heldout", "labels"),
     recordings: join(r, "fixtures", "bench-extractions", "heldout"), results: join(r, "bench", "heldout", "results.json"),
+  });
+});
+
+// Recordings: a made-up case, written for these tests only.
+const RAW_CASE: BenchCase = {
+  id: "t-raw",
+  description: "test only",
+  email: {
+    id: "t-raw",
+    from: "Ines Varga <ines@apexbuilders.example>",
+    to: "Harbor Mechanical <office@harbormech.example>",
+    subject: "BC-7731 - Summit MOB",
+    receivedAt: new Date("2026-10-20T14:00:00Z"),
+    body: "Hi,\n\nHarbor Mechanical left condensate lines uncapped and water reached the ceiling below.\n\nBC-7731: ceiling tile replacement, Summit MOB, USD 1,450.\n\nInes",
+  },
+};
+const RAW_OUTPUT = {
+  items: [{
+    ref: "BC-7731", description: "Ceiling tile replacement", amountText: "USD 1,450",
+    amountSentence: "BC-7731: ceiling tile replacement, Summit MOB, USD 1,450.",
+    vendorNameAsWritten: "Harbor Mechanical", jobRef: "Summit MOB", disputeNoted: false,
+  }],
+};
+
+function withRun(run: BenchRun, f: (dir: string) => void) {
+  const dir = mkdtempSync(join(tmpdir(), "contra-bench-"));
+  try {
+    mkdirSync(join(dir, RAW_CASE.id));
+    writeFileSync(join(dir, RAW_CASE.id, "run-1.json"), JSON.stringify(run, null, 2));
+    f(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function scoreRun(dir: string) {
+  const seed = demoSeed(new Date("2026-11-07T15:00:00Z"));
+  const erp = new MockERP({ jobs: seed.jobs, subcontracts: seed.subcontracts, aliases: [...seed.aliases] });
+  const [r] = loadRuns(dir, RAW_CASE);
+  const x = r!.items.length === 1 ? r!.items[0]! : null;
+  const o = x ? contraDecide(RAW_CASE.email, x, erp) : REVIEW;
+  return { items: r!.items, rejected: r!.rejected, outcome: o, score: score(o, L("SC-SUM-0912", false, 145_000), x ? x.amountCents : 0, r!.items.length) };
+}
+
+test("recordings: an old-format run (stored items only) and a new-format run (raw output) of the same output score the same", () => {
+  const validated = parseBackCharges(RAW_OUTPUT, RAW_CASE.email);
+  assert.equal(validated.items.length, 1);
+  const meta = { model: "claude-test-1", effort: "medium", recordedAt: "2026-11-10T00:00:00.000Z" };
+  const old: BenchRun = { ...meta, ...validated };
+  const now: BenchRun = { ...meta, ...validated, rawToolInput: RAW_OUTPUT };
+  let a: ReturnType<typeof scoreRun> | undefined, b: ReturnType<typeof scoreRun> | undefined;
+  withRun(JSON.parse(JSON.stringify(old)), (d) => (a = scoreRun(d)));
+  withRun(JSON.parse(JSON.stringify(now)), (d) => (b = scoreRun(d)));
+  assert.deepEqual(a, b);
+  assert.equal(a!.items[0]!.amountCents, 145_000);
+});
+
+test("recordings: raw output is re-validated at scoring time, so a stored rejection from an older validator is not kept", () => {
+  // Recorded when the validator didn't read "USD 1,450": nothing accepted. The raw output reads fine today.
+  const stale: BenchRun = {
+    model: "claude-test-1", effort: "medium", recordedAt: "2026-11-10T00:00:00.000Z",
+    items: [], rejected: [{ index: 0, reason: 'BC-7731: amountText "USD 1,450" is not exactly one $ amount' }],
+    rawToolInput: RAW_OUTPUT,
+  };
+  withRun(stale, (d) => {
+    const s = scoreRun(d);
+    assert.deepEqual(s.rejected, []);
+    assert.deepEqual(s.items.map((x) => [x.ref, x.amountCents]), [["BC-7731", 145_000]]);
+  });
+  // And the other way: raw output today's validator rejects is not scored from stale stored items.
+  const unreadable = { items: [{ ...RAW_OUTPUT.items[0]!, amountText: "USD 1,450.5", amountSentence: "BC-7731: ceiling tile replacement, Summit MOB, USD 1,450.5." }] };
+  const email = { ...RAW_CASE.email, body: "BC-7731: ceiling tile replacement, Summit MOB, USD 1,450.5." };
+  const accepted: BenchRun = { ...stale, items: parseBackCharges(RAW_OUTPUT, RAW_CASE.email).items, rejected: [], rawToolInput: unreadable };
+  withRun(accepted, (d) => {
+    const [r] = loadRuns(d, { ...RAW_CASE, email });
+    assert.equal(r!.items.length, 0);
+    assert.match(r!.rejected[0]!.reason, /can't be read exactly/);
+  });
+});
+
+test("recordings: a failed call is not re-validated", () => {
+  const failed: BenchRun = { model: "m", effort: "medium", recordedAt: "2026-11-10T00:00:00.000Z", items: [], rejected: [], error: "HTTP 500" };
+  withRun(failed, (d) => {
+    const [r] = loadRuns(d, RAW_CASE);
+    assert.equal(r!.error, "HTTP 500");
+    assert.deepEqual(r!.items, []);
   });
 });

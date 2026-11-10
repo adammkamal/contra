@@ -24,7 +24,7 @@ if (!cases.length) {
   console.error(`No cases in ${rel(paths.cases)}/`);
   process.exit(1);
 }
-const runsByCase = new Map(cases.map((c) => [c.id, loadRuns(paths.recordings, c.id)]));
+const runsByCase = new Map(cases.map((c) => [c.id, loadRuns(paths.recordings, c)]));
 
 const unrecorded = cases.filter((c) => runsByCase.get(c.id)!.length === 0).map((c) => c.id);
 if (unrecorded.length) {

@@ -34,12 +34,13 @@ export async function extractBackCharges(
   settings: ModelSettings,
   email: Email,
   opts: ExtractOptions = {},
-): Promise<{ ok: true; items: ExtractedBackCharge[]; rejected: Rejected[]; actor: Actor } | { ok: false; reason: string }> {
+): Promise<{ ok: true; items: ExtractedBackCharge[]; rejected: Rejected[]; actor: Actor; rawToolInput: unknown } | { ok: false; reason: string }> {
   const w = wrap(email, opts.boundary);
   const r = await callTool(settings, { system: backchargeSystem(w.tag), user: w.text, tool: BACKCHARGE_TOOL }, opts);
   if (r.status !== "OK") return { ok: false, reason: `${r.status}: ${r.message}` };
   const parsed = parseBackCharges(r.toolInput, email);
-  return { ok: true, ...parsed, actor: { kind: "llm", id: "extractor", model: r.model } };
+  // rawToolInput is the model's output before validation, so recordings can be re-validated later.
+  return { ok: true, ...parsed, actor: { kind: "llm", id: "extractor", model: r.model }, rawToolInput: r.toolInput };
 }
 
 export async function extractResponse(
