@@ -9,7 +9,7 @@
 import { performance } from "node:perf_hooks";
 import type { App } from "../src/app.ts";
 import type { ModelSettings } from "../src/extract/anthropic.ts";
-import { extractBackCharges, type ExtractOptions } from "../src/extract/index.ts";
+import { extractBackCharges, type CallErrorType, type ExtractOptions } from "../src/extract/index.ts";
 import { assessExtractedItem } from "../src/intake.ts";
 import { formatUsd } from "../src/money.ts";
 import type { ResolverData } from "../src/resolver.ts";
@@ -80,9 +80,28 @@ export const TRY_NOTE =
   "and nothing holds it, so the PM can confirm it and send the sub a notice. In every case a credit still needs a notice to the sub, " +
   "the response window to pass, the eligibility check and a controller's approval. Nothing was saved.";
 
-/** The model call couldn't be made or failed (missing key, network, model error). The API answers 503 with the message. */
+/**
+ * What a person sees when the model call fails, one fixed sentence per error type. The upstream API's own
+ * message is never passed on: it is outside our control and could echo anything.
+ */
+export const MODEL_ERROR_MESSAGES: Record<CallErrorType, string> = {
+  INVALID_CREDENTIAL: "The demo's API key was refused. Ask the demo owner to check it.",
+  RATE_LIMITED: "The model service is rate-limiting the demo. Try again in a minute.",
+  TIMEOUT: "The model took too long to answer. Try again.",
+  NETWORK_ERROR: "The model service couldn't be reached. Try again.",
+  MODEL_ERROR: "The model service returned an error. Try again later.",
+  INVALID_OUTPUT: "The model's answer couldn't be read. Try again.",
+};
+
+/**
+ * The model call couldn't be made or failed. The API answers 503 with the message, which is either our
+ * own settings message (missing key) or a fixed MODEL_ERROR_MESSAGES sentence, never upstream text.
+ */
 export class TryUnavailable extends Error {
   readonly status = 503;
+  constructor(message: string, readonly errorType: CallErrorType | "NOT_CONFIGURED") {
+    super(message);
+  }
 }
 
 export type TrySettings = { ok: true; settings: ModelSettings } | { ok: false; message: string };
@@ -170,7 +189,7 @@ function checksFor(email: Email, x: ExtractedBackCharge, a: ReturnType<typeof as
  * Throws TryUnavailable when settings are missing or the model call fails.
  */
 export async function tryEmail(app: App, input: TryInput, settings: TrySettings, opts: ExtractOptions & { now?: () => number } = {}): Promise<TryResult> {
-  if (!settings.ok) throw new TryUnavailable(settings.message);
+  if (!settings.ok) throw new TryUnavailable(settings.message, "NOT_CONFIGURED");
   const now = opts.now ?? (() => performance.now());
   const email: Email = {
     id: "try-email",
@@ -183,7 +202,7 @@ export async function tryEmail(app: App, input: TryInput, settings: TrySettings,
   const t0 = now();
   const r = await extractBackCharges(settings.settings, email, opts);
   const latencyMs = Math.round(now() - t0);
-  if (!r.ok) throw new TryUnavailable(r.reason);
+  if (!r.ok) throw new TryUnavailable(MODEL_ERROR_MESSAGES[r.errorType], r.errorType);
 
   const data = erpCopy(app);
   const refs = r.items.map((x) => x.ref);

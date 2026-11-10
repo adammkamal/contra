@@ -51,7 +51,7 @@ try {
   const result = await tryEmail(app, input, settingsFromEnv(process.env));
   console.log(JSON.stringify(result, null, 2));
 } catch (e) {
-  console.error(e instanceof TryUnavailable ? `Unavailable: ${e.message}` : e);
+  console.error(e instanceof TryUnavailable ? `Unavailable (${e.errorType}): ${e.message}` : e);
   process.exitCode = 1;
 } finally {
   app.close();

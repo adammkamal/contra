@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createApiServer, DEFAULT_TRY_DAILY_CAP, TRY_LIMITS, tryDailyCapFromEnv, tryLimiter, type TryApiOptions } from "../server/api.ts";
-import { findHighlight, tryEmail, tryOutcome, TRY_NOTE, type TryInput, type TrySettings } from "../server/try.ts";
+import { findHighlight, MODEL_ERROR_MESSAGES, tryEmail, tryOutcome, TRY_NOTE, type TryInput, type TrySettings } from "../server/try.ts";
 import { App } from "../src/app.ts";
 import { runAction } from "../src/commands.ts";
 import { normalize } from "../src/span.ts";
@@ -294,7 +294,8 @@ test("API /api/try: 503 with the message when the key is missing, the model fail
   await withApi({ settings: () => OK, callOptions: { fetcher: failing, ...fast } }, async (base) => {
     const r = await postTry(base, HARBOR);
     assert.equal(r.status, 503);
-    assert.match(r.body.error, /Overloaded/);
+    assert.equal(r.body.error, MODEL_ERROR_MESSAGES.MODEL_ERROR); // a fixed message, never the upstream text
+    assert.doesNotMatch(r.body.error, /Overloaded/);
     assert.equal((await postTry(base, HARBOR)).status, 503); // the in-flight slot was released
   });
   await withApi(undefined, async (base) => {

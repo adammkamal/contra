@@ -2,9 +2,12 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Actor, Email, ExtractedBackCharge, ExtractedResponse } from "../types.ts";
-import { callTool, type CallOptions, type ModelSettings } from "./anthropic.ts";
+import { callTool, type CallOptions, type CallResult, type ModelSettings } from "./anthropic.ts";
 import { BACKCHARGE_TOOL, RESPONSE_TOOL, backchargeSystem, responseSystem } from "./prompt.ts";
 import { parseBackCharges, parseResponse, type Rejected } from "./validate.ts";
+
+/** Why a model call failed, as callTool classifies it. */
+export type CallErrorType = Exclude<CallResult["status"], "OK">;
 
 export interface ExtractOptions extends CallOptions {
   /** Source of the per-call wrapper id. Default: a random UUID without dashes. Tests inject a fixed one. */
@@ -34,10 +37,10 @@ export async function extractBackCharges(
   settings: ModelSettings,
   email: Email,
   opts: ExtractOptions = {},
-): Promise<{ ok: true; items: ExtractedBackCharge[]; rejected: Rejected[]; actor: Actor; rawToolInput: unknown } | { ok: false; reason: string }> {
+): Promise<{ ok: true; items: ExtractedBackCharge[]; rejected: Rejected[]; actor: Actor; rawToolInput: unknown } | { ok: false; reason: string; errorType: CallErrorType }> {
   const w = wrap(email, opts.boundary);
   const r = await callTool(settings, { system: backchargeSystem(w.tag), user: w.text, tool: BACKCHARGE_TOOL }, opts);
-  if (r.status !== "OK") return { ok: false, reason: `${r.status}: ${r.message}` };
+  if (r.status !== "OK") return { ok: false, reason: `${r.status}: ${r.message}`, errorType: r.status };
   const parsed = parseBackCharges(r.toolInput, email);
   // rawToolInput is the model's output before validation, so recordings can be re-validated later.
   return { ok: true, ...parsed, actor: { kind: "llm", id: "extractor", model: r.model }, rawToolInput: r.toolInput };

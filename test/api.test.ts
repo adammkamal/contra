@@ -59,7 +59,7 @@ test("API: bad input is rejected with 400, unknown things with 404, illegal move
     assert.equal((await post(`${base}/api/action`, { action: { command: "approveCredit" } })).status, 400); // missing creditId
     assert.equal((await post(`${base}/api/action`, { action: { command: "deleteEverything" } })).status, 400);
     assert.equal((await post(`${base}/api/action`, { action: { command: "evaluateAll", extra: 1 } })).status, 400);
-    const r = await fetch(`${base}/api/action`, { method: "POST", body: "{not json" });
+    const r = await fetch(`${base}/api/action`, { method: "POST", headers: { "content-type": "application/json" }, body: "{not json" });
     assert.equal(r.status, 400);
     assert.equal((await getJson(`${base}/api/backcharge/BC-0000`)).status, 404);
     assert.equal((await getJson(`${base}/api/credit/VC-9/memo`)).status, 404);
@@ -98,7 +98,7 @@ test("API: two-part actions need their input; reset starts clean; CORS preflight
     assert.equal(pre.headers.get("access-control-allow-origin"), null); // no Origin, no CORS headers (never "*")
     const local = await fetch(`${base}/api/action`, { method: "OPTIONS", headers: { origin: "http://localhost:3000" } });
     assert.equal(local.headers.get("access-control-allow-origin"), "http://localhost:3000");
-    const big = await fetch(`${base}/api/action`, { method: "POST", body: "x".repeat(70_000) });
+    const big = await fetch(`${base}/api/action`, { method: "POST", headers: { "content-type": "application/json" }, body: "x".repeat(70_000) });
     assert.equal(big.status, 413); // a real response, not a dropped connection
   });
 });

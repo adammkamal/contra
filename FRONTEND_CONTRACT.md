@@ -29,8 +29,13 @@ app.ctx.contra.creditMemo("VC-1");    // { filename, text }
 It listens on `http://127.0.0.1:4100` (set `CONTRA_PORT` to change). CORS headers are sent only to the
 origins in `CONTRA_ALLOWED_ORIGINS` (comma-separated, exact match, e.g.
 `http://localhost:5173,https://demo.example.com`); unset, that is `http://localhost:3000` (`next dev`).
-A page served from any other origin gets no CORS headers, so the browser won't let it read responses:
-add your frontend's origin before calling the API from a browser.
+A request whose `Origin` header is any other origin is refused with 403 on every method, before anything
+runs: add your frontend's origin before calling the API from a browser. Requests with no `Origin` header
+(curl, server-to-server) are unaffected.
+
+**Every POST must send `Content-Type: application/json`** (a `charset` parameter is allowed), including
+`POST /api/reset` with an empty `{}` body. Anything else, or no Content-Type, is refused with 415 before the
+body is read.
 
 | Method and path | Returns |
 |---|---|
@@ -44,16 +49,20 @@ add your frontend's origin before calling the API from a browser.
 
 Errors are `{ "ok": false, "error": "<message to show the user>" }`:
 - **400:** the action isn't one the API knows, or its fields are wrong.
+- **403:** the request's `Origin` isn't in `CONTRA_ALLOWED_ORIGINS`. Checked first, on every method;
+  nothing ran.
 - **404:** unknown back-charge, credit or route.
 - **409:** a rule refused it. This includes any action the screens aren't currently offering (a stale
   screen, a double-click or a hand-made request), which comes back as "… is not available right now".
   Nothing changed; refresh the screens.
 - **413:** the request body is too large (`POST /api/try`: over 256 KB; other routes: over 64 KB).
+- **415:** a POST without `Content-Type: application/json`. Nothing ran.
 - **429** (`POST /api/try` only): another email is being checked, the hourly limit for your address is
   reached, or the daily demo cap is reached. The message says which.
 - **500:** an unexpected server error. The message is always "internal error".
 - **503** (`POST /api/try` only): no API key is configured, the model call failed, or the route isn't
-  enabled. The message says which.
+  enabled. A failed model call gets one fixed sentence per failure kind (key refused, rate-limited, timed
+  out, unreachable, service error, unreadable answer); the model service's own message is never shown.
 
 Show the message; don't retry.
 

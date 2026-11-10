@@ -131,6 +131,14 @@ export function allowedOriginsFromEnv(env: Record<string, string | undefined>): 
     });
 }
 
+/** "application/json", optionally with a charset parameter ("application/json; charset=utf-8"), and nothing else. */
+export function isJsonContentType(header: string | undefined): boolean {
+  if (!header) return false;
+  const [type, ...params] = header.split(";");
+  if (type!.trim().toLowerCase() !== "application/json") return false;
+  return params.every((p) => /^\s*charset\s*=\s*"?[A-Za-z0-9._-]+"?\s*$/i.test(p));
+}
+
 export interface ApiOptions {
   dbPath: string;
   start?: Date;
@@ -263,6 +271,16 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
 
   const server = createServer(async (req, res) => {
     setCors(req, res);
+    // Gates that run before any body is read or any route runs. CORS headers alone only stop a browser
+    // from reading the response; these stop a disallowed page's request from doing anything at all.
+    // 1. An Origin header that isn't allowed: 403 on every method. No Origin (curl, server-to-server): unaffected.
+    const origin = req.headers.origin;
+    if (origin !== undefined && !allowed.has(origin)) return send(res, 403, { ok: false, error: "this origin is not allowed to use the API" });
+    // 2. Every POST must be JSON. A form or text/plain POST is one a browser sends cross-origin without a
+    //    preflight; requiring application/json forces the preflight that the allow-list then refuses.
+    if (req.method === "POST" && !isJsonContentType(req.headers["content-type"])) {
+      return send(res, 415, { ok: false, error: "send the request body as JSON (Content-Type: application/json)" });
+    }
     try {
       const url = new URL(req.url ?? "/", "http://localhost");
       const path = url.pathname.replace(/\/+$/, "") || "/";
