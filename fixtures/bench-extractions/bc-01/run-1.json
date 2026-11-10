@@ -1,11 +1,11 @@
 {
   "model": "claude-opus-5-5",
   "effort": "medium",
-  "recordedAt": "2026-11-10T02:45:39.029Z",
+  "recordedAt": "2026-11-10T07:49:24.850Z",
   "items": [
     {
       "ref": "BC-5001",
-      "description": "Site cleanup, L2 - clearing drywall scrap and empty mud buckets",
+      "description": "Site cleanup, L2 - drywall scrap and empty mud buckets left after hang",
       "amountCents": 145000,
       "amountEvidence": {
         "emailId": "bc-01",

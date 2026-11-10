@@ -1,11 +1,11 @@
 {
   "model": "claude-opus-5-5",
   "effort": "medium",
-  "recordedAt": "2026-11-10T02:46:11.128Z",
+  "recordedAt": "2026-11-10T07:49:57.692Z",
   "items": [
     {
       "ref": "BC-5006",
-      "description": "Debris haul-off of scrap board and packaging left at Lakeview loading area",
+      "description": "Debris haul-off of scrap board and packaging at Lakeview loading area",
       "amountCents": 60000,
       "amountEvidence": {
         "emailId": "bc-06",

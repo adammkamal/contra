@@ -18,7 +18,7 @@ export const backchargeSystem = (tag: string) => [
   "- amountText: the dollar amount exactly as written, including the $ sign, e.g. \"$6,800.00\". Never compute, add or convert amounts.",
   "- amountSentence: copy the single sentence that contains that amount, character for character. Do not fix typos or join lines differently.",
   "- vendorNameAsWritten: the most complete name for the subcontractor that the email itself writes, in the body, subject, signature or the To/From display name. Never build a name from an email address or domain. Never use a remit-to, lockbox, factor or bank name unless it is the only name given. If the email never names the subcontractor, or names two different subcontractors and it is unclear which this back-charge is for, write UNKNOWN.",
-  "- jobRef: the job or project name as written.",
+  "- jobRef: the job or project name as written. If the email never names the job or project, write UNKNOWN.",
   "- disputeNoted: true if the email says the subcontractor disputes, contests or rejects this item; then copy that sentence into disputeSentence.",
   "- If nothing in the email is a back-charge, call the tool with an empty list.",
 ].join("\n");

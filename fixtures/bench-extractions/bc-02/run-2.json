@@ -1,11 +1,11 @@
 {
   "model": "claude-opus-5-5",
   "effort": "medium",
-  "recordedAt": "2026-11-10T02:45:46.990Z",
+  "recordedAt": "2026-11-10T07:49:32.876Z",
   "items": [
     {
       "ref": "BC-5002",
-      "description": "Replace damaged door frame, Room 214 (hollow metal frame jamb bent by crew's board cart; frame cut out and replaced)",
+      "description": "Replace damaged door frame, Room 214 (crew's board cart bent the hollow metal jamb)",
       "amountCents": 230000,
       "amountEvidence": {
         "emailId": "bc-02",

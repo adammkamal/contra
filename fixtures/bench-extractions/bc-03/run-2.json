@@ -1,11 +1,11 @@
 {
   "model": "claude-opus-5-5",
   "effort": "medium",
-  "recordedAt": "2026-11-10T02:45:53.124Z",
+  "recordedAt": "2026-11-10T07:49:40.412Z",
   "items": [
     {
       "ref": "BC-5003",
-      "description": "Floor protection and cleaning, L1 lobby (sub worked over finished lobby floor without protection)",
+      "description": "Floor protection and cleaning, L1 lobby (worked over finished lobby floor without protection)",
       "amountCents": 95000,
       "amountEvidence": {
         "emailId": "bc-03",

@@ -1,11 +1,11 @@
 {
   "model": "claude-opus-5-5",
   "effort": "medium",
-  "recordedAt": "2026-11-10T02:47:01.122Z",
+  "recordedAt": "2026-11-10T07:50:48.645Z",
   "items": [
     {
       "ref": "BC-5013",
-      "description": "Duct repair, L2 - crew cut into supply duct while installing backing; repaired by Harbor Mechanical",
+      "description": "Duct repair on L2 after the drywall crew cut into a supply duct while installing backing; repair done by Harbor Mechanical",
       "amountCents": 160000,
       "amountEvidence": {
         "emailId": "bc-13",
