@@ -103,7 +103,9 @@ export type HoldReason =
   | "no_payments_vendor"
   | "unverified_evidence"
   | "conflicting_amounts"
-  | "unresolved_link";
+  | "unresolved_link"
+  | "only_in_quoted_text"
+  | "suspicious_instructions";
 
 export interface BackCharge {
   ref: string;

@@ -42,6 +42,8 @@ const HOLD_WORDS: Record<HoldReason, string> = {
   unverified_evidence: "amount not found in the source email",
   conflicting_amounts: "two emails give different amounts",
   unresolved_link: "not linked to a subcontract",
+  only_in_quoted_text: "found only in quoted or forwarded text (may already have been sent or credited)",
+  suspicious_instructions: "email contains instructions aimed at an AI or automated system",
 };
 
 export function backChargeStatus(b: Readonly<BackCharge>): Status {
