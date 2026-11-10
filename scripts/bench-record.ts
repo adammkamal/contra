@@ -3,13 +3,14 @@
  * CONTRA_EFFORT from .env.local (never from ANTHROPIC_* variables, which Claude Code also reads).
  *   npm run bench:record              # 3 runs per case
  *   npm run bench:record -- --runs 5
- * Writes fixtures/bench-extractions/<caseId>/run-<n>.json. A failed call is recorded (with `error`)
+ *   npm run bench:record -- --set heldout   # held-out set (default: main)
+ * Writes fixtures/bench-extractions/<caseId>/run-<n>.json (held-out: fixtures/bench-extractions/heldout/<caseId>/). A failed call is recorded (with `error`)
  * and the recording continues. Never touches fixtures/extractions/ (the demo's).
  */
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadCases, type BenchRun } from "../bench/lib.ts";
+import { loadCases, parseSet, setPaths, type BenchRun, type BenchSet } from "../bench/lib.ts";
 import { settingsFromEnv } from "../src/extract/anthropic.ts";
 import { extractBackCharges } from "../src/extract/index.ts";
 
@@ -24,17 +25,30 @@ if (!Number.isInteger(RUNS) || RUNS < 1) {
   console.error("--runs must be a positive integer");
   process.exit(2);
 }
+let set: BenchSet;
+try {
+  set = parseSet(process.argv);
+} catch (e) {
+  console.error((e as Error).message);
+  process.exit(2);
+}
 const cfg = settingsFromEnv(process.env);
 if (!cfg.ok) {
   console.error(cfg.message);
   process.exit(2);
 }
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const outRoot = join(root, "fixtures", "bench-extractions");
-const cases = loadCases(join(root, "bench", "cases"));
+const paths = setPaths(root, set);
+const outRoot = paths.recordings;
+const outRel = relative(root, outRoot).replaceAll("\\", "/");
+const cases = loadCases(paths.cases);
+if (!cases.length) {
+  console.error(`No cases in ${relative(root, paths.cases)}`);
+  process.exit(1);
+}
 const effort = cfg.settings.effort ?? "medium";
 
-console.log(`Recording ${cases.length} cases x ${RUNS} runs with ${cfg.settings.model} (${effort})`);
+console.log(`Recording ${set} set: ${cases.length} cases x ${RUNS} runs with ${cfg.settings.model} (${effort})`);
 let failed = 0;
 for (const c of cases) {
   const dir = join(outRoot, c.id);
@@ -57,4 +71,4 @@ for (const c of cases) {
   }
   console.log(`${c.id}  ${parts.join(" | ")}`);
 }
-console.log(`\nDone: ${cases.length} cases x ${RUNS} runs, ${failed} failed call(s). Written to fixtures/bench-extractions/.`);
+console.log(`\nDone: ${cases.length} cases x ${RUNS} runs, ${failed} failed call(s). Written to ${outRel}/.`);

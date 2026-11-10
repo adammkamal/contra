@@ -28,10 +28,32 @@ export interface BenchRun {
 export interface BenchLabel {
   id: string;
   labeledBy: string;
-  /** "review" means a careful human would NOT auto-link this (ambiguous or unknown party). */
-  link: string | "review";
+  /**
+   * "review" means a careful human would NOT auto-link this (ambiguous or unknown party).
+   * "none" means the email holds no back-charge; then amountCents is null.
+   */
+  link: string | "review" | "none";
   disputed: boolean;
-  amountCents: number;
+  amountCents: number | null;
+}
+
+/** Which benchmark: the main set, or the held-out set that is scored separately and never merged into the main numbers. */
+export type BenchSet = "main" | "heldout";
+
+/** Reads `--set <main|heldout>` from argv; main when absent. Throws on any other value. */
+export function parseSet(argv: readonly string[]): BenchSet {
+  const i = argv.indexOf("--set");
+  if (i < 0) return "main";
+  const v = argv[i + 1];
+  if (v === "main" || v === "heldout") return v;
+  throw new Error(`--set must be "main" or "heldout", got ${v === undefined ? "nothing" : `"${v}"`}`);
+}
+
+/** Where a set's cases, labels, recordings and results live, from the repo root. */
+export function setPaths(repoRoot: string, set: BenchSet) {
+  const bench = set === "main" ? join(repoRoot, "bench") : join(repoRoot, "bench", "heldout");
+  const recordings = join(repoRoot, "fixtures", "bench-extractions", ...(set === "main" ? [] : ["heldout"]));
+  return { cases: join(bench, "cases"), labels: join(bench, "labels"), recordings, results: join(bench, "results.json") };
 }
 
 export type Decision = { kind: "link"; subcontractId: string } | { kind: "review" } | { kind: "hold"; why: string };
@@ -97,9 +119,22 @@ export interface Score {
  * wrongLink: auto-linked to anything other than the label (including linking when label = review).
  * wrongCredit: would create a credit that a careful human would not (wrong party, disputed, or wrong amount).
  * `extracted` is the extracted amount; it only matters when the system would credit.
+ * `accepted` is how many items the extractor accepted in the run (o is REVIEW when it isn't exactly 1).
+ *
+ * Label "none" (no back-charge): correct only if no item is accepted. An accepted item that would be
+ * credited is a wrong credit; any other accepted outcome is routed to a person and not correct.
  */
-export function score(o: Outcome, label: BenchLabel, extracted: number): Score {
+export function score(o: Outcome, label: BenchLabel, extracted: number, accepted: number): Score {
   const linked = o.decision.kind === "link" ? o.decision.subcontractId : null;
+  if (label.link === "none") {
+    return {
+      matching: accepted === 0,
+      dispute: !o.wouldCredit,
+      wrongLink: linked !== null,
+      wrongCredit: o.wouldCredit,
+      routedToHuman: accepted > 0 && !o.wouldCredit,
+    };
+  }
   const wrongLink = linked !== null && linked !== label.link;
   return {
     matching: label.link === "review" ? linked === null : linked === label.link,
@@ -113,6 +148,7 @@ export function score(o: Outcome, label: BenchLabel, extracted: number): Score {
 const reviveDates = (_k: string, v: unknown) => (typeof v === "string" && /^\d{4}-\d\d-\d\dT/.test(v) ? new Date(v) : v);
 
 export function loadCases(dir: string): BenchCase[] {
+  if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .filter((f) => f.endsWith(".json"))
     .sort()
@@ -136,6 +172,7 @@ export function loadRuns(recordingsDir: string, caseId: string): BenchRun[] {
 
 export function loadLabels(dir: string): Map<string, BenchLabel> {
   const out = new Map<string, BenchLabel>();
+  if (!existsSync(dir)) return out;
   for (const f of readdirSync(dir).filter((f) => f.endsWith(".json"))) {
     const l = JSON.parse(readFileSync(join(dir, f), "utf8")) as BenchLabel;
     out.set(l.id, l);

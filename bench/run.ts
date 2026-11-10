@@ -1,27 +1,40 @@
 import { writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MockERP } from "../src/mocks/erp.ts";
 import { demoSeed } from "../src/seed.ts";
-import { baselineDecide, contraDecide, loadCases, loadLabels, loadRuns, REVIEW, score, type Outcome, type Score } from "./lib.ts";
+import { baselineDecide, contraDecide, loadCases, loadLabels, loadRuns, parseSet, REVIEW, score, setPaths, type BenchSet, type Outcome, type Score } from "./lib.ts";
 
-const root = dirname(fileURLToPath(import.meta.url));
-const recordings = join(root, "..", "fixtures", "bench-extractions");
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+let set: BenchSet;
+try {
+  set = parseSet(process.argv);
+} catch (e) {
+  console.error((e as Error).message);
+  process.exit(2);
+}
+const paths = setPaths(repoRoot, set);
+const rel = (p: string) => relative(repoRoot, p).replaceAll("\\", "/");
+const setArg = set === "main" ? "" : ` -- --set ${set}`;
 
 const seed = demoSeed(new Date("2026-11-07T15:00:00Z"));
 const erp = new MockERP({ jobs: seed.jobs, subcontracts: seed.subcontracts, aliases: [...seed.aliases] });
-const cases = loadCases(join(root, "cases"));
-const runsByCase = new Map(cases.map((c) => [c.id, loadRuns(recordings, c.id)]));
+const cases = loadCases(paths.cases);
+if (!cases.length) {
+  console.error(`No cases in ${rel(paths.cases)}/`);
+  process.exit(1);
+}
+const runsByCase = new Map(cases.map((c) => [c.id, loadRuns(paths.recordings, c.id)]));
 
 const unrecorded = cases.filter((c) => runsByCase.get(c.id)!.length === 0).map((c) => c.id);
 if (unrecorded.length) {
-  console.error(`No recordings for ${unrecorded.length === cases.length ? "any case" : unrecorded.join(", ")}: run npm run bench:record first`);
+  console.error(`No recordings for ${unrecorded.length === cases.length ? "any case" : unrecorded.join(", ")}: run npm run bench:record${setArg} first`);
   process.exit(1);
 }
-const labels = loadLabels(join(root, "labels"));
+const labels = loadLabels(paths.labels);
 const missing = cases.filter((c) => !labels.has(c.id)).map((c) => c.id);
 if (missing.length) {
-  console.error(`Unlabeled cases (label them by hand in bench/labels/): ${missing.join(", ")}`);
+  console.error(`Unlabeled cases (label them by hand in ${rel(paths.labels)}/): ${missing.join(", ")}`);
   process.exit(1);
 }
 const caseIds = new Set(cases.map((c) => c.id));
@@ -45,10 +58,11 @@ for (const c of cases) {
     const co = x ? contraDecide(c.email, x, erp) : REVIEW;
     const bo = x ? baselineDecide(x, seed.vendors, seed.subcontracts, seed.jobs) : REVIEW;
     const amount = x ? x.amountCents : 0;
+    const accepted = r.items.length;
     const note = x ? "" : ` (${r.items.length} items)`;
     rows.push({
       caseId: c.id, run, items: r.items.length,
-      contra: score(co, label, amount), baseline: score(bo, label, amount),
+      contra: score(co, label, amount, accepted), baseline: score(bo, label, amount, accepted),
       contraDecision: show(co) + note, baselineDecision: show(bo) + note,
     });
   });
@@ -75,13 +89,15 @@ const unstable = (k: "contraDecision" | "baselineDecision") =>
 
 const models = [...new Set([...runsByCase.values()].flat().map((r) => `${r.model} (${r.effort})`))];
 const summary = {
-  extractions: `fixtures/bench-extractions, ${runCount} run(s), ${models.join(", ")}`,
+  set,
+  extractions: `${rel(paths.recordings)}, ${runCount} run(s), ${models.join(", ")}`,
   contra: perRun("contra"),
   baseline: perRun("baseline"),
   unstable: { contra: unstable("contraDecision"), baseline: unstable("baselineDecision") },
   nonHumanLabels: notHuman,
 };
 
+console.log(`Set: ${set}${set === "main" ? "" : " (scored separately, never merged into the main numbers)"}`);
 console.log(`Extractions: ${summary.extractions}`);
 console.table(rows.map((r) => ({
   case: r.caseId, run: r.run, items: r.failed ? "failed" : r.items,
@@ -96,4 +112,4 @@ console.log(`\nUnstable cases (outcome differs between runs): contra ${summary.u
 if (notHuman.length) {
   console.log(`\nNOT VALID FOR THE DEMO: ${notHuman.length} label(s) were not written by a human: ${notHuman.join(", ")}`);
 }
-writeFileSync(join(root, "results.json"), JSON.stringify({ summary, rows }, null, 2));
+writeFileSync(paths.results, JSON.stringify({ summary, rows }, null, 2));

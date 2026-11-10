@@ -6,6 +6,8 @@
 npm run bench:record              # live extractor, 3 runs per case (uses .env.local)
 npm run bench:record -- --runs 5
 npm run bench                     # scores the recordings against bench/labels/
+npm run bench:record -- --set heldout
+npm run bench -- --set heldout    # held-out set; the default set is main
 ```
 
 Without recordings, `npm run bench` exits with "run npm run bench:record first". With recordings but
@@ -34,3 +36,14 @@ set), so the comparison isolates matching. Columns, per system and per run:
 - **wrong links**, **wrong credits** (would credit something a careful human wouldn't: wrong party,
   disputed, or wrong amount) and **routed to human**. Report wrong credits together with the
   routed-to-human count: "0 wrong credits" means nothing if everything was routed to a human.
+
+## Held-out set
+
+`bench/heldout/` holds a second set of cases (`cases/`, ho-01 ...) with its own protected, human-written
+`labels/`. It is recorded and scored only with `--set heldout`, and its numbers are never merged into the
+main benchmark's: recordings go to `fixtures/bench-extractions/heldout/<caseId>/`, results to
+`bench/heldout/results.json`.
+
+A label's `link` may also be `"none"` (the email holds no back-charge), with `amountCents: null`. Such a run
+is correct only if no item is accepted. An accepted item that would be credited counts as a wrong credit;
+any other accepted outcome is routed to a person and is not correct.
