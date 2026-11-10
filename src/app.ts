@@ -1,4 +1,5 @@
 import { ManualClock, SystemClock } from "./clock.ts";
+import type { MemoSender } from "./memo.ts";
 import { MockERP } from "./mocks/erp.ts";
 import { MockRamp, type RampBill, type RampCredit } from "./mocks/ramp.ts";
 import { reconcile, scanEmails, type ReconResult } from "./reconcile.ts";
@@ -21,6 +22,8 @@ export interface Ctx {
   erp: MockERP;
   ramp: MockRamp;
   seed: ReturnType<typeof demoSeed>;
+  /** Delivers credit memos; null when none is configured (then no memo can be sent). Injected like the clock. */
+  memoSender: MemoSender | null;
 }
 
 /**
@@ -32,8 +35,10 @@ export class App {
   readonly store: SqliteStore;
   #ctx!: Ctx;
   #seedBaseMs!: number;
+  readonly #memoSender: MemoSender | null;
 
-  constructor(dbPath: string, opts: { start?: Date } = {}) {
+  constructor(dbPath: string, opts: { start?: Date; memoSender?: MemoSender | null } = {}) {
+    this.#memoSender = opts.memoSender ?? null;
     this.store = new SqliteStore(dbPath);
     if (!this.store.loadSnapshot()) {
       const start = opts.start ?? new SystemClock().now();
@@ -106,7 +111,7 @@ export class App {
     }
     const deps = { clock, log, erp, ramp };
     const contra = s ? Contra.restore(deps, s.contra) : new Contra(deps);
-    this.#ctx = { clock, contra, erp, ramp, seed };
+    this.#ctx = { clock, contra, erp, ramp, seed, memoSender: this.#memoSender };
   }
 
   #save(): void {

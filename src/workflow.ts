@@ -7,7 +7,7 @@ import { formatUsd, sub as subCents, sum, type Cents } from "./money.ts";
 import { assessExtractedItem } from "./intake.ts";
 import { ambiguousWith, type Resolution } from "./resolver.ts";
 import { disputeSentencesFor, normalize, verifySpan } from "./span.ts";
-import { transitionBackCharge, transitionCredit, transitionNotice } from "./state.ts";
+import { IllegalTransition, transitionBackCharge, transitionCredit, transitionMemo, transitionNotice } from "./state.ts";
 import type { MockERP } from "./mocks/erp.ts";
 import { planApplication, type PaymentsPlatform, type PlannedApplication } from "./mocks/ramp.ts";
 import { EMAIL_INGESTED, type EmailOrigin } from "./types.ts";
@@ -103,9 +103,21 @@ export class Contra {
 
   // ---- Step 1: ingest PM emails ------------------------------------------------------------
 
+  /** True when an email with this Message-ID has already been ingested. Read-only. */
+  hasMessage(messageId: string): boolean {
+    for (const e of this.emails.values()) if (e.messageId === messageId) return true;
+    return false;
+  }
+
+  /**
+   * Ingests one email and its extracted back-charges. Idempotent by Message-ID: an email whose
+   * messageId was already ingested changes nothing (no back-charge, notice or audit entry) and returns [].
+   */
   ingestBackChargeEmail(email: Email, extracted: ExtractedBackCharge[], extractor: Actor, origin: EmailOrigin = "builtin"): BackCharge[] {
+    if (email.messageId && this.hasMessage(email.messageId)) return [];
     this.emails.set(email.id, email);
-    this.d.log.append({ actor: SYSTEM, entity: "email", entityId: email.id, action: EMAIL_INGESTED[origin], from: null, to: null, evidence: [email.subject] });
+    const attachments = email.attachmentCount ? [`${email.attachmentCount} attachment(s), not read`] : [];
+    this.d.log.append({ actor: SYSTEM, entity: "email", entityId: email.id, action: EMAIL_INGESTED[origin], from: null, to: null, evidence: [email.subject, ...attachments] });
     const out: BackCharge[] = [];
 
     for (const x of extracted) {
@@ -348,6 +360,32 @@ export class Contra {
     const approval = this.d.log.forEntity("credit", id).find((e) => e.to === "approved");
     if (!approval) throw new Error(`credit ${id} has no recorded approval`);
     return renderCreditMemo({ credit, subcontract: sc, job, vendorName: sc.partyLegalName, items, notices, approvedAt: approval.at });
+  }
+
+  // ---- Credit memo delivery ----------------------------------------------------------------
+
+  /** A memo can be sent for a credit with a recorded approval (approved, synced or applied). */
+  static memoSendable(c: Readonly<Credit>): boolean {
+    return (c.state === "approved" || c.state === "synced" || c.state === "applied") && (!c.memoDelivery || c.memoDelivery.state === "failed");
+  }
+
+  /** Marks the memo queued for `to` (first send, or a retry after failed) and returns the memo to send. */
+  queueMemo(id: string, to: string, human: Actor): { filename: string; text: string } {
+    const c = this.#credit(id);
+    if (!Contra.memoSendable(c)) throw new IllegalTransition(`credit ${id}: memo can't be sent now (${c.state}, memo ${c.memoDelivery?.state ?? "not sent"})`);
+    const memo = this.creditMemo(id);
+    const attempts = (c.memoDelivery?.attempts ?? 0) + 1;
+    transitionMemo(this.d.log, c, "queued", human, `memo queued for ${to}${attempts > 1 ? ` (attempt ${attempts})` : ""}`, [memo.filename], { to, attempts, error: null });
+    return memo;
+  }
+
+  memoSent(id: string, messageId: string): void {
+    const c = this.#credit(id);
+    transitionMemo(this.d.log, c, "sent", SYSTEM, `memo sent to ${c.memoDelivery?.to ?? "?"}`, [messageId], { messageId });
+  }
+
+  memoFailed(id: string, why: string): void {
+    transitionMemo(this.d.log, this.#credit(id), "failed", SYSTEM, "memo failed", [why], { error: why });
   }
 
   // ---- Step 5: bill and payment ------------------------------------------------------------

@@ -170,6 +170,7 @@ const COMMANDS: Record<Action["command"], Record<string, "string" | "number" | "
   billArrives: {},
   turnOnCredits: { billId: "string" },
   payBill: { billId: "string" },
+  sendCreditMemo: { creditId: "string" },
 };
 
 /** Strict shape check for an Action arriving over HTTP. Returns null if anything is off. */

@@ -22,6 +22,7 @@ function address(h: AddressObject | AddressObject[] | undefined, header: string)
  * Parses one RFC 822 message. Body: the text/plain part when there is one, else mailparser's text
  * rendering of the HTML part. Line endings are normalized to \n. The Date header is required: an
  * email with no date can't be placed on the timeline, so it is rejected rather than guessed.
+ * messageId (the Message-ID header) and attachmentCount are set when present; attachments aren't read.
  */
 export async function parseEml(bytes: Buffer | Uint8Array, id: string): Promise<Email> {
   const m = await simpleParser(Buffer.from(bytes), { skipImageLinks: true });
@@ -29,6 +30,7 @@ export async function parseEml(bytes: Buffer | Uint8Array, id: string): Promise<
   if (Number.isNaN(m.date.getTime())) throw new EmlError(`${id}: unreadable Date header`);
   const text = typeof m.text === "string" && m.text.trim() !== "" ? m.text : "";
   if (!text) throw new EmlError(`${id}: no text/plain or HTML body`);
+  const attachments = m.attachments?.length ?? 0;
   return {
     id,
     from: address(m.from, "From"),
@@ -36,6 +38,9 @@ export async function parseEml(bytes: Buffer | Uint8Array, id: string): Promise<
     subject: m.subject ?? "",
     receivedAt: m.date,
     body: text.replace(/\r\n?/g, "\n").replace(/\n+$/, ""),
+    // Only when present, so emails without them keep their exact shape.
+    ...(m.messageId ? { messageId: m.messageId } : {}),
+    ...(attachments ? { attachmentCount: attachments } : {}),
   };
 }
 

@@ -64,6 +64,46 @@ export function ingestPmEmails(
   });
 }
 
+/**
+ * Ingests one email read from a live inbox, with the extraction made for it. Idempotent by Message-ID
+ * (the core skips one it has seen: no back-charge, notice or audit entry). Returns whether it was new.
+ */
+export function ingestInboxEmail(
+  app: App,
+  email: Email,
+  extracted: ExtractedBackCharge[],
+  extractor: Actor,
+  origin: EmailOrigin = "gmail",
+): { ingested: boolean; refs: string[] } {
+  if (!email.messageId) throw new Error(`inbox email ${email.id} has no Message-ID`);
+  if (app.ctx.contra.hasMessage(email.messageId)) return { ingested: false, refs: [] };
+  return app.run(({ contra }) => {
+    if (contra.hasMessage(email.messageId!)) return { ingested: false, refs: [] };
+    return { ingested: true, refs: contra.ingestBackChargeEmail(email, extracted, extractor, origin).map((b) => b.ref) };
+  });
+}
+
+/**
+ * Sends a credit's memo with the injected MemoSender, in three steps: queue it (app.run), hand it to the
+ * sender, then record sent or failed (app.run). If the process stops between the send and the record,
+ * the memo stays queued and is never re-sent automatically (retry is only from failed).
+ */
+export async function sendCreditMemo(app: App, creditId: string): Promise<{ state: "sent" | "failed" }> {
+  const sender = app.ctx.memoSender;
+  if (!sender) throw new Error("no memo sender is configured on this server");
+  const memo = app.run(({ contra }) => contra.queueMemo(creditId, sender.destination, AP));
+  let messageId: string;
+  try {
+    ({ messageId } = await sender.send({ creditId, ...memo }));
+  } catch (e) {
+    const why = (e instanceof Error ? e.message : "the sender failed").slice(0, 300) || "the sender failed";
+    app.run(({ contra }) => contra.memoFailed(creditId, why));
+    return { state: "failed" };
+  }
+  app.run(({ contra }) => contra.memoSent(creditId, messageId));
+  return { state: "sent" };
+}
+
 export function confirmLink(app: App, ref: string, subcontractId?: string) {
   app.run(({ contra }) => contra.confirmLink(ref, PM, subcontractId));
 }
@@ -135,7 +175,8 @@ export interface ActionInput {
 
 /**
  * The single dispatcher every frontend uses (Next server action or HTTP API). Exhaustive: adding an
- * Action variant without a case here is a type error.
+ * Action variant without a case here is a type error. Every action is synchronous except
+ * sendCreditMemo, which returns a Promise that settles once the send is recorded: hosts await the result.
  */
 export function runAction(
   app: App,
@@ -143,7 +184,7 @@ export function runAction(
   input: ActionInput = {},
   /** Injected by the host: where "Ingest PM emails" reads from. Absent or null: the built-in sample. */
   sources: { pmEmails?: PmEmailSource | null } = {},
-): void {
+): void | Promise<void> {
   if (!isOffered(app, action)) throw new NotOffered(`${action.command} is not available right now (refresh the screen)`);
   switch (action.command) {
     case "ingestPmEmails":
@@ -186,6 +227,8 @@ export function runAction(
     case "payBill":
       payBill(app, action.billId);
       return;
+    case "sendCreditMemo":
+      return sendCreditMemo(app, action.creditId).then(() => undefined);
     default: {
       const never: never = action;
       throw new Error(`unknown action ${JSON.stringify(never)}`);

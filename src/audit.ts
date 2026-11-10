@@ -1,7 +1,7 @@
 import type { Actor } from "./types.ts";
 import type { Clock } from "./clock.ts";
 
-export type EntityKind = "backcharge" | "notice" | "credit" | "bill" | "alias" | "email";
+export type EntityKind = "backcharge" | "notice" | "credit" | "bill" | "alias" | "email" | "memo";
 
 export interface AuditEvent {
   readonly seq: number;
