@@ -6,7 +6,7 @@ import type { Email, ExtractedBackCharge, HoldReason } from "./types.ts";
  * Text aimed at an AI or automated system rather than at a person. Emails are untrusted input to the
  * extractor, and an email that tries to instruct it is suspect as a whole, so every item in it is held
  * for a person (even when the extraction looks right). Matched case-insensitively on the normalized
- * body, quoted text included. Each pattern needs wording a PM wouldn't write to a sub: "ignore the old
+ * subject and body (each on its own), quoted text included. Each pattern needs wording a PM wouldn't write to a sub: "ignore the old
  * drawing", "disregard my earlier email", "record this as complete" and "you are now past the window"
  * must not match. A false positive costs a PM review, never a credit.
  */
@@ -20,9 +20,9 @@ export const AI_DIRECTED_PATTERNS: readonly RegExp[] = [
   /\brecord\s+this\s+as\s+\$/i,
 ];
 
-/** The passages of `body` that match AI_DIRECTED_PATTERNS (empty when none). */
-export function aiDirectedText(body: string): string[] {
-  const text = normalize(body);
+/** The passages of `text` (a subject or body) that match AI_DIRECTED_PATTERNS (empty when none). */
+export function aiDirectedText(raw: string): string[] {
+  const text = normalize(raw);
   return AI_DIRECTED_PATTERNS.map((p) => p.exec(text)?.[0]).filter((m): m is string => m !== undefined);
 }
 
@@ -66,10 +66,13 @@ export function assessExtractedItem(email: Email, x: ExtractedBackCharge, data: 
     holdReasons.push("only_in_quoted_text");
     holdEvidence.push(`amount sentence appears only in quoted text: ${x.amountEvidence.sentence}`);
   }
-  const aimed = aiDirectedText(email.body);
+  const aimed = [
+    ...aiDirectedText(email.subject).map((t) => `text aimed at an automated system (subject): ${t}`),
+    ...aiDirectedText(email.body).map((t) => `text aimed at an automated system: ${t}`),
+  ];
   if (aimed.length) {
     holdReasons.push("suspicious_instructions");
-    holdEvidence.push(...aimed.map((t) => `text aimed at an automated system: ${t}`));
+    holdEvidence.push(...aimed);
   }
 
   const resolution = holdReasons.length ? null : resolve(x, data);
