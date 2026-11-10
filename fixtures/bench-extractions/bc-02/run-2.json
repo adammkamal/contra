@@ -1,0 +1,20 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T02:45:46.990Z",
+  "items": [
+    {
+      "ref": "BC-5002",
+      "description": "Replace damaged door frame, Room 214 (hollow metal frame jamb bent by crew's board cart; frame cut out and replaced)",
+      "amountCents": 230000,
+      "amountEvidence": {
+        "emailId": "bc-02",
+        "sentence": "BC-5002: replace damaged door frame, Room 214, $2,300.00."
+      },
+      "vendorNameAsWritten": "Ridgeline Drywall",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": []
+}

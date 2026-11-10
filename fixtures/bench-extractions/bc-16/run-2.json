@@ -1,0 +1,20 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T02:47:26.317Z",
+  "items": [
+    {
+      "ref": "BC-5016",
+      "description": "Refinish scratched mullions, L1 north elevation",
+      "amountCents": 115000,
+      "amountEvidence": {
+        "emailId": "bc-16",
+        "sentence": "BC-5016: refinish scratched mullions, L1 north elevation, $1,150.00."
+      },
+      "vendorNameAsWritten": "Ridgeline Glass & Glazing",
+      "jobRef": "Summit MOB",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": []
+}

@@ -1,0 +1,20 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T02:46:11.128Z",
+  "items": [
+    {
+      "ref": "BC-5006",
+      "description": "Debris haul-off of scrap board and packaging left at Lakeview loading area",
+      "amountCents": 60000,
+      "amountEvidence": {
+        "emailId": "bc-06",
+        "sentence": "BC-5006: debris haul-off, $600.00."
+      },
+      "vendorNameAsWritten": "Ridgeline Drywall",
+      "jobRef": "Lakeview",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": []
+}

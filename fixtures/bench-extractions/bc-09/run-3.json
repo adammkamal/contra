@@ -1,0 +1,24 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T02:46:39.521Z",
+  "items": [
+    {
+      "ref": "BC-5009",
+      "description": "Repair gouged corridor walls, L3",
+      "amountCents": 120000,
+      "amountEvidence": {
+        "emailId": "bc-09",
+        "sentence": "BC-5009: repair gouged corridor walls, L3, $1,200.00."
+      },
+      "vendorNameAsWritten": "Ridgeline Drywall",
+      "jobRef": "Summit",
+      "disputeNoted": true,
+      "disputeEvidence": {
+        "emailId": "bc-09",
+        "sentence": "Heads up, Ridgeline disputes it."
+      }
+    }
+  ],
+  "rejected": []
+}

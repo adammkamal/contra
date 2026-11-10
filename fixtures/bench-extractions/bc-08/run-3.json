@@ -1,0 +1,12 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T02:46:31.703Z",
+  "items": [],
+  "rejected": [
+    {
+      "index": 0,
+      "reason": "BC-5008: missing or oversized field"
+    }
+  ]
+}

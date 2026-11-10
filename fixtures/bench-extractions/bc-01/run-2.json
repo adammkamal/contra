@@ -1,0 +1,20 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T02:45:41.093Z",
+  "items": [
+    {
+      "ref": "BC-5001",
+      "description": "Site cleanup, L2 - drywall scrap and empty mud buckets cleared by GC labor crew",
+      "amountCents": 145000,
+      "amountEvidence": {
+        "emailId": "bc-01",
+        "sentence": "BC-5001: site cleanup, L2, $1,450.00."
+      },
+      "vendorNameAsWritten": "Ridgeline Interiors LLC",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": []
+}
