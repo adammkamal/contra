@@ -112,6 +112,16 @@ test("money: a sentence-ending point or comma is punctuation, and the amount is 
   assert.equal(parseUsd("BC-7414: $1,200 for 300 sq ft."), 120_000);
 });
 
+test("money: punctuation, a space and 3 digits after an amount start a new number, not a digit group", () => {
+  assert.equal(parseUsd("BC-7414: $1,200, 300 sq ft."), 120_000);
+  assert.equal(parseUsd("BC-7414: $1,200. 300 units were affected."), 120_000);
+  // Space grouping straight after a digit is still unreadable, never read as $1.00 or $200.00.
+  for (const text of ["BC-7414: $1 200 for the east wall.", "BC-7414: 1 200 USD for the east wall."]) {
+    assert.deepEqual(scanUsdAmounts(text).map((a) => a.cents), [null], text);
+    assert.throws(() => parseUsd(text), /can't be read exactly/, text);
+  }
+});
+
 test("money: an unreadable amount next to a readable one is never read as exactly one", () => {
   const s = "BC-7414: $1,200.5 labor, $40.00 disposal.";
   assert.deepEqual(scanUsdAmounts(s).map((a) => a.cents), [null, 4_000]);

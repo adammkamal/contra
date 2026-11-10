@@ -26,11 +26,12 @@ export function sum(xs: readonly Cents[]): Cents {
 
 /**
  * Everything that could be part of the number next to a currency marker: digits, commas and periods, and
- * a space (incl. no-break and thin spaces) followed by 3 digits, as in "1 200". It is read whole, so a
+ * a space (incl. no-break and thin spaces) followed by 3 digits, as in "1 200", but only straight after a
+ * digit: "$1,200, 300 sq ft." is $1,200 followed by punctuation and a new number. It is read whole, so a
  * malformed number is never cut down to a shorter one that looks fine ("$1,200.5" is not "$1,200").
  */
-const SP = String.raw`[    ]`;
-const TOKEN = String.raw`(\.?\d(?:[\d.,]|${SP}\d{3}(?!\d))*)`;
+const SP = String.raw`[ \u00A0\u202F\u2009]`;
+const TOKEN = String.raw`(\.?\d(?:[\d.,]|(?<=\d)${SP}\d{3}(?!\d))*)`;
 
 /** The only form read as money: "1,200", "1200", "1,200.50". Thousands commas in groups of 3; cents optional, exactly 2 digits. */
 const EXACT = /^(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{2}))?$/;
