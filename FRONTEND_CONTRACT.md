@@ -49,7 +49,9 @@ Errors are `{ "ok": false, "error": "<message to show the user>" }`:
   screen, a double-click or a hand-made request), which comes back as "… is not available right now".
   Nothing changed; refresh the screens.
 - **413:** the request body is too large (`POST /api/try`: over 256 KB; other routes: over 64 KB).
-- **429** (`POST /api/try` only): another email is being checked, or the hourly limit is reached.
+- **429** (`POST /api/try` only): another email is being checked, the hourly limit for your address is
+  reached, or the daily demo cap is reached. The message says which.
+- **500:** an unexpected server error. The message is always "internal error".
 - **503** (`POST /api/try` only): no API key is configured, the model call failed, or the route isn't
   enabled. The message says which.
 
