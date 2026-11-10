@@ -44,7 +44,8 @@ body is read.
 | `POST /api/reset` | `{ "ok": true, "screens": Screens }` (fresh demo) |
 | `GET /api/backcharge/:ref` | `BackChargeDetail` |
 | `GET /api/credit/:id/memo` | `{ "filename": string, "text": string }` |
-| `GET /api/health` | `{ "ok": true }` |
+| `GET /api/health` | `{ "ok": true, "inbox": InboxStatus }` (see [Live inbox and memos](#live-inbox-and-memos)). No secrets. |
+| `GET /api/events` | Server-Sent Events: `screens-changed` and `heartbeat` (see [Real-time updates](#real-time-updates)). |
 | `POST /api/try` with body `{ "subject", "body", "from"?, "to"? }` | `TryResult` (see [Try any email](#try-any-email)). Never changes demo state. |
 
 Errors are `{ "ok": false, "error": "<message to show the user>" }`:
@@ -72,12 +73,12 @@ Show the message; don't retry.
 |---|---|
 | `now` | The demo clock (it moves when "advance a week" runs). |
 | `extractionSource` | `"model"`, `"sample"`, `"mixed"` or `null`. When it is `"sample"`, the Inbox must say **"Sample extractions (hand-written), not model output"**. |
-| `emailSource` | `"eml"`, `"builtin"`, `"mixed"` or `null` (before ingest). Where the Inbox's PM emails were read from. Show it in the Inbox beside the extraction note: **"Emails: .eml files"** for `"eml"`, **"Emails: built-in sample"** for `"builtin"`, **"Emails: .eml files and built-in sample"** for `"mixed"`. |
+| `emailSource` | `"eml"`, `"builtin"`, `"gmail"`, `"mixed"` or `null` (before ingest). Where the Inbox's PM emails were read from. Show it in the Inbox beside the extraction note: **"Emails: .eml files"** for `"eml"`, **"Emails: built-in sample"** for `"builtin"`, **"Emails: Gmail inbox"** for `"gmail"`, **"Emails: more than one source"** for `"mixed"`. |
 | `nextStep` | `{ text, action }` for the presenter bar. Highlight `action`'s button. `action` is `null` only at "Demo complete". |
 | `opener` | The missed back-charges screen. Always show **"Sample data"**. Totals are already formatted; rows carry `ref`, `status`, `amount` and `evidence`. |
 | `inbox[]` | `ref`, `emailSubject`, `vendorAsWritten`, `amount`, `sourceSentence` (show beside the amount), `linkExplanation[]`, `status`, `actions[]`. |
 | `outbox[]` | Notices: `id`, `total`, `refs`, `body` (shown as written, preformatted), `status`, `actions[]`. |
-| `credits[]` | `id`, `amount`, `job`, `refs`, `status`, `actions[]`, `hasMemo` (when true, offer "View memo"). |
+| `credits[]` | `id`, `amount`, `job`, `refs`, `status`, `actions[]`, `hasMemo` (when true, offer "View memo"), `memo`: the memo's delivery to the AP inbox as a `Status` (e.g. "Memo not sent", "Memo sent to …", "Memo not sent: … You can send it again."), or `null` when there is no memo yet. Show `memo.label` as written. |
 | `bills[]` | Always show **"Simulated Ramp"**. `vendor`, `job`, `amount`, `creditsOn`, `status`, `paid`, plus `check`: `status`, `actions[]` (sentences), `warnings[]`, `wouldPay`. Also has `actions[]` (buttons). |
 | `pmQueue[]` | `ref` and `status` for items a person must look at. |
 | `audit[]` | Newest first: `seq`, `at`, `actor` (already worded), `what`, `evidence[]`. |
@@ -108,6 +109,7 @@ Render each `actions[]` entry as a button, and when clicked send exactly that ob
 | `billArrives` | none | Bill arrives |
 | `turnOnCredits` | `billId` | Turn on credits |
 | `payBill` | `billId` | Pay (simulated) |
+| `sendCreditMemo` | `creditId` | Send credit memo. Appears only when the server has a memo sender (live mode, `CONTRA_INBOX=gmail`), for a credit with a recorded approval whose memo isn't sent, or whose last send failed (the retry). The response comes back after the send is recorded (a few seconds); disable the button meanwhile. In-process hosts must `await runAction(...)`: for this action it returns a Promise. |
 
 **Test ids** (the browser test selects on these): `data-testid="{command}-{id}"`, where id is the
 action's `ref`, `noticeId`, `creditId`, `billId` or `subcontractId`. Use just `{command}` when the
@@ -115,6 +117,31 @@ action has none. The presenter bar's copy of a button uses `presenter-{command}[
 
 A button only appears when its action is legal right now. Don't add buttons the backend didn't send:
 `runAction` refuses any action that isn't currently on screen.
+
+## Real-time updates
+
+`GET /api/events` is a Server-Sent Events stream (use `EventSource`; the same Origin allow-list applies).
+- `event: screens-changed`, `data: {"reason": "action" | "reset" | "inbox"}`: after every successful action,
+  every reset, and every inbox poll that ingested something. Re-read `GET /api/screens`; the event never
+  carries screen data itself.
+- `event: heartbeat`, `data: {}`: every 15 seconds, so the connection stays open. Ignore it.
+
+## Live inbox and memos
+
+With `CONTRA_INBOX=gmail`, the server polls the demo Gmail inbox and ingests only mail delivered to the PM
+intake address (`<local>+backcharges@<domain>`). Live emails appear in the Inbox like any other, with
+`emailSource` `"gmail"` or `"mixed"`; they never change `nextStep` (the presenter script follows the
+demo's own emails). Credit memos are sent to a stand-in AP inbox (`<local>+ramp-ap@<domain>`), not to Ramp.
+
+`GET /api/health` → `inbox`:
+
+| Field | Meaning |
+|---|---|
+| `mode` | `"gmail"` (live inbox) or `"sample"` (demo emails only) |
+| `address` | The PM intake address being read, or `null` |
+| `lastPollAt` | ISO time of the last poll, or `null` |
+| `lastError` | The last problem, in words, or `null` |
+| `status` | `"off"`, `"starting"`, `"ok"`, `"error"`, `"expired: run npm run gmail:auth"` or `"not configured: …"`. Show it as written. Expired is normal (Google expires the demo's sign-in after 7 days); the screens keep working. |
 
 ## Detail screen: `BackChargeDetail`
 

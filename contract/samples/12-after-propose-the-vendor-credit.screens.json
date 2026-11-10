@@ -119,7 +119,8 @@
           "creditId": "VC-1"
         }
       ],
-      "hasMemo": false
+      "hasMemo": false,
+      "memo": null
     }
   ],
   "bills": [],

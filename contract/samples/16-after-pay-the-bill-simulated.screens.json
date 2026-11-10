@@ -106,8 +106,17 @@
         "label": "Applied to a bill",
         "tone": "ok"
       },
-      "actions": [],
-      "hasMemo": true
+      "actions": [
+        {
+          "command": "sendCreditMemo",
+          "creditId": "VC-1"
+        }
+      ],
+      "hasMemo": true,
+      "memo": {
+        "label": "Memo not sent",
+        "tone": "idle"
+      }
     }
   ],
   "bills": [

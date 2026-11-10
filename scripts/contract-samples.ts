@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { DEFAULT_EML_DIR, loadPmEmails } from "../ingest/eml.ts";
 import { App } from "../src/app.ts";
 import * as cmd from "../src/commands.ts";
+import type { MemoSender } from "../src/memo.ts";
 import { backChargeDetail, buildScreens, nextStep } from "../src/view.ts";
 import { tryEmail, type TryInput } from "../server/try.ts";
 
@@ -20,7 +21,10 @@ const write = (name: string, data: unknown) => writeFileSync(join(out, name), JS
 // Same email source as the API: fixtures/emails/*.eml when present.
 const pmEmails = await loadPmEmails(join(dirname(fileURLToPath(import.meta.url)), "..", DEFAULT_EML_DIR));
 const tmp = mkdtempSync(join(tmpdir(), "contra-samples-"));
-const app = new App(join(tmp, "s.db"), { start: new Date("2026-11-07T15:00:00Z") });
+// A stand-in memo sender (sends nothing), so the samples show what a live server offers: the sendCreditMemo
+// button from the approved credit on, and the memo's status.
+const memoSender: MemoSender = { destination: "contra.demo+ramp-ap@example.com", send: async () => ({ messageId: "sample-message-1" }) };
+const app = new App(join(tmp, "s.db"), { start: new Date("2026-11-07T15:00:00Z"), memoSender });
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50);
 
 let i = 0;
@@ -34,6 +38,10 @@ for (;;) {
   write(`${String(i).padStart(2, "0")}-after-${slug(step.text)}.screens.json`, buildScreens(app));
   if (i > 40) throw new Error("demo did not finish");
 }
+// Not a presenter step (nextStep never sends memos): the credit row's own button, after the demo.
+await cmd.sendCreditMemo(app, "VC-1");
+i++;
+write(`${String(i).padStart(2, "0")}-after-send-credit-memo-vc-1.screens.json`, buildScreens(app));
 for (const ref of ["BC-4467", "BC-4470", "BC-4471"]) write(`detail-${ref}.json`, backChargeDetail(app, ref));
 write("memo-VC-1.json", app.ctx.contra.creditMemo("VC-1"));
 
