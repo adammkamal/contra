@@ -3,6 +3,8 @@
  * pasted, and reports what Contra would do with it. Read-only: it never calls app.run, never ingests,
  * and checks against a copy of the ERP data, so the demo state and the audit log stay exactly as they were.
  * Lives outside src/ because it calls the model (CLAUDE.md: no model calls in src/ except src/extract/).
+ * Privacy: the email's text, subject and addresses are never logged, written to disk or put in an error
+ * message, on any path (test/try.test.ts "privacy: ..." checks console, stdout/stderr, the database and errors).
  */
 import { performance } from "node:perf_hooks";
 import type { App } from "../src/app.ts";

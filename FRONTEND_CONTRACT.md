@@ -122,6 +122,8 @@ A person types or pastes a back-charge email; Contra runs the real extraction (o
 the real ingest checks, and shows what it would do. **Nothing is saved**: the demo screens, the audit log
 and the ERP data are unchanged, so this can be used at any point in the demo. In process, call
 `tryEmail(app, input, settingsFromEnv(process.env))` from `server/try.ts`; over HTTP, `POST /api/try`.
+The server never logs or stores the email's text, subject or addresses, including when the call fails; it
+is sent only to the model. Don't log it in the frontend either.
 
 **Request** (JSON). Unknown fields are refused with 400.
 

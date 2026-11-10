@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -372,4 +372,78 @@ test("API /api/try: a request over 256 KB gets a 413 response (not a dropped con
     assert.match(((await big.json()) as { error: string }).error, /body too large/);
     assert.equal((await postTry(base, HARBOR)).status, 200);
   });
+});
+
+// ---- Privacy: the email's text, subject and addresses are never logged, persisted or recorded ----
+
+const MARK = { body: "PRIVBODY-7f3a91c2", subject: "PRIVSUBJ-5d0e44b8", from: "privfrom-a1b2c3@sender.example", to: "privto-d4e5f6@sub.example" };
+const PRIVATE: TryInput = {
+  from: `Avery Lund <${MARK.from}>`,
+  to: `Harbor Mechanical Co <${MARK.to}>`,
+  subject: `Summit MOB ${MARK.subject}`,
+  body: HARBOR.body.replace("Thanks,", `Gate code for the site is ${MARK.body}.\n\nThanks,`),
+};
+
+/** Runs fn while recording every console call and every stdout/stderr write (still passed through). */
+async function captureOutput(fn: () => Promise<void>): Promise<string> {
+  const seen: string[] = [];
+  const methods = ["log", "info", "warn", "error", "debug", "trace"] as const;
+  const saved = methods.map((m) => console[m]);
+  const out = process.stdout.write.bind(process.stdout);
+  const err = process.stderr.write.bind(process.stderr);
+  methods.forEach((m) => (console[m] = (...a: unknown[]) => void seen.push(a.map((x) => (typeof x === "string" ? x : JSON.stringify(x) ?? String(x))).join(" "))));
+  process.stdout.write = ((chunk: unknown, ...rest: unknown[]) => (seen.push(String(chunk)), out(chunk as string, ...(rest as []))) ) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: unknown, ...rest: unknown[]) => (seen.push(String(chunk)), err(chunk as string, ...(rest as []))) ) as typeof process.stderr.write;
+  try {
+    await fn();
+  } finally {
+    methods.forEach((m, i) => (console[m] = saved[i]!));
+    process.stdout.write = out;
+    process.stderr.write = err;
+  }
+  return seen.join("\n");
+}
+
+const leaks = (text: string) => Object.values(MARK).filter((m) => text.includes(m));
+
+test("privacy: /api/try never logs, persists or echoes the email text, subject or addresses, on success or failure", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "contra-priv-"));
+  const failing = (async () => new Response(JSON.stringify({ type: "error", error: { type: "api_error", message: "Internal server error" } }), { status: 500 })) as unknown as typeof fetch;
+  let fetcher: typeof fetch = fetcherFor({ items: [item()] });
+  let boundary: (() => string) | undefined;
+  const callOptions = { maxRetries: 0, sleep: async () => {}, get fetcher() { return fetcher; }, get boundary() { return boundary; } };
+  const errorBodies: string[] = [];
+  const api = createApiServer({ dbPath: join(dir, "d.db"), start: START, emlDir: null, try: { settings: () => OK, callOptions } });
+  await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
+  let output = "";
+  try {
+    output = await captureOutput(async () => {
+      const ok = await postTry(base, PRIVATE); // success
+      assert.equal(ok.status, 200);
+      assert.equal(ok.body.items[0].outcome, "ready_for_notice");
+      fetcher = failing; // the model fails
+      const down = await postTry(base, PRIVATE);
+      assert.equal(down.status, 503);
+      errorBodies.push(JSON.stringify(down.body));
+      fetcher = fetcherFor({ items: [item()] });
+      boundary = () => "not valid!"; // an unexpected error inside tryEmail
+      const bug = await postTry(base, PRIVATE);
+      assert.equal(bug.status, 500);
+      errorBodies.push(JSON.stringify(bug.body));
+      boundary = undefined;
+      const bad = await postTry(base, { ...PRIVATE, subject: `${MARK.subject} ${"s".repeat(TRY_LIMITS.subject)}` }); // bad input
+      assert.equal(bad.status, 400);
+      errorBodies.push(JSON.stringify(bad.body));
+      // In process, a failing call too.
+      await assert.rejects(tryEmail(api.app(), PRIVATE, OK, { fetcher: failing, ...fast }));
+    });
+  } finally {
+    await api.close();
+  }
+  assert.deepEqual(leaks(output), [], "console or stdout/stderr");
+  assert.deepEqual(leaks(errorBodies.join("\n")), [], "error responses");
+  const stored = readdirSync(dir).map((f) => readFileSync(join(dir, f)).toString("latin1")).join("\n");
+  assert.ok(stored.length > 0);
+  assert.deepEqual(leaks(stored), [], "database files");
 });
