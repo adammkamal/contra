@@ -117,7 +117,7 @@ export class Contra {
         continue;
       }
 
-      const a = assessExtractedItem(email, x, this.d.erp);
+      const a = assessExtractedItem(email, x, this.d.erp, extracted.map((e) => e.ref));
       this.#evidenceOk.set(x.ref, a.evidenceOk);
       this.#sourceDispute.set(x.ref, a.disputeInSource);
 

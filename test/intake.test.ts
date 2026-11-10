@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { aiDirectedText, assessExtractedItem } from "../src/intake.ts";
+import { aiDirectedText, assessExtractedItem, unaccountedRefs } from "../src/intake.ts";
 import { demoReply } from "../src/seed.ts";
 import { normalize } from "../src/span.ts";
+import { backChargeStatus } from "../src/view.ts";
 import { cents } from "../src/money.ts";
 import type { Email, ExtractedBackCharge } from "../src/types.ts";
 import { LLM, setup, throughNotice } from "./helpers.ts";
@@ -72,7 +73,7 @@ test("intake: a back-charge found only in quoted text is held for the PM, not li
 
 test("intake: quoted text marked only by '>' lines (no 'wrote:' header) also counts as quoted", () => {
   const body = "See the note below.\n\n> BC-7303: regrout shower walls, $1,275.00.\n> Thanks";
-  const a = assessExtractedItem(email("T-Q2", body), item("T-Q2", "BC-7303", "BC-7303: regrout shower walls, $1,275.00.", 127_500), setup().erp);
+  const a = assessExtractedItem(email("T-Q2", body), item("T-Q2", "BC-7303", "BC-7303: regrout shower walls, $1,275.00.", 127_500), setup().erp, ["BC-7303"]);
   assert.deepEqual(a.holdReasons, ["only_in_quoted_text"]);
   assert.equal(a.resolution, null);
 });
@@ -196,7 +197,7 @@ for (const [style, lines] of Object.entries(FORWARDS)) {
     const body = lines.join("\n");
     assert.equal(normalize(body, { excludeQuoted: true }), `${OWN} Priya`, "everything from the marker on is cut");
     assert.ok(normalize(body).includes(CHARGE), "without excludeQuoted nothing is cut");
-    const a = assessExtractedItem(email("T-F1", body), item("T-F1", "BC-7320", CHARGE, 86_500), setup().erp);
+    const a = assessExtractedItem(email("T-F1", body), item("T-F1", "BC-7320", CHARGE, 86_500), setup().erp, ["BC-7320"]);
     assert.deepEqual(a.holdReasons, ["only_in_quoted_text"]);
     assert.equal(a.resolution, null);
   });
@@ -216,7 +217,7 @@ test("intake: a 'From:' line in ordinary text is not a forward header", () => {
   for (const lines of bodies) {
     const body = lines.join("\n");
     assert.ok(normalize(body, { excludeQuoted: true }).includes(CHARGE), body);
-    const a = assessExtractedItem(email("T-F2", body), item("T-F2", "BC-7320", CHARGE, 86_500), setup().erp);
+    const a = assessExtractedItem(email("T-F2", body), item("T-F2", "BC-7320", CHARGE, 86_500), setup().erp, ["BC-7320"]);
     assert.deepEqual(a.holdReasons, [], body);
   }
 });
@@ -261,4 +262,63 @@ test("intake: text aimed at an AI in the subject holds the item, and the log say
 
   const clean = ingest(email("T-S4", body, "Cedar Point - ignore the old tile layout"), { ...x, amountEvidence: { emailId: "T-S4", sentence: x.amountEvidence.sentence } });
   assert.deepEqual(clean.bc.holdReasons, [], "an ordinary subject does not hold");
+});
+
+// ---- unaccounted_reference ----------------------------------------------------------------
+
+const THRESHOLD = "BC-7352: replace the cracked lobby threshold, $940.00.";
+const GROUT = "BC-7357: regrout the second-floor restroom, $615.50.";
+
+test("intake: an email whose two BC numbers differ by a typo holds the item for the PM", () => {
+  const body = ["Hi,", "", "The tile crew cracked the lobby threshold moving their carts.", THRESHOLD, "", "BC-7325 covers the threshold only.", "", "Priya"].join("\n");
+  const e = email("T-U1", body);
+  const a = assessExtractedItem(e, item("T-U1", "BC-7352", THRESHOLD, 94_000), setup().erp, ["BC-7352"]);
+  assert.deepEqual(a.holdReasons, ["unaccounted_reference"]);
+  assert.equal(a.resolution, null, "a held item is not linked");
+  assert.match(a.holdEvidence.join(" "), /BC-7325/);
+
+  const { bc } = ingest(e, item("T-U1", "BC-7352", THRESHOLD, 94_000));
+  assert.equal(bc.state, "held");
+  assert.deepEqual(bc.holdReasons, ["unaccounted_reference"]);
+  assert.match(backChargeStatus(bc).label, /the email mentions a back-charge number that wasn't extracted/);
+});
+
+test("intake: an unaccounted number holds every item from that email", () => {
+  const body = ["Hi,", "", THRESHOLD, GROUT, "", "Also see BC 7375 from the walk.", "", "Priya"].join("\n");
+  const ctx = setup();
+  ctx.contra.ingestBackChargeEmail(email("T-U2", body), [item("T-U2", "BC-7352", THRESHOLD, 94_000), item("T-U2", "BC-7357", GROUT, 61_550)], LLM);
+  for (const ref of ["BC-7352", "BC-7357"]) {
+    const bc = ctx.contra.backCharges.get(ref)!;
+    assert.equal(bc.state, "held", ref);
+    assert.deepEqual(bc.holdReasons, ["unaccounted_reference"], ref);
+  }
+});
+
+test("intake: an email listing two BC numbers that were both extracted is not held for them", () => {
+  const body = ["Hi,", "", "Two items from Thursday's walk:", THRESHOLD, GROUT, "", "Priya"].join("\n");
+  const ctx = setup();
+  ctx.contra.ingestBackChargeEmail(email("T-U3", body, "Cedar Point - BC-7352 and BC 7357"), [item("T-U3", "BC-7352", THRESHOLD, 94_000), item("T-U3", "BC-7357", GROUT, 61_550)], LLM);
+  for (const ref of ["BC-7352", "BC-7357"]) {
+    const bc = ctx.contra.backCharges.get(ref)!;
+    assert.deepEqual(bc.holdReasons, [], ref);
+    assert.notEqual(bc.state, "held", ref);
+  }
+});
+
+test("intake: a BC number mentioned only in quoted or forwarded text doesn't count", () => {
+  const quotedReply = ["Hi,", "", THRESHOLD, "", "Priya", "", "On Tue, Oct 6, 2026 at 8:02 AM Priya Natarajan <priya@harborviewgc.example> wrote:", "> BC-7368 was for the old threshold, already settled."].join("\n");
+  const angleOnly = ["Hi,", "", THRESHOLD, "", "> Is BC-7369 still open?", "", "Priya"].join("\n");
+  for (const body of [quotedReply, angleOnly]) {
+    const a = assessExtractedItem(email("T-U4", body), item("T-U4", "BC-7352", THRESHOLD, 94_000), setup().erp, ["BC-7352"]);
+    assert.deepEqual(a.holdReasons, [], body);
+    assert.notEqual(a.resolution, null, body);
+  }
+});
+
+test("intake: a BC number in the subject counts; the space and no-separator forms are the same number", () => {
+  const body = ["Hi,", "", THRESHOLD, "", "Priya"].join("\n");
+  assert.deepEqual(unaccountedRefs(email("T-U5", body, "Cedar Point - BC-7381"), ["BC-7352"]), ["BC-7381"]);
+  assert.deepEqual(unaccountedRefs(email("T-U5", body, "Cedar Point - bc 7352 / BC7352"), ["BC-7352"]), []);
+  // Not a BC number: part of a longer word or number, or too few/many digits.
+  assert.deepEqual(unaccountedRefs(email("T-U5", body, "ABC-7390, BC-12, BC-7352000, PO 7391"), ["BC-7352"]), []);
 });

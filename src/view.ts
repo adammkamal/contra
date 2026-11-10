@@ -44,6 +44,7 @@ const HOLD_WORDS: Record<HoldReason, string> = {
   unresolved_link: "not linked to a subcontract",
   only_in_quoted_text: "found only in quoted or forwarded text (may already have been sent or credited)",
   suspicious_instructions: "email contains instructions aimed at an AI or automated system",
+  unaccounted_reference: "the email mentions a back-charge number that wasn't extracted",
 };
 
 export function backChargeStatus(b: Readonly<BackCharge>): Status {

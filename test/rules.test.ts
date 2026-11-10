@@ -7,6 +7,16 @@ import { demoReply } from "../src/seed.ts";
 import { disputeSentencesFor, normalize } from "../src/span.ts";
 import { CONTROLLER, LLM, PM, setup, throughNotice } from "./helpers.ts";
 
+/**
+ * One E-1 item with a copy of E-1 whose body is only that item's sentence, so the email names no other
+ * back-charge number (a partial extraction of the real E-1 would be held as unaccounted_reference).
+ */
+function e1Item(seed: ReturnType<typeof setup>["seed"], i: 0 | 1, emailId: string, vendorNameAsWritten: string) {
+  const x = seed.extractions["E-1"]![i]!;
+  const email = { ...seed.emails[0]!, id: emailId, body: x.amountEvidence.sentence };
+  return { email, x: { ...x, vendorNameAsWritten, amountEvidence: { emailId, sentence: x.amountEvidence.sentence } } };
+}
+
 test("credit leakage: a Summit credit on a Lakeview bill is flagged before payment", () => {
   const ctx = setup();
   const notice = throughNotice(ctx);
@@ -86,13 +96,13 @@ test("dispute backstop catches a dispute the model missed", () => {
 test("unknown vendor name goes to PM; PM link teaches an alias used next time", () => {
   const ctx = setup();
   const { contra, seed } = ctx;
-  const x = { ...seed.extractions["E-1"]![0]!, vendorNameAsWritten: "RDG Interiors crew" };
-  contra.ingestBackChargeEmail(seed.emails[0]!, [x], LLM);
+  const first = e1Item(seed, 0, "E-1a", "RDG Interiors crew");
+  contra.ingestBackChargeEmail(first.email, [first.x], LLM);
   assert.equal(contra.backCharges.get("BC-4467")!.state, "needs_review");
   contra.confirmLink("BC-4467", PM, "SC-SUM-0912");
   assert.ok(ctx.erp.aliases.some((a) => a.alias === "RDG Interiors crew" && a.source === "pm_confirmed"));
-  const y = { ...seed.extractions["E-1"]![1]!, vendorNameAsWritten: "RDG Interiors crew" };
-  contra.ingestBackChargeEmail(seed.emails[0]!, [y], LLM);
+  const next = e1Item(seed, 1, "E-1b", "RDG Interiors crew");
+  contra.ingestBackChargeEmail(next.email, [next.x], LLM);
   assert.equal(contra.proposals.get("BC-4468")!.kind, "linked");
 });
 
@@ -277,8 +287,8 @@ test("an ambiguous name is never learned as an alias: PM links 'Ridgeline' once,
   const ev = [...ctx.log.all()].find((e) => e.entity === "alias" && e.entityId === "Ridgeline");
   assert.ok(ev && /not learned/.test(ev.action) && /Ridgeline Glass & Glazing Inc/.test(ev.action), ev?.action);
 
-  const y = { ...seed.extractions["E-1"]![1]!, vendorNameAsWritten: "Ridgeline" };
-  contra.ingestBackChargeEmail(seed.emails[0]!, [y], LLM);
+  const next = e1Item(seed, 1, "E-1b", "Ridgeline");
+  contra.ingestBackChargeEmail(next.email, [next.x], LLM);
   assert.equal(contra.proposals.get("BC-4468")!.kind, "review");
   assert.equal(contra.backCharges.get("BC-4468")!.state, "needs_review");
 });
@@ -294,8 +304,9 @@ test("the seeded 'Ridgeline Drywall' alias is not ambiguous and still links to S
 test("an alias that becomes ambiguous after a similar party joins the job stops linking", () => {
   const ctx = setup();
   const { contra, seed, erp } = ctx;
-  const x = { ...seed.extractions["E-1"]![0]!, vendorNameAsWritten: "RDG Interiors crew" };
-  contra.ingestBackChargeEmail(seed.emails[0]!, [x], LLM);
+  const first = e1Item(seed, 0, "E-1a", "RDG Interiors crew");
+  contra.ingestBackChargeEmail(first.email, [first.x], LLM);
+  assert.equal(contra.backCharges.get("BC-4467")!.state, "needs_review");
   contra.confirmLink("BC-4467", PM, "SC-SUM-0912");
   assert.ok(erp.aliases.some((a) => a.alias === "RDG Interiors crew")); // learned: not ambiguous yet
   const sc = erp.subcontract("SC-SUM-0820")!;

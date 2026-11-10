@@ -26,6 +26,29 @@ export function aiDirectedText(raw: string): string[] {
   return AI_DIRECTED_PATTERNS.map((p) => p.exec(text)?.[0]).filter((m): m is string => m !== undefined);
 }
 
+/**
+ * A back-charge number as the validator accepts it (src/extract/validate.ts normalizeRef): "BC", then an
+ * optional space or hyphen, then 3 to 6 digits. Not part of a longer word or number.
+ */
+const BC_NUMBER = /(?<![A-Za-z0-9])BC[ -]?(\d{3,6})(?!\d)/gi;
+
+/**
+ * Back-charge numbers the email's own text mentions (subject, and body without quoted or forwarded
+ * mail) that no extracted item accounts for, as "BC-1234", in order of first mention. Conflicting or
+ * extra numbers ("BC-1234" in one line, "BC-1243" in another) mean a person must check which charge is
+ * real. `extractedRefs` are the refs of every item extracted from this email.
+ */
+export function unaccountedRefs(email: Email, extractedRefs: readonly string[]): string[] {
+  const have = new Set(extractedRefs);
+  const text = `${normalize(email.subject)}\n${normalize(email.body, { excludeQuoted: true })}`;
+  const out: string[] = [];
+  for (const m of text.matchAll(BC_NUMBER)) {
+    const ref = `BC-${m[1]}`;
+    if (!have.has(ref) && !out.includes(ref)) out.push(ref);
+  }
+  return out;
+}
+
 /** What ingest decides for one extracted back-charge, before any state changes. */
 export interface IntakeAssessment {
   /** Every span check on the item's evidence passed (the amount, and the dispute sentence when the model cited one). */
@@ -43,12 +66,13 @@ export interface IntakeAssessment {
 }
 
 /**
- * The per-item checks Contra applies at ingest: span checks, quoted-text and AI-directed-text holds,
- * dispute flag plus code backstop, and the resolver link. Pure and deterministic.
+ * The per-item checks Contra applies at ingest: span checks, quoted-text, AI-directed-text and
+ * unaccounted-reference holds, dispute flag plus code backstop, and the resolver link. Pure and deterministic.
+ * `extractedRefs` are the refs of every item extracted from the same email (this one included).
  * Contra.ingestBackChargeEmail and the benchmark (bench/lib.ts contraDecide) both call this, so the
  * benchmark scores the product's real rules.
  */
-export function assessExtractedItem(email: Email, x: ExtractedBackCharge, data: ResolverData): IntakeAssessment {
+export function assessExtractedItem(email: Email, x: ExtractedBackCharge, data: ResolverData, extractedRefs: readonly string[]): IntakeAssessment {
   const amountCheck = verifyAmountEvidence(email, x.amountEvidence, x.amountCents);
   const disputeCheck = x.disputeNoted && x.disputeEvidence ? verifySpan(email, x.disputeEvidence) : { ok: true as const };
   const backstop = disputeSentencesFor(email.body, x.ref);
@@ -73,6 +97,14 @@ export function assessExtractedItem(email: Email, x: ExtractedBackCharge, data: 
   if (aimed.length) {
     holdReasons.push("suspicious_instructions");
     holdEvidence.push(...aimed);
+  }
+  // Every item from the email is held, since a person must decide which of the numbers is the real charge.
+  // Like only_in_quoted_text, checked only when the evidence verified: an unverified item is already held
+  // and keeps that single reason.
+  const unaccounted = evidenceOk ? unaccountedRefs(email, extractedRefs) : [];
+  if (unaccounted.length) {
+    holdReasons.push("unaccounted_reference");
+    holdEvidence.push(`email mentions ${unaccounted.join(", ")}, not among the extracted items (${extractedRefs.join(", ") || "none"})`);
   }
 
   const resolution = holdReasons.length ? null : resolve(x, data);

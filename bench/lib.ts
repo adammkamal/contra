@@ -66,9 +66,12 @@ export interface Outcome {
 /** Both systems send a run with 0 or several accepted items to a human. */
 export const REVIEW: Outcome = { decision: { kind: "review" }, wouldCredit: false };
 
-/** Contra: the product's own ingest checks (src/intake.ts assessExtractedItem), mapped to an outcome. Nothing bench-specific. */
+/**
+ * Contra: the product's own ingest checks (src/intake.ts assessExtractedItem), mapped to an outcome. Nothing bench-specific.
+ * A scored run has exactly one accepted item, so it is the only extracted ref from the email.
+ */
 export function contraDecide(email: Email, x: ExtractedBackCharge, data: ResolverData): Outcome {
-  const a = assessExtractedItem(email, x, data);
+  const a = assessExtractedItem(email, x, data, [x.ref]);
   if (a.holdReasons.length) return { decision: { kind: "hold", why: a.holdReasons.join(", ") }, wouldCredit: false };
   const r = a.resolution!;
   if (r.kind !== "linked") return { decision: { kind: "review" }, wouldCredit: false };
