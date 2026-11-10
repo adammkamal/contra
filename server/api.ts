@@ -14,6 +14,8 @@ import { IllegalTransition } from "../src/state.ts";
 import { backChargeDetail, buildScreens, type Action } from "../src/view.ts";
 import type { ExtractOptions } from "../src/extract/index.ts";
 import { tryEmail, TryUnavailable, type TryInput, type TrySettings } from "./try.ts";
+import { SAMPLE_INBOX, type InboxPoller, type InboxStatus } from "./gmail.ts";
+import type { MemoSender } from "../src/memo.ts";
 
 /** POST /api/try: the model call is paid for with the demo's key, so it is capped and rate-limited. */
 export interface TryApiOptions {
@@ -152,6 +154,12 @@ export interface ApiOptions {
   emlDir?: string | null;
   /** Enables POST /api/try. Without it the route answers 503. */
   try?: TryApiOptions;
+  /** Delivers credit memos (sendCreditMemo). Without one, the action is never offered. */
+  memoSender?: MemoSender | null;
+  /** Live inbox polling (CONTRA_INBOX=gmail). Without it, health reports the sample inbox. */
+  inbox?: { poller: Pick<InboxPoller, "poll" | "status">; intervalMs: number };
+  /** Server-Sent Events heartbeat interval in ms. Default 15,000. */
+  heartbeatMs?: number;
 }
 
 const COMMANDS: Record<Action["command"], Record<string, "string" | "number" | "string[]">> = {
@@ -190,10 +198,40 @@ export function parseAction(x: unknown): Action | null {
   return o as unknown as Action;
 }
 
-export function createApiServer(opts: ApiOptions): { server: Server; app: () => App; close: () => Promise<void> } {
+export function createApiServer(opts: ApiOptions): { server: Server; app: () => App; pollNow: () => Promise<void>; close: () => Promise<void> } {
   const maxBody = opts.maxBodyBytes ?? 64 * 1024;
   mkdirSync(dirname(opts.dbPath), { recursive: true });
-  let app = new App(opts.dbPath, opts.start ? { start: opts.start } : {});
+  const appOptions = { ...(opts.start ? { start: opts.start } : {}), memoSender: opts.memoSender ?? null };
+  let app = new App(opts.dbPath, appOptions);
+
+  // ---- Server-Sent Events: "screens-changed" after every change, plus a heartbeat. Event data never
+  // carries state or secrets: the client re-reads GET /api/screens.
+  const sseClients = new Set<ServerResponse>();
+  const broadcast = (event: string, data: Record<string, string>) => {
+    const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    for (const c of sseClients) c.write(msg);
+  };
+  const changed = (reason: "action" | "reset" | "inbox") => broadcast("screens-changed", { reason });
+  const heartbeat = setInterval(() => broadcast("heartbeat", {}), opts.heartbeatMs ?? 15_000);
+  heartbeat.unref();
+
+  // ---- Inbox polling: never overlapping; the poller records its own errors and never throws.
+  let polling = false;
+  const pollNow = async () => {
+    if (!opts.inbox || polling) return;
+    polling = true;
+    try {
+      const r = await opts.inbox.poller.poll(app);
+      if (r.ingested > 0) changed("inbox");
+    } catch {
+      /* the poller records errors in its status; a timer must never throw */
+    } finally {
+      polling = false;
+    }
+  };
+  const pollTimer = opts.inbox ? setInterval(() => void pollNow(), opts.inbox.intervalMs) : null;
+  pollTimer?.unref();
+  const inboxStatus = (): InboxStatus => opts.inbox?.poller.status() ?? SAMPLE_INBOX;
 
   // mailparser is async and runAction is sync, so the files are read up front and awaited before an action.
   const loadEmails = (): Promise<PmEmailSource | null> => {
@@ -206,7 +244,7 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
   const reset = () => {
     app.close();
     for (const suffix of ["", "-wal", "-shm"]) if (existsSync(opts.dbPath + suffix)) rmSync(opts.dbPath + suffix);
-    app = new App(opts.dbPath, opts.start ? { start: opts.start } : {});
+    app = new App(opts.dbPath, appOptions);
     pmEmails = loadEmails();
   };
 
@@ -287,7 +325,14 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
       const path = url.pathname.replace(/\/+$/, "") || "/";
       if (req.method === "OPTIONS") return send(res, 204, null);
 
-      if (req.method === "GET" && path === "/api/health") return send(res, 200, { ok: true });
+      if (req.method === "GET" && path === "/api/health") return send(res, 200, { ok: true, inbox: inboxStatus() });
+      if (req.method === "GET" && path === "/api/events") {
+        res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
+        res.write("retry: 3000\n\n");
+        sseClients.add(res);
+        req.on("close", () => sseClients.delete(res));
+        return;
+      }
       if (req.method === "GET" && path === "/api/screens") return send(res, 200, buildScreens(app));
       let m = /^\/api\/backcharge\/([A-Za-z0-9-]{1,20})$/.exec(path);
       if (req.method === "GET" && m) return send(res, 200, backChargeDetail(app, decodeURIComponent(m[1]!)));
@@ -299,6 +344,7 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
       }
       if (req.method === "POST" && path === "/api/reset") {
         reset();
+        changed("reset");
         return send(res, 200, { ok: true, screens: buildScreens(app) });
       }
       if (req.method === "POST" && path === "/api/action") {
@@ -310,7 +356,8 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
           ...(typeof rawInput.choice === "string" ? { choice: rawInput.choice } : {}),
           ...(typeof rawInput.reason === "string" ? { reason: rawInput.reason } : {}),
         };
-        runAction(app, action, input, action.command === "ingestPmEmails" ? { pmEmails: await pmEmails } : {});
+        await runAction(app, action, input, action.command === "ingestPmEmails" ? { pmEmails: await pmEmails } : {});
+        changed("action");
         return send(res, 200, { ok: true, screens: buildScreens(app) });
       }
       if (req.method === "POST" && path === "/api/try") {
@@ -346,8 +393,13 @@ export function createApiServer(opts: ApiOptions): { server: Server; app: () => 
   return {
     server,
     app: () => app,
+    pollNow,
     close: () =>
       new Promise<void>((resolve) => {
+        clearInterval(heartbeat);
+        if (pollTimer) clearInterval(pollTimer);
+        for (const c of sseClients) c.end();
+        sseClients.clear();
         server.close(() => {
           app.close();
           resolve();
