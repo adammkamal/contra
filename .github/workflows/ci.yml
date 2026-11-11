@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+# No secrets are used anywhere: the suites run on fakes only (no model key, no Gmail, no network calls).
+jobs:
+  check:
+    name: check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          # The repo needs Node 22.13+ (node:sqlite); this range guarantees it.
+          node-version: ">=22.13.0 <23"
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run typecheck:ui
+
+  e2e:
+    name: e2e (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ">=22.13.0 <23"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # PW_CHANNEL is not set: Playwright's bundled Chromium.
+      - run: npx playwright test --reporter=list,html
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e2e-screenshots
+          path: e2e/screenshots
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: warn
