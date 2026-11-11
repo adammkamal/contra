@@ -114,6 +114,24 @@ export interface ExtractedBackCharge {
   disputeEvidence?: Evidence;
 }
 
+/**
+ * Something the extractor returned that validation refused (src/extract/validate.ts): one item, or the
+ * whole output (index -1). Never repaired and never a back-charge, but never dropped either: ingest keeps
+ * it and the Inbox shows it as a held row. `reason` is technical (logs, benchmark); `words` says it to a PM;
+ * `ref` is the item's BC number when it had a readable one.
+ */
+export interface RejectedExtraction {
+  index: number;
+  reason: string;
+  words: string;
+  ref?: string;
+}
+
+/** A rejected extraction as ingest keeps it, with the email it came from. */
+export interface RejectedItem extends RejectedExtraction {
+  emailId: string;
+}
+
 /** What the extractor returns for a sub's reply to a notice. Untrusted until verified. */
 export interface ExtractedResponse {
   noticeId: string;

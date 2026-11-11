@@ -12,8 +12,10 @@
   },
   "inbox": [
     {
+      "kind": "backCharge",
       "ref": "BC-7151",
       "emailSubject": "Summit MOB - back-charge for stair core drywall",
+      "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
       "vendorAsWritten": "Ridgeline Drywall",
       "amount": "$900.00",
       "sourceSentence": "BC-7151: patch the stair core drywall damaged during framing, Summit, $900.00.",
@@ -36,8 +38,10 @@
       ]
     },
     {
+      "kind": "backCharge",
       "ref": "BC-7152",
       "emailSubject": "Summit - two back-charges, estimate and ticket photo attached",
+      "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
       "vendorAsWritten": "Ridgeline Interiors LLC",
       "amount": "$1,250.00",
       "sourceSentence": "BC-7152: corridor wall repair, L3, $1,250.00 per our painter's quote.",
@@ -64,8 +68,10 @@
       ]
     },
     {
+      "kind": "backCharge",
       "ref": "BC-7153",
       "emailSubject": "Summit - two back-charges, estimate and ticket photo attached",
+      "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
       "vendorAsWritten": "Ridgeline Interiors LLC",
       "amount": "$640.00",
       "sourceSentence": "BC-7153 FLOOR PROTECTION $640.00",

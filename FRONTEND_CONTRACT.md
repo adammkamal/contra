@@ -86,11 +86,11 @@ Show the message; don't retry.
 | `emailSource` | `"eml"`, `"builtin"`, `"gmail"`, `"mixed"` or `null` (before ingest). Where the Inbox's PM emails were read from. Show it in the Inbox beside the extraction note: **"Emails: .eml files"** for `"eml"`, **"Emails: built-in sample"** for `"builtin"`, **"Emails: Gmail inbox"** for `"gmail"`, **"Emails: more than one source"** for `"mixed"`. |
 | `nextStep` | `{ text, action }` for the presenter bar. Highlight `action`'s button. In `demo`, `action` is `null` only at "Demo complete". In `live`, it is also `null` while waiting for mail ("Waiting for back-charge emails from the live inbox") while the PM must choose a subcontract in an Inbox row, and while the PM must confirm an amount read from an image in an Inbox row; show the text without a button. |
 | `opener` | The missed back-charges screen. Always show **"Sample data"**. Totals are already formatted; rows carry `ref`, `status`, `amount` and `evidence`. |
-| `inbox[]` | `ref`, `emailSubject`, `vendorAsWritten`, `amount`, `sourceSentence` (show beside the amount), `sourceLocation` (where that sentence is: `"email body"`, `"attachment estimate.pdf, page 2"`, or `"attachment IMG_2041.jpg"` for a photo; show it with the sentence), `attachments[]` (what became of each of the email's attachments, in words; show them all, skipped ones included, as written), `linkExplanation[]`, `status`, `actions[]`. |
+| `inbox[]` | `kind`, `ref`, `emailSubject`, `emailFrom`, `vendorAsWritten`, `amount`, `sourceSentence` (show beside the amount), `sourceLocation` (where that sentence is: `"email body"`, `"attachment estimate.pdf, page 2"`, or `"attachment IMG_2041.jpg"` for a photo; show it with the sentence), `attachments[]` (what became of each of the email's attachments, in words; show them all, skipped ones included, as written), `linkExplanation[]`, `status`, `actions[]`. `kind` is `"backCharge"` (an extracted back-charge, with a detail screen) or `"rejected"` (see [Items not taken in](#items-not-taken-in)). |
 | `outbox[]` | Notices: `id`, `total`, `refs`, `body` (shown as written, preformatted), `status`, `actions[]`. |
 | `credits[]` | `id`, `amount`, `job`, `refs`, `status`, `actions[]`, `hasMemo` (when true, offer "View memo"), `memo`: the memo's delivery to the AP inbox as a `Status` (e.g. "Memo not sent", "Memo sent to …", "Memo not sent: … You can send it again."), or `null` when there is no memo yet. Show `memo.label` as written. |
 | `bills[]` | Always show **"Simulated Ramp"**. `vendor`, `job`, `amount`, `creditsOn`, `status`, `paid`, plus `check`: `status`, `actions[]` (sentences), `warnings[]`, `wouldPay`. Also has `actions[]` (buttons). |
-| `pmQueue[]` | `ref` and `status` for items a person must look at. |
+| `pmQueue[]` | `ref` and `status` for items a person must look at, including items not taken in (their `ref` can be `""`). |
 | `audit[]` | Newest first: `seq`, `at`, `actor` (already worded), `what`, `evidence[]`. |
 
 `Status` is `{ label, tone }`. **The label carries the meaning; show it as text.** `tone` (`ok`, `warn`,
@@ -239,6 +239,21 @@ Attachments of PM emails (live Gmail and `.eml` files) are read when the email i
 | `amount_only_in_image` | amount read from a photo or scanned page, which can't be checked word for word; a person must confirm it |
 
 Only `amount_only_in_image`, when it is an item's only reason, has a button (`confirmImageAmount`).
+
+## Items not taken in
+
+Nothing a PM sends vanishes. When the model returns something for an email that validation refuses (a
+page or attachment that doesn't exist, an amount that can't be read exactly, a missing BC number, an answer
+in the wrong form, ...), it is never a back-charge, but it is an Inbox row with `kind: "rejected"`:
+
+- `status.label` is `Held: not taken in: <the reason in plain words>; a person must read the email`, for example
+  `Held: not taken in: the model said the amount is on page 3 of estimate.pdf, which has only 2 pages; a person
+  must read the email`. Show it as written.
+- `emailSubject`, `emailFrom` and `attachments[]` say which email it came from.
+- `ref` is its BC number when the model gave a readable one, else `""`. `vendorAsWritten`, `amount`,
+  `sourceSentence` and `sourceLocation` are `""`: the model's unchecked text is never shown as if it were checked.
+- No `actions` and no detail screen: don't link it to `backChargeDetail` (its `ref` may be another row's,
+  or empty). A person reads the original email. It is also in `pmQueue[]` and in the audit log.
 
 ## Detail screen: `BackChargeDetail`
 

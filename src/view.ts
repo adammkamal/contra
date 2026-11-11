@@ -4,7 +4,7 @@ import { DEMO_BILL, DEMO_SC } from "./commands.ts";
 import { formatUsd } from "./money.ts";
 import { matchJobs, resolve, type Resolution } from "./resolver.ts";
 import { attachmentPages, describeAt, describeAttachment } from "./span.ts";
-import { EMAIL_INGESTED, type Actor, type BackCharge, type Credit, type EmailOrigin, type HoldReason, type Job, type Notice, type Subcontract } from "./types.ts";
+import { EMAIL_INGESTED, type Actor, type BackCharge, type Credit, type EmailOrigin, type HoldReason, type Job, type Notice, type RejectedItem, type Subcontract } from "./types.ts";
 import { Contra } from "./workflow.ts";
 
 /**
@@ -109,9 +109,27 @@ export function actorLabel(a: Actor): string {
   return "Contra";
 }
 
+/**
+ * The status of something validation refused from an extraction: held, with the reason in words. Never a
+ * back-charge, so no detail screen and no button; a person reads the email it came from.
+ */
+export function rejectedStatus(r: Readonly<RejectedItem>): Status {
+  return { label: `Held: not taken in: ${r.words}; a person must read the email`, tone: "danger" };
+}
+
 export interface InboxRow {
+  /**
+   * "backCharge": an extracted back-charge (backChargeDetail(app, ref) has its detail screen).
+   * "rejected": something the model returned that validation refused. Always held, with the reason in
+   * `status.label`; `ref` is its BC number if it had a readable one, else ""; `vendorAsWritten`, `amount`,
+   * `sourceSentence` and `sourceLocation` are "" (the model's unchecked text is never shown as if checked);
+   * no detail screen and no actions.
+   */
+  kind: "backCharge" | "rejected";
   ref: string;
   emailSubject: string;
+  /** Who sent the email the row came from. */
+  emailFrom: string;
   vendorAsWritten: string;
   amount: string;
   sourceSentence: string;
@@ -189,8 +207,10 @@ export function buildScreens(app: App): Screens {
       actions.push({ command: "confirmImageAmount", ref: b.ref, options: r.kind === "linked" ? [r.subcontractId] : subcontractOptions(b.extracted.jobRef, r, erp.jobs, erp.subcontracts) });
     }
     return {
+      kind: "backCharge" as const,
       ref: b.ref,
       emailSubject: email?.subject ?? "",
+      emailFrom: email?.from ?? "",
       vendorAsWritten: b.extracted.vendorNameAsWritten,
       amount: formatUsd(b.extracted.amountCents),
       sourceSentence: b.extracted.amountEvidence.sentence,
@@ -201,6 +221,24 @@ export function buildScreens(app: App): Screens {
       actions,
     };
   });
+  // Nothing a PM sends vanishes: what validation refused is a held row too, with the email it came from.
+  for (const r of contra.rejected) {
+    const email = contra.emails.get(r.emailId);
+    inbox.push({
+      kind: "rejected",
+      ref: r.ref ?? "",
+      emailSubject: email?.subject ?? "",
+      emailFrom: email?.from ?? "",
+      vendorAsWritten: "",
+      amount: "",
+      sourceSentence: "",
+      sourceLocation: "",
+      attachments: email?.attachments?.map(describeAttachment) ?? [],
+      linkExplanation: [],
+      status: rejectedStatus(r),
+      actions: [],
+    });
+  }
 
   const outbox = notices.map((n) => ({
     id: n.id,
@@ -301,7 +339,7 @@ export function buildScreens(app: App): Screens {
     outbox,
     credits: creditRows,
     bills,
-    pmQueue: contra.pmQueue().map((b) => ({ ref: b.ref, status: backChargeStatus(b) })),
+    pmQueue: [...contra.pmQueue().map((b) => ({ ref: b.ref, status: backChargeStatus(b) })), ...contra.rejected.map((r) => ({ ref: r.ref ?? "", status: rejectedStatus(r) }))],
     opener,
     audit,
   };

@@ -6,6 +6,7 @@ import { test } from "node:test";
 import { MAX_ATTACHMENTS, readAttachments } from "../ingest/attachments.ts";
 import { parseEmlWithMedia } from "../ingest/eml.ts";
 import { parseAction } from "../server/api.ts";
+import { GmailClient, InboxPoller, modelExtractor } from "../server/gmail.ts";
 import { App } from "../src/app.ts";
 import * as cmd from "../src/commands.ts";
 import { evaluateEligibility } from "../src/eligibility.ts";
@@ -15,6 +16,7 @@ import { assessExtractedItem } from "../src/intake.ts";
 import type { AttachmentMedia, Email } from "../src/types.ts";
 import { buildScreens, HOLD_WORDS } from "../src/view.ts";
 import { eml, png, scannedPdf, textPdf, type Part } from "./attachment-fakes.ts";
+import { CONFIG, fakeGmail, gmailAuthPass } from "./gmail-fakes.ts";
 import { LLM, PM, setup } from "./helpers.ts";
 
 // Made-up emails for these tests. Ridgeline Interiors LLC on Summit is SC-SUM-0912 in the demo seed, so an
@@ -247,6 +249,83 @@ test("attachments: confirmImageAmount is offered only when the image is the only
     assert.deepEqual(app.ctx.contra.backCharges.get("BC-7403")!.holdReasons, ["amount_only_in_image", "conflicting_amounts"]);
     assert.deepEqual(row.actions, []);
     assert.throws(() => app.ctx.contra.confirmImageAmount("BC-7403", PM, 64_000 as never, "SC-SUM-0912"), /only an item held just for an amount read from an image/);
+  } finally {
+    app.close();
+  }
+});
+
+// ---- Nothing vanishes: what validation refuses is a held Inbox row --------------------------------
+
+const LIVE_START = new Date("2026-11-07T15:00:00Z");
+const liveApp = (db = join(mkdtempSync(join(tmpdir(), "contra-")), "d.db")) => new App(db, { start: LIVE_START, workspace: "live", realClock: { now: () => LIVE_START } });
+const PAGE3_WORDS = "the model said the amount is on page 3 of estimate.pdf, which has only 2 pages";
+
+test("attachments: a live email whose only item cites a page the PDF doesn't have is a held Inbox row with that reason, never dropped", async () => {
+  // The whole live path: Gmail (faked) -> .eml with a 2-page PDF -> the live extractor (model faked) -> poll -> ingest.
+  const msg = eml({ id: "rej-1", subject: "Summit - BC-7401 corridor wall", body: BODY, parts: [await pdfPart([PAGE1, PAGE2])] });
+  const raw = [`Authentication-Results: ${gmailAuthPass("apexbuilders.example")}`, `Delivered-To: ${CONFIG.intake}`, msg.toString("utf8")].join("\r\n");
+  const g = fakeGmail({ messages: [{ id: "r1", raw }] });
+  const model = fakeModel([rawItem({ amountPage: 3 })]);
+  const now = () => Date.UTC(2026, 10, 10, 16, 0, 0);
+  const poller = new InboxPoller({ client: new GmailClient(CONFIG, g.transport, now), extract: modelExtractor(() => ({ ok: true, settings: S }), { fetcher: model.fetcher }), now });
+  const db = join(mkdtempSync(join(tmpdir(), "contra-")), "d.db");
+  let app = liveApp(db);
+  try {
+    assert.deepEqual(await poller.poll(app), { ingested: 1 });
+    assert.equal(app.ctx.contra.backCharges.size, 0); // never a back-charge
+    const expected = {
+      kind: "rejected",
+      ref: "BC-7401",
+      emailSubject: "Summit - BC-7401 corridor wall",
+      amount: "",
+      sourceSentence: "",
+      status: { label: `Held: not taken in: ${PAGE3_WORDS}; a person must read the email`, tone: "danger" },
+      actions: [],
+    };
+    const check = () => {
+      const s = buildScreens(app);
+      assert.equal(s.inbox.length, 1);
+      const row = s.inbox[0]!;
+      assert.deepEqual({ kind: row.kind, ref: row.ref, emailSubject: row.emailSubject, amount: row.amount, sourceSentence: row.sourceSentence, status: row.status, actions: row.actions }, expected);
+      assert.match(row.emailFrom, /dana\.ortiz@apexbuilders\.example/);
+      assert.deepEqual(row.attachments, ["attachment estimate.pdf: PDF, 2 pages, text read"]);
+      assert.deepEqual(s.pmQueue, [{ ref: "BC-7401", status: expected.status }]);
+      assert.deepEqual(s.nextStep.action, null);
+    };
+    check();
+    // In the audit log too, as the extractor's, with the validator's own reason.
+    const logged = app.ctx.contra.audit.all().find((e) => e.action.startsWith("BC-7401 not taken in"))!;
+    assert.equal(logged.actor.kind, "llm");
+    assert.equal(logged.action, `BC-7401 not taken in, held for a person: ${PAGE3_WORDS}`);
+    assert.deepEqual(logged.evidence, ["validation: BC-7401: amountPage 3 is not a page of estimate.pdf (1-2)"]);
+    // It survives a restart (the snapshot keeps it).
+    app.close();
+    app = liveApp(db);
+    check();
+  } finally {
+    app.close();
+  }
+});
+
+test("attachments: every kind of rejection, and a whole answer refused, is a held row with its own words", async () => {
+  const { email } = await parseEmlWithMedia(eml({ id: "rej-2", subject: "Summit - three items", body: `${BODY}\n\n${SENTENCE}`, parts: [await pdfPart([PAGE1, PAGE2])] }), "gmail-rej2");
+  const parsed = parseBackCharges({ items: [rawItem({ amountAttachment: 0, amountPage: undefined }), rawItem({ ref: "corridor" }), rawItem({ ref: "BC-7404", amountText: "$1,250.5", amountSentence: "BC-7404 is $1,250.5 per quote" }), rawItem({ ref: "BC-7405", amountAttachment: 4 })] }, email);
+  assert.equal(parsed.items.length, 1);
+  const app = liveApp();
+  try {
+    cmd.ingestInboxEmail(app, { ...email, messageId: "rej-2" }, parsed.items, LLM, "gmail", parsed.rejected);
+    const whole = parseBackCharges({ items: "none" }, email);
+    cmd.ingestInboxEmail(app, { ...email, id: "gmail-rej3", messageId: "rej-3", subject: "Summit - unreadable" }, whole.items, LLM, "gmail", whole.rejected);
+    const held = buildScreens(app).inbox.filter((r) => r.kind === "rejected").map((r) => [r.ref, r.emailSubject, r.status.label]);
+    const h = (w: string) => `Held: not taken in: ${w}; a person must read the email`;
+    assert.deepEqual(held, [
+      ["", "Summit - three items", h("the model didn't give a back-charge number in the form BC-1234")],
+      ["BC-7404", "Summit - three items", h(`the amount can't be read exactly ("$1,250.5")`)],
+      ["BC-7405", "Summit - three items", h("the model said the amount is in attachment 4, but the email has no attachment 4")],
+      ["", "Summit - unreadable", h("the model's answer for this email wasn't in the expected form, so nothing in it was taken in")],
+    ]);
+    // The accepted item is a normal row; the rejected ones never become back-charges.
+    assert.deepEqual([...app.ctx.contra.backCharges.keys()], ["BC-7401"]);
   } finally {
     app.close();
   }

@@ -6,7 +6,7 @@ import { isOffered } from "./view.ts";
 export class NotOffered extends Error {}
 import { cents, parseUsd } from "./money.ts";
 import { demoReply } from "./seed.ts";
-import type { Actor, Email, EmailOrigin, ExtractedBackCharge, ExtractedResponse } from "./types.ts";
+import type { Actor, Email, EmailOrigin, ExtractedBackCharge, ExtractedResponse, RejectedExtraction } from "./types.ts";
 
 /**
  * Every button in the UI maps to exactly one of these. Each runs inside app.run (atomic).
@@ -38,7 +38,8 @@ export interface PmEmailSource {
 /**
  * Ingests the demo PM emails: `emails` when given (from `emailOrigin`, required with it), else the
  * built-in sample in src/seed.ts. Extractions, in order:
- *  1. `extractions` passed in (with the `extractor` that produced them);
+ *  1. `extractions` passed in (with the `extractor` that produced them, and `rejected`: what validation
+ *     refused from each email, by email id, kept as held Inbox rows);
  *  2. recorded model output in `fixturesDir` (written by `npm run extract:live` on a full pass);
  *  3. the hand-written sample in src/seed.ts, logged as SAMPLE_EXTRACTIONS, never as the model.
  */
@@ -46,6 +47,7 @@ export function ingestPmEmails(
   app: App,
   opts: {
     extractions?: Record<string, ExtractedBackCharge[]>;
+    rejected?: Record<string, RejectedExtraction[]>;
     extractor?: Actor;
     fixturesDir?: string | null;
     emails?: Email[];
@@ -68,7 +70,8 @@ export function ingestPmEmails(
       if (rec) [ex, actor, source] = [rec.extractions, { kind: "llm", id: "extractor", model: rec.model }, "model"];
       else [ex, actor, source] = [seed.extractions, SAMPLE_EXTRACTIONS, "sample"];
     }
-    const refs = emails.flatMap((e) => contra.ingestBackChargeEmail(e, ex[e.id] ?? [], actor, emailOrigin).map((b) => b.ref));
+    const rejected = source === "provided" ? opts.rejected ?? {} : {};
+    const refs = emails.flatMap((e) => contra.ingestBackChargeEmail(e, ex[e.id] ?? [], actor, emailOrigin, rejected[e.id] ?? []).map((b) => b.ref));
     return { refs, source, emailOrigin };
   });
 }
@@ -76,7 +79,8 @@ export function ingestPmEmails(
 /**
  * Ingests one email read from a live inbox, with the extraction made for it, into the live workspace only
  * (a demo App refuses it). Idempotent by Message-ID (the core skips one it has seen: no back-charge, notice
- * or audit entry). Returns whether it was new.
+ * or audit entry). Returns whether it was new. `rejected`: what validation refused from the extraction;
+ * each becomes a held Inbox row, never dropped.
  */
 export function ingestInboxEmail(
   app: App,
@@ -84,6 +88,7 @@ export function ingestInboxEmail(
   extracted: ExtractedBackCharge[],
   extractor: Actor,
   origin: EmailOrigin = "gmail",
+  rejected: readonly RejectedExtraction[] = [],
 ): { ingested: boolean; refs: string[] } {
   // Live mail never reaches the scripted demo: its notice, credit and payment can't change through the inbox.
   if (app.ctx.workspace !== "live") throw new WrongWorkspace("live inbox mail goes only to the live workspace, never to the demo");
@@ -91,7 +96,7 @@ export function ingestInboxEmail(
   if (app.ctx.contra.hasMessage(email.messageId)) return { ingested: false, refs: [] };
   return app.run(({ contra }) => {
     if (contra.hasMessage(email.messageId!)) return { ingested: false, refs: [] };
-    return { ingested: true, refs: contra.ingestBackChargeEmail(email, extracted, extractor, origin).map((b) => b.ref) };
+    return { ingested: true, refs: contra.ingestBackChargeEmail(email, extracted, extractor, origin, rejected).map((b) => b.ref) };
   });
 }
 

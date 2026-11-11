@@ -11,6 +11,7 @@ import { App } from "../src/app.ts";
 import * as cmd from "../src/commands.ts";
 import { SAMPLE_EXTRACTIONS } from "../src/actors.ts";
 import type { MemoSender } from "../src/memo.ts";
+import { parseBackCharges } from "../src/extract/validate.ts";
 import { cents } from "../src/money.ts";
 import { backChargeDetail, buildScreens, nextStep } from "../src/view.ts";
 import { tryEmail, type TryInput } from "../server/try.ts";
@@ -131,7 +132,26 @@ cmd.ingestInboxEmail(
 );
 write("live-02-after-an-email-with-attachments-arrives.screens.json", buildScreens(live));
 write("live-detail-BC-7153.json", backChargeDetail(live, "BC-7153"));
+
+// An email whose only item cites a page the PDF doesn't have: validation refuses it, and it is a held row
+// (kind "rejected") with the reason in words, never dropped.
+const rejEmail = {
+  ...attEmail,
+  id: "gmail-18c2f0a1b2c3d4f7",
+  subject: "Summit - stair nosing estimate attached",
+  receivedAt: new Date("2026-11-07T15:40:00Z"),
+  body: "Hi,\n\nEstimate for the stair nosing attached.\n\nDana Ortiz\nProject Manager, Apex Builders",
+  messageId: "<sample-live-3@apexbuilders.example>",
+  attachmentCount: 1,
+  attachments: [{ n: 1, filename: "nosing-estimate.pdf", mediaType: "application/pdf", read: "text" as const, pages: ["APEX BUILDERS - REPAIR ESTIMATE", "BC-7154: stair nosing, L1, $480.00."] }],
+};
+const refused = parseBackCharges(
+  { items: [{ ref: "BC-7154", description: "Stair nosing, L1", amountText: "$480.00", amountSentence: "BC-7154: stair nosing, L1, $480.00.", vendorNameAsWritten: "Ridgeline Interiors LLC", jobRef: "Summit", disputeNoted: false, amountAttachment: 1, amountPage: 3 }] },
+  rejEmail,
+);
+cmd.ingestInboxEmail(live, rejEmail, refused.items, SAMPLE_EXTRACTIONS, "gmail", refused.rejected);
+write("live-03-after-an-item-is-not-taken-in.screens.json", buildScreens(live));
 live.close();
 
 rmSync(tmp, { recursive: true, force: true });
-console.log(`Wrote ${i + 1} screen states + 3 details + 1 memo + ${trySamples.length} try samples + 3 live-workspace screens + 1 live detail to contract/samples/`);
+console.log(`Wrote ${i + 1} screen states + 3 details + 1 memo + ${trySamples.length} try samples + 4 live-workspace screens + 1 live detail to contract/samples/`);

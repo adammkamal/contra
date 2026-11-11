@@ -20,6 +20,8 @@ import type {
   ExtractedResponse,
   HoldReason,
   Notice,
+  RejectedExtraction,
+  RejectedItem,
 } from "./types.ts";
 
 const SYSTEM: Actor = { kind: "system", id: "contra" };
@@ -54,6 +56,8 @@ export interface ContraState {
   lateDisputes: { ref: string; emailId: string }[];
   evidenceOk: [string, boolean][];
   sourceDispute: [string, boolean][];
+  /** Absent in snapshots written before rejected extractions were kept. */
+  rejected?: RejectedItem[];
   seq: { notice: number; credit: number };
 }
 
@@ -64,6 +68,8 @@ export class Contra {
   readonly emails = new Map<string, Email>();
   readonly proposals = new Map<string, Resolution>();
   readonly lateDisputes: { ref: string; emailId: string }[] = [];
+  /** What validation refused from each email's extraction. Each is a held row in the Inbox, never dropped. */
+  readonly rejected: RejectedItem[] = [];
   readonly #evidenceOk = new Map<string, boolean>();
   readonly #sourceDispute = new Map<string, boolean>();
   #seq = { notice: 0, credit: 0 };
@@ -82,6 +88,7 @@ export class Contra {
       lateDisputes: [...this.lateDisputes],
       evidenceOk: [...this.#evidenceOk.entries()],
       sourceDispute: [...this.#sourceDispute.entries()],
+      rejected: [...this.rejected],
       seq: { ...this.#seq },
     });
   }
@@ -97,6 +104,7 @@ export class Contra {
     c.lateDisputes.push(...s2.lateDisputes);
     for (const [k, v] of s2.evidenceOk) c.#evidenceOk.set(k, v);
     for (const [k, v] of s2.sourceDispute) c.#sourceDispute.set(k, v);
+    c.rejected.push(...(s2.rejected ?? []));
     c.#seq = { ...s2.seq };
     return c;
   }
@@ -112,8 +120,10 @@ export class Contra {
   /**
    * Ingests one email and its extracted back-charges. Idempotent by Message-ID: an email whose
    * messageId was already ingested changes nothing (no back-charge, notice or audit entry) and returns [].
+   * `rejected` is what validation refused from the same extraction: each is kept (an Inbox row, held) and
+   * logged with its reason, so nothing the PM sent vanishes. It never becomes a back-charge.
    */
-  ingestBackChargeEmail(email: Email, extracted: ExtractedBackCharge[], extractor: Actor, origin: EmailOrigin = "builtin"): BackCharge[] {
+  ingestBackChargeEmail(email: Email, extracted: ExtractedBackCharge[], extractor: Actor, origin: EmailOrigin = "builtin", rejected: readonly RejectedExtraction[] = []): BackCharge[] {
     if (email.messageId && this.hasMessage(email.messageId)) return [];
     this.emails.set(email.id, email);
     // One line per attachment: read as text, read as an image, or skipped and why. Never dropped silently.
@@ -121,6 +131,18 @@ export class Contra {
     // Live mail: when Gmail received it (the host sets receivedAt from Gmail's internalDate).
     const received = origin === "gmail" ? [`received ${email.receivedAt.toISOString()}`] : [];
     this.d.log.append({ actor: SYSTEM, entity: "email", entityId: email.id, action: EMAIL_INGESTED[origin], from: null, to: null, evidence: [email.subject, ...received, ...attachments] });
+    for (const r of rejected) {
+      this.rejected.push({ ...r, emailId: email.id });
+      this.d.log.append({
+        actor: extractor,
+        entity: "email",
+        entityId: email.id,
+        action: `${r.ref ?? (r.index < 0 ? "extraction" : `item ${r.index + 1}`)} not taken in, held for a person: ${r.words}`,
+        from: null,
+        to: null,
+        evidence: [`validation: ${r.reason}`],
+      });
+    }
     const out: BackCharge[] = [];
 
     for (const x of extracted) {

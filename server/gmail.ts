@@ -11,9 +11,9 @@ import { EmlError, parseEmlWithMedia } from "../ingest/eml.ts";
 import type { App } from "../src/app.ts";
 import { ingestInboxEmail } from "../src/commands.ts";
 import type { ModelSettings } from "../src/extract/anthropic.ts";
-import { extractBackCharges } from "../src/extract/index.ts";
+import { extractBackCharges, type ExtractOptions } from "../src/extract/index.ts";
 import type { MemoSender } from "../src/memo.ts";
-import type { Actor, AttachmentMedia, Email, ExtractedBackCharge } from "../src/types.ts";
+import type { Actor, AttachmentMedia, Email, ExtractedBackCharge, RejectedExtraction } from "../src/types.ts";
 import { MODEL_ERROR_MESSAGES } from "./try.ts";
 
 export type Transport = (url: string, init?: RequestInit) => Promise<Response>;
@@ -380,16 +380,23 @@ export const SAMPLE_INBOX: InboxStatus = { mode: "sample", address: null, lastPo
  * One call is at most one model call (the poller counts each against the daily cap), so retries are the
  * poller's own, each counted. `media` holds the bytes of the email's photos and scans, for the model only.
  */
-export type Extract = (email: Email, media: readonly AttachmentMedia[]) => Promise<{ ok: true; items: ExtractedBackCharge[]; actor: Actor } | { ok: false; reason: string }>;
+export type Extract = (
+  email: Email,
+  media: readonly AttachmentMedia[],
+) => Promise<{ ok: true; items: ExtractedBackCharge[]; rejected?: RejectedExtraction[]; actor: Actor } | { ok: false; reason: string }>;
 
-/** The live extractor: src/extract with Contra's model settings, one model call and no retry. Never writes anything to disk. */
-export function modelExtractor(settings: () => { ok: true; settings: ModelSettings } | { ok: false; message: string }): Extract {
+/**
+ * The live extractor: src/extract with Contra's model settings, one model call and no retry. Never writes
+ * anything to disk. `opts` is for tests (a fake fetcher); the retry count is always 0.
+ */
+export function modelExtractor(settings: () => { ok: true; settings: ModelSettings } | { ok: false; message: string }, opts: ExtractOptions = {}): Extract {
   return async (email, media) => {
     const s = settings();
     if (!s.ok) return { ok: false, reason: "the model isn't configured (CONTRA_ANTHROPIC_API_KEY in .env.local)" };
-    const r = await extractBackCharges(s.settings, email, { maxRetries: 0, media });
+    const r = await extractBackCharges(s.settings, email, { ...opts, maxRetries: 0, media });
     if (!r.ok) return { ok: false, reason: MODEL_ERROR_MESSAGES[r.errorType] };
-    return { ok: true, items: r.items, actor: r.actor };
+    // What validation refused goes along too: ingest keeps each as a held Inbox row.
+    return { ok: true, items: r.items, rejected: r.rejected, actor: r.actor };
   };
 }
 
@@ -504,7 +511,7 @@ export class InboxPoller {
           errors.push(`extraction failed for one message: ${x.reason}`);
           continue;
         }
-        if (ingestInboxEmail(app, email, x.items, x.actor, "gmail").ingested) ingested++;
+        if (ingestInboxEmail(app, email, x.items, x.actor, "gmail", x.rejected ?? []).ingested) ingested++;
       }
       this.#status = { ...this.#status, status: capped ? dailyCapReached(this.#cap) : errors.length ? "error" : "ok", lastError: errors.at(-1) ?? null };
     } catch (e) {
