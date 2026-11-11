@@ -122,6 +122,9 @@ Creating a credit exists only in the mock, and every Ramp screen says "Simulated
 | **Held-out, first run** | **6/8** | **1** | **1** | 4/8 | 3 |
 | Held-out, after fixes (no longer held-out) | 8/8 | 0 | 0 | 5/8 | 3 |
 | **Fresh, written outside the team, first run** | **1/8** | **0** | **7** | 1/8 | 0 |
+| Main, after the BC-number fix | 19/20 | 0 | 0 | 13/20 | 6 |
+| Held-out, after the BC-number fix (no longer held-out) | 8/8 | 0 | 0 | 5/8 | 3 |
+| Fresh, after the BC-number fix (**no longer held-out**) | 5/8 | 0 | 0 | 6–7/8 | 0–1 |
 
 ### The independent test, and what it changed
 
@@ -135,7 +138,7 @@ So the design changed:
 - Estimated amounts are marked as estimates on the notice and at credit approval.
 - Every email from an allowed sender produces a visible row, including "no back-charge found."
 
-**Status at submission:** the fix is in progress on branch `bc-fix` and is not merged. A second independent set (fh-09..16, written to the PM's description) is ready but has not been run, because it should only be run once, against the finished fix.
+**Status at submission:** the fix is merged. After it, every set was re-recorded (3 runs per case) once `npm run extract:live` passed 5/5; results are in `bench/results/*-after-bc-number-fix.txt`. Main and held-out are unchanged, row for row. The fresh set goes from 1/8 to 5/8 with 0 wrong credits and 0 missed; the other 3 all go to a person (a charge only in forwarded mail, a misspelled sub name, an amount written only in words). Its cases were read while building the fix, so it is **no longer held-out**: its held-out score stays the first run's 1/8 (`bench/results/fresh-first-run.txt`). A second independent set (fh-09..16, written to the PM's description) is ready but has not been run, because it should only be run once, against the finished fix.
 
 **What the first runs taught us.**
 - bc-12 was a prompt injection. It's now held by the AI-directed text check.

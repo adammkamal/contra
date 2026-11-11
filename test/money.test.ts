@@ -94,6 +94,22 @@ const UNREADABLE = [
   "US$1,200.5",
 ];
 
+test("money: '$2k', '$1.5M' or '$2 thousand' is unreadable, never read as $2.00", () => {
+  for (const text of ["$2k", "$2K", "$1.5M", "$3mm", "$2 thousand", "$1 million", "$5 grand", "USD 1,200k", "~$2k"]) {
+    const sentence = `Cleanup will be roughly ${text} for Ridgeline Drywall.`;
+    assert.deepEqual(scanUsdAmounts(sentence).map((a) => a.cents), [null], text);
+    assert.throws(() => findUsdAmounts(sentence), /can't be read exactly/, text);
+  }
+  const email: Email = { id: "K-1", from: "pm@x.example", to: "sub@x.example", subject: "Summit", receivedAt: new Date(0), body: "Cleanup will be roughly $2k for Ridgeline Drywall." };
+  const out = parseBackCharges({ items: [{ ref: null, description: "Cleanup", amountText: "$2", amountSentence: "Cleanup will be roughly $2k for Ridgeline Drywall.", vendorNameAsWritten: "Ridgeline Drywall", jobRef: "Summit", disputeNoted: false }] }, email);
+  assert.equal(out.items.length, 0);
+  assert.match(out.rejected[0]!.reason, /amount can't be read exactly: "\$2k"/);
+  // A word after the amount that isn't a multiplier changes nothing.
+  for (const [text, c] of [["$300 each", 30_000], ["$500-ish", 50_000], ["$500 or so", 50_000], ["~$475", 47_500], ["$1,200.", 120_000]] as const) {
+    assert.deepEqual(findUsdAmounts(text), [c], text);
+  }
+});
+
 test("money: an amount that can't be read exactly is unreadable, never a shorter amount", () => {
   for (const text of UNREADABLE) {
     const sentence = `BC-7414: patch and paint, ${text} for the east wall.`;

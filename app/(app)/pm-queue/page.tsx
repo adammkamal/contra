@@ -17,11 +17,11 @@ export default async function PmQueue() {
       {pmQueue.length === 0 ? <p className="empty">Nothing waiting on the PM.</p> : null}
       <div className="stack">
         {pmQueue.map((q, i) =>
-          // An item not taken in is not a back-charge: no detail screen (its ref may be empty or another row's).
-          q.status.label.startsWith("Held: not taken in:") ? (
-            <div key={i} className="item rejected" data-testid={`pm-queue-rejected-${i}`}>
+          // Only a back-charge has a detail screen: an item not taken in or an email's own row has none.
+          q.kind !== "backCharge" ? (
+            <div key={i} className="item rejected" data-testid={`pm-queue-${q.kind}-${i}`}>
               <div>
-                <span className="rejected-tag">Not taken in</span>
+                <span className="rejected-tag">{q.kind === "rejected" ? "Not taken in" : q.kind === "noBackCharge" ? "No back-charge found" : "Couldn't process"}</span>
                 <StatusWord s={q.status} />
               </div>
             </div>
@@ -29,7 +29,7 @@ export default async function PmQueue() {
             <div key={i} className="item">
               <div className="item-title">
                 <Link className="ref" href={`/backcharge/${q.ref}`}>
-                  {q.ref}
+                  {q.refLabel}
                 </Link>
                 <StatusWord s={q.status} />
               </div>

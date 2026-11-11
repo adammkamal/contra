@@ -1,11 +1,11 @@
 {
   "model": "claude-opus-5-5",
   "effort": "medium",
-  "recordedAt": "2026-11-10T10:19:20.123Z",
+  "recordedAt": "2026-11-11T07:09:07.918Z",
   "items": [
     {
       "ref": "BC-5008",
-      "description": "Wall patching and repainting, 2nd floor, after the subcontractor's crew gouged finished walls while moving lifts",
+      "description": "Wall patching and repainting, 2nd floor, after crew gouged finished walls moving lifts",
       "amountCents": 78000,
       "amountEvidence": {
         "emailId": "bc-08",
@@ -21,7 +21,7 @@
     "items": [
       {
         "ref": "BC-5008",
-        "description": "Wall patching and repainting, 2nd floor, after the subcontractor's crew gouged finished walls while moving lifts",
+        "description": "Wall patching and repainting, 2nd floor, after crew gouged finished walls moving lifts",
         "amountText": "$780.00",
         "amountSentence": "BC-5008: wall patching, 2nd floor, $780.00.",
         "vendorNameAsWritten": "Ridgeline Drywall",

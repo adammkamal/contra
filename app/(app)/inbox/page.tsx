@@ -39,6 +39,31 @@ export default async function Inbox() {
       ) : null}
       <div className="stack">
         {s.inbox.map((r, idx) => {
+          if (r.kind === "noBackCharge" || r.kind === "notProcessed") {
+            // The email's own row: nothing was found in it, or the model couldn't process it. No amount, no detail link.
+            return (
+              <article key={`email-${r.emailId}`} className="item rejected" data-testid={`email-row-${r.emailId}`}>
+                <div>
+                  <span className="rejected-tag">{r.kind === "noBackCharge" ? "No back-charge found" : "Couldn't process"}</span>
+                  <StatusWord s={r.status} />
+                </div>
+                <div className="source-line">
+                  <span>Email: {r.emailSubject}</span>
+                  <span>From: {r.emailFrom}</span>
+                </div>
+                <Files items={r.attachments} testId={`email-attachments-${r.emailId}`} />
+                {r.actions.length ? (
+                  <div className="item-foot">
+                    <div className="actions">
+                      {r.actions.map((a, i) => (
+                        <ActionButton key={i} action={a} next={s.nextStep.action} />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </article>
+            );
+          }
           if (r.kind === "rejected") {
             const n = s.inbox.slice(0, idx).filter((x) => x.kind === "rejected").length; // 0, 1, ... among the rejected rows
             // Something the model returned that validation refused: not a back-charge. No amount, no buttons, no detail link.
@@ -65,7 +90,7 @@ export default async function Inbox() {
               <div className="item-head">
                 <div className="item-title">
                   <Link className="ref" href={`/backcharge/${r.ref}`}>
-                    {r.ref}
+                    {r.refLabel}
                   </Link>
                   <span className="item-about">
                     {r.emailSubject} · written as “{r.vendorAsWritten}”
@@ -79,6 +104,11 @@ export default async function Inbox() {
                     {diff ? (
                       <div className="amt-note" data-testid={`amount-difference-${r.ref}`}>
                         {diff}
+                      </div>
+                    ) : null}
+                    {r.estimate ? (
+                      <div className="amt-note" data-testid={`estimate-${r.ref}`}>
+                        Estimate (the email says “{r.estimate}”)
                       </div>
                     ) : null}
                   </div>

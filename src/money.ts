@@ -68,11 +68,22 @@ function read(token: string): Cents | null {
   return cents(Number.parseInt(m[1]!.replaceAll(",", ""), 10) * 100 + Number.parseInt(m[2] ?? "00", 10));
 }
 
+/**
+ * A number followed by a multiplier the digits don't carry: a letter right after it ("$2k", "$1.5M",
+ * "$3mm") or a word ("$2 thousand", "$1 million", "$5 grand"). Read as digits alone it would be a
+ * thousandth of the amount meant, so such an amount is unreadable, never guessed.
+ */
+const MULTIPLIER = /^(?:[A-Za-z]|[    ]?(?:thousand|million|billion|grand)\b)/i;
+
 /** Every amount in the text ("$", "US$" or "USD" with a number; one per marker), in order, readable or not. */
 export function scanUsdAmounts(text: string): UsdAmount[] {
   const found: { at: number; amount: UsdAmount }[] = [];
   for (const re of AMOUNT_RES) {
-    for (const m of text.matchAll(re)) found.push({ at: m.index, amount: { text: m[0], cents: read(m[1]!) } });
+    for (const m of text.matchAll(re)) {
+      const after = text.slice(m.index + m[0].length);
+      const multiplied = !/USD$/i.test(m[0]) && MULTIPLIER.exec(after);
+      found.push({ at: m.index, amount: multiplied ? { text: m[0] + multiplied[0], cents: null } : { text: m[0], cents: read(m[1]!) } });
+    }
   }
   return found.sort((a, b) => a.at - b.at).map((f) => f.amount);
 }

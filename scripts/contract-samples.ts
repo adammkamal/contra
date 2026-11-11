@@ -160,6 +160,41 @@ write("live-03-after-an-item-is-not-taken-in.screens.json", buildScreens(live));
 // In live every step is recorded under the signed-in person; here the sample PM, Dana Ortiz.
 cmd.confirmImageAmount(live, "BC-7153", "$640.00", "SC-SUM-0912", PM);
 write("live-04-after-a-photo-amount-is-confirmed.screens.json", buildScreens(live));
+
+// A first back-charge email with no BC number (made up, extraction hand-written): it gets Contra's reference
+// CONTRA-0001 ("no BC number yet") and proceeds. A week later a follow-up cites BC-7160, which accounting
+// assigned, for the same charge: it is held as a possible duplicate of CONTRA-0001, with Same charge /
+// Different charge buttons. Then the PM confirms it is the same charge: one charge, both emails as evidence.
+// The first email calls its amount an estimate ("approximately"): marked, never held.
+const noNumSentence = "Please back-charge Ridgeline Drywall approximately $360.00 for the stairwell cleanup.";
+const noNumEmail = {
+  id: "gmail-18c2f0a1b2c3d4f8",
+  from: "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+  to: "contra.demo+backcharges@example.com",
+  subject: "Summit - stairwell debris",
+  receivedAt: new Date("2026-11-07T16:00:00Z"),
+  body: `Hi,\n\nRidgeline Drywall left debris in stair 2 at Summit again.\n\n${noNumSentence}\n\nThanks,\nDana`,
+  messageId: "<sample-live-4@apexbuilders.example>",
+};
+const noNumItem = { ref: null, description: "Stairwell debris cleanup", amountCents: cents(36_000), amountEvidence: { emailId: noNumEmail.id, sentence: noNumSentence }, vendorNameAsWritten: "Ridgeline Drywall", jobRef: "Summit", disputeNoted: false };
+cmd.ingestInboxEmail(live, noNumEmail, [noNumItem], SAMPLE_EXTRACTIONS);
+const followSentence = "BC-7160: stair 2 debris cleanup, $360.00, as sent last week.";
+const followEmail = { ...noNumEmail, id: "gmail-18c2f0a1b2c3d4f9", subject: "Summit - BC-7160 stairwell debris", body: `Hi,\n\nAccounting logged the stairwell cleanup.\n\n${followSentence}\n\nThanks,\nDana`, messageId: "<sample-live-5@apexbuilders.example>" };
+cmd.ingestInboxEmail(live, followEmail, [{ ...noNumItem, ref: "BC-7160", description: "Stair 2 debris cleanup", amountEvidence: { emailId: followEmail.id, sentence: followSentence } }], SAMPLE_EXTRACTIONS);
+write("live-05-after-a-possible-duplicate-arrives.screens.json", buildScreens(live));
+cmd.sameCharge(live, "BC-7160", PM);
+write("live-06-after-the-pm-confirms-the-same-charge.screens.json", buildScreens(live));
+write("live-detail-CONTRA-0001.json", backChargeDetail(live, "CONTRA-0001"));
+
+// Nothing vanishes (made up): an email from an allowed sender with no back-charge in it is a row (kind
+// "noBackCharge") the PM dismisses with a reason; an email the model failed on after every retry is a
+// "couldn't process" row (kind "notProcessed").
+const statusEmail = { ...noNumEmail, id: "gmail-18c2f0a1b2c3d4fa", subject: "Harbor Mechanical - payment status", body: "Hi Accounting,\n\nWe still owe Harbor $4,900 under their approved pay app. When does it go out?\n\nDana", messageId: "<sample-live-6@apexbuilders.example>" };
+cmd.ingestInboxEmail(live, statusEmail, [], SAMPLE_EXTRACTIONS);
+cmd.recordUnprocessedEmail(live, { id: "gmail-18c2f0a1b2c3d4fb", messageId: "<sample-live-7@apexbuilders.example>", subject: "Summit - punch list charges", from: noNumEmail.from, receivedAt: new Date("2026-11-07T16:30:00Z") }, "the model service didn't answer in time", 3);
+write("live-07-after-emails-with-no-back-charge.screens.json", buildScreens(live));
+cmd.dismissEmail(live, statusEmail.id, "a payment question, not a back-charge", PM);
+write("live-08-after-the-pm-dismisses-one.screens.json", buildScreens(live));
 live.close();
 
 // Signing in: the real HTTP responses from a server on a fixed clock, with two made-up accounts (a live PM
@@ -209,4 +244,4 @@ await authApi.close();
 authStore.close();
 
 rmSync(tmp, { recursive: true, force: true });
-console.log(`Wrote ${i + 1} screen states + 3 details + 1 memo + ${trySamples.length} try samples + 5 live-workspace screens + 1 live detail + 7 sign-in samples to contract/samples/`);
+console.log(`Wrote ${i + 1} screen states + 3 details + 1 memo + ${trySamples.length} try samples + 9 live-workspace screens + 2 live details + 7 sign-in samples to contract/samples/`);

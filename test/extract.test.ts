@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { callTool, normalizeApiKey, settingsFromEnv } from "../src/extract/anthropic.ts";
 import { extractBackCharges, extractResponse, wrap } from "../src/extract/index.ts";
-import { BACKCHARGE_TOOL } from "../src/extract/prompt.ts";
+import { BACKCHARGE_TOOL, backchargeSystem } from "../src/extract/prompt.ts";
 import { parseBackCharges, parseResponse } from "../src/extract/validate.ts";
 import { demoSeed } from "../src/seed.ts";
 import { verifyAmountEvidence } from "../src/span.ts";
@@ -56,6 +56,46 @@ test("validation rejects numeric money, two amounts, invented refs, extra fields
   assert.match(out.rejected[4]!.reason, /not inside amountSentence/);
   assert.match(out.rejected[5]!.reason, /appears twice/);
   assert.deepEqual(parseBackCharges({ items: [], note: "x" }, E1).rejected[0]!.reason, "output is not {items: [...]}");
+});
+
+test("no BC number: ref null is taken in; UNKNOWN or an empty ref is refused, never read as 'no number'", () => {
+  const email = { ...E1, id: "NB", subject: "Summit - cleanup", body: "Please back-charge Ridgeline Drywall $475.00 for the cleanup.\n\nThe second cleanup was $360.00, also theirs." };
+  const one = { ref: null, description: "Cleanup", amountText: "$475.00", amountSentence: "Please back-charge Ridgeline Drywall $475.00 for the cleanup.", vendorNameAsWritten: "Ridgeline Drywall", jobRef: "Summit", disputeNoted: false };
+  const two = { ...one, description: "Second cleanup", amountText: "$360.00", amountSentence: "The second cleanup was $360.00, also theirs." };
+  const out = parseBackCharges({ items: [one, two, { ...one, ref: "UNKNOWN" }, { ...one, ref: "" }] }, email);
+  // Two charges without a number are two items, not a duplicate ref.
+  assert.deepEqual(out.items.map((x) => [x.ref, x.amountCents]), [[null, 47_500], [null, 36_000]]);
+  assert.deepEqual(out.rejected.map((r) => [r.index, r.reason]), [[2, "ref is not a BC number or null"], [3, "ref is not a BC number or null"]]);
+  // A refused item without a number is named by its position.
+  assert.match(parseBackCharges({ items: [{ ...one, amountText: "$9.00" }] }, email).rejected[0]!.reason, /^item 1 \(no BC number\): amountText not inside amountSentence/);
+});
+
+test("validation refuses a BC number the email doesn't contain; one in the subject, body or written as the bare number passes", () => {
+  const base = E1_OUTPUT.items[0]!;
+  const made = parseBackCharges({ items: [{ ...base, ref: "BC-9999" }] }, E1);
+  assert.equal(made.items.length, 0);
+  assert.equal(made.rejected[0]!.reason, "BC-9999 is not in the email");
+  assert.equal(made.rejected[0]!.words, "the model gave BC-9999, which isn't in the email (a back-charge number is never made up)");
+  const s = "Back-charge 9999: ceiling grid, $6,800.00.";
+  const bare = { ...E1, subject: "Summit", body: s };
+  assert.equal(parseBackCharges({ items: [{ ...base, ref: "BC-9999", amountSentence: s }] }, bare).items.length, 1);
+  const subj = { ...E1, subject: "Summit - BC-9999", body: "Ceiling grid, $6,800.00." };
+  assert.equal(parseBackCharges({ items: [{ ...base, ref: "BC-9999", amountSentence: "Ceiling grid, $6,800.00." }] }, subj).items.length, 1);
+  // Part of an amount or a longer number is not the number.
+  const inAmount = { ...E1, subject: "Summit", body: "Ceiling grid, $9999.00 and order 199990." };
+  assert.equal(parseBackCharges({ items: [{ ...base, ref: "BC-9999", amountText: "$9999.00", amountSentence: "Ceiling grid, $9999.00 and order 199990." }] }, inAmount).rejected[0]!.reason, "BC-9999 is not in the email");
+  // Ending a longer number, or a whole-dollar amount, is not the number either.
+  const tail = { ...E1, subject: "Summit", body: "Ceiling grid, $6,800.00. PO 19999, deposit $9999." };
+  assert.equal(parseBackCharges({ items: [{ ...base, ref: "BC-9999", amountSentence: "Ceiling grid, $6,800.00." }] }, tail).rejected[0]!.reason, "BC-9999 is not in the email");
+});
+
+test("prompt and schema: a charge without a number is extracted with ref null, never skipped or invented", () => {
+  const p = backchargeSystem("email_x");
+  assert.doesNotMatch(p, /Skip items with no number/);
+  assert.match(p, /with or without a back-charge number/);
+  assert.match(p, /then ref is null\. Never make a number up, never write UNKNOWN/);
+  assert.deepEqual(BACKCHARGE_TOOL.input_schema.properties.items.items.properties.ref, { type: ["string", "null"] });
+  assert.ok((BACKCHARGE_TOOL.input_schema.properties.items.items.required as readonly string[]).includes("ref"));
 });
 
 test("a dispute flagged without its sentence still counts as a dispute", () => {

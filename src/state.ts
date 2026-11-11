@@ -25,13 +25,21 @@ const BACKCHARGE: Record<BackChargeState, Rule<BackChargeState>[]> = {
     { to: "held", needsHuman: false },
   ],
   // Leaving "held" is a human decision (e.g. dispute resolved); it goes back to linked, not to eligible.
-  held: [{ to: "linked", needsHuman: true }],
+  // An item held before it had a link goes back to waiting for one (extracted or needs_review). "merged":
+  // the PM confirmed it is the same charge as another item, which carries it from then on.
+  held: [
+    { to: "linked", needsHuman: true },
+    { to: "extracted", needsHuman: true, role: "pm" },
+    { to: "needs_review", needsHuman: true, role: "pm" },
+    { to: "merged", needsHuman: true, role: "pm" },
+  ],
   eligible: [
     { to: "credited", needsHuman: false },
     { to: "held", needsHuman: false },
   ],
   credited: [{ to: "applied", needsHuman: false }],
   applied: [],
+  merged: [],
 };
 
 // The PM owns the sub relationship and the notice; the controller approves money (src/roles.ts).

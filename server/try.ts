@@ -31,7 +31,10 @@ export interface TryCheck {
 }
 
 export interface TryItem {
+  /** The BC number the email gives, or "" when it gives none. */
   ref: string;
+  /** The reference to show: the BC number, or "no BC number yet". */
+  refLabel: string;
   amount: string;
   description: string;
   vendorAsWritten: string;
@@ -170,7 +173,7 @@ function checksFor(email: Email, x: ExtractedBackCharge, a: ReturnType<typeof as
         ? "none found"
         : [
             ...(x.disputeNoted ? [`the extractor noted a dispute${x.disputeEvidence?.sentence ? `: ${x.disputeEvidence.sentence}` : ""}`] : []),
-            ...a.backstop.map((s) => `dispute wording next to ${x.ref}: ${s}`),
+            ...a.backstop.map((s) => (x.ref ? `dispute wording next to ${x.ref}: ${s}` : `dispute wording in a sentence that names no BC number: ${s}`)),
           ].join("; ") + " (Contra holds it at the eligibility check)",
     },
   );
@@ -213,7 +216,8 @@ export async function tryEmail(app: App, input: TryInput, settings: TrySettings,
     const holdReasons = a.holdReasons.map((h) => HOLD_WORDS[h]);
     const checks = checksFor(email, x, a);
     return {
-      ref: x.ref,
+      ref: x.ref ?? "",
+      refLabel: x.ref ?? "no BC number yet",
       amount: formatUsd(x.amountCents),
       description: x.description,
       vendorAsWritten: x.vendorNameAsWritten,

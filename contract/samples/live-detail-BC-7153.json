@@ -1,7 +1,10 @@
 {
   "ref": "BC-7153",
+  "bcNumber": "BC-7153",
+  "refLabel": "BC-7153",
   "description": "Floor protection",
   "amount": "",
+  "estimate": null,
   "photoAmount": null,
   "status": {
     "label": "Held: amount read from a photo or scanned page, which can't be checked word for word; a person must confirm it",
@@ -37,6 +40,9 @@
     "subcontractId": null,
     "explanation": []
   },
+  "duplicate": null,
+  "mergedInto": null,
+  "alsoIn": [],
   "clause": null,
   "eligibility": {
     "status": "held",

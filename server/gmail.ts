@@ -9,7 +9,7 @@
  */
 import { EmlError, parseEmlWithMedia } from "../ingest/eml.ts";
 import type { App } from "../src/app.ts";
-import { ingestInboxEmail } from "../src/commands.ts";
+import { ingestInboxEmail, recordUnprocessedEmail } from "../src/commands.ts";
 import type { ModelSettings } from "../src/extract/anthropic.ts";
 import { extractBackCharges, type ExtractOptions } from "../src/extract/index.ts";
 import type { MemoSender } from "../src/memo.ts";
@@ -508,7 +508,11 @@ export class InboxPoller {
         if (!x.ok) {
           const tries = (this.#tries.get(m.gmailId) ?? 0) + 1;
           this.#tries.set(m.gmailId, tries);
-          if (tries >= MAX_EXTRACTION_TRIES) this.#skipped.set(m.gmailId, `extraction failed ${tries} times`);
+          if (tries >= MAX_EXTRACTION_TRIES) {
+            this.#skipped.set(m.gmailId, `extraction failed ${tries} times`);
+            // Nothing vanishes: after the last try it is a "couldn't process" Inbox row, persisted.
+            recordUnprocessedEmail(app, email, x.reason, tries);
+          }
           errors.push(`extraction failed for one message: ${x.reason}`);
           continue;
         }

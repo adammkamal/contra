@@ -120,7 +120,7 @@ export function TryPanel() {
               <article key={`${it.ref}-${i}`} className="panel" data-testid={`try-item-${it.ref}`}>
                 <div className="item-head">
                   <div className="item-title">
-                    <span className="ref">{it.ref}</span>
+                    <span className="ref">{it.refLabel}</span>
                     <span className="item-about">
                       {it.description} · written as “{it.vendorAsWritten}” · job “{it.jobRef}”
                     </span>

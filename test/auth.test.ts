@@ -10,6 +10,7 @@ import { createApiServer, type AuthOptions } from "../server/api.ts";
 import { AuthStore, parseUserAddArgs, SESSION_COOKIE } from "../server/auth.ts";
 import { DatabaseSync } from "node:sqlite";
 import { signIn, TEST_COST, TEST_PASSWORD, testAuth } from "./auth-fakes.ts";
+import { sseClient, until } from "./gmail-fakes.ts";
 
 // Accounts and sessions (server/auth.ts). Made-up names and passwords only.
 
@@ -354,4 +355,83 @@ test("user:add --email: the account gets the email, and a second account with th
   assert.equal(store.userByEmail("cy@apex.example")?.username, "cy.ctl");
   assert.equal(store.user("cy.two"), null);
   store.close();
+});
+
+/** A server with fast heartbeats, for the live-update stream tests. */
+async function withStreams(auth: AuthOptions, fn: (base: string, port: number) => Promise<void>) {
+  const api = createApiServer({ auth, dbPath: join(tmp(), "d.db"), start: START, emlDir: null, heartbeatMs: 20 });
+  await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
+  const port = (api.server.address() as AddressInfo).port;
+  try {
+    await fn(`http://127.0.0.1:${port}`, port);
+  } finally {
+    await api.close();
+  }
+}
+const heartbeats = (text: string) => text.split("event: heartbeat").length - 1;
+
+test("live updates: logout closes that session's open streams (with a session-ended event); the account's other session and other accounts keep theirs", async () => {
+  const auth = testAuth();
+  await withStreams(auth, async (base, port) => {
+    const a = await signIn(base, auth, { username: "pat.pm" });
+    const b = await signIn(base, auth, { username: "pat.pm" }); // the same account, another session (another tab or device)
+    const c = await signIn(base, auth, { username: "al.ap", role: "ap" });
+    const sa = await sseClient(port, { cookie: a });
+    const sb = await sseClient(port, { cookie: b });
+    const sc = await sseClient(port, { cookie: c });
+    try {
+      await until(() => [sa, sb, sc].every((x) => heartbeats(x.text()) > 0));
+      const out = await fetch(`${base}/api/logout`, { method: "POST", headers: { "content-type": "application/json", cookie: a }, body: "{}" });
+      assert.equal(out.status, 200);
+      await until(() => sa.ended());
+      assert.match(sa.text(), /event: session-ended\ndata: \{"reason":"signed out"\}\n\n$/);
+      // The others keep receiving heartbeats and stay open.
+      const [hb, hc] = [heartbeats(sb.text()), heartbeats(sc.text())];
+      await until(() => heartbeats(sb.text()) > hb + 1 && heartbeats(sc.text()) > hc + 1);
+      assert.ok(!sb.ended() && !sc.ended());
+      assert.ok(!sb.text().includes("session-ended") && !sc.text().includes("session-ended"));
+      // And the ended session can't open a new stream.
+      assert.equal((await fetch(`${base}/api/events`, { headers: { cookie: a } })).status, 401);
+    } finally {
+      for (const x of [sa, sb, sc]) x.close();
+    }
+  });
+});
+
+test("live updates: a stream closes when its session expires (the heartbeat re-checks it, and a timer fires at the expiry time)", async () => {
+  // 1. The heartbeat check, on an injected clock: the session expires when the clock passes its lifetime.
+  let now = START.getTime();
+  const auth = testAuth({ now: () => now, sessionTtlMs: 60 * MIN });
+  await withStreams(auth, async (base, port) => {
+    const cookie = await signIn(base, auth);
+    const other = await sseClient(port, { cookie: await signIn(base, auth, { username: "al.ap", role: "ap" }) });
+    const s = await sseClient(port, { cookie });
+    try {
+      await until(() => heartbeats(s.text()) > 1);
+      assert.ok(!s.ended());
+      now += 60 * MIN; // both sessions expire
+      await until(() => s.ended() && other.ended());
+      assert.match(s.text(), /event: session-ended\ndata: \{"reason":"expired"\}\n\n$/);
+    } finally {
+      s.close();
+      other.close();
+    }
+  });
+  // 2. The timer, on the real clock, with no heartbeat in between: a 300 ms session.
+  const auth2 = testAuth({ sessionTtlMs: 300 });
+  const api = createApiServer({ auth: auth2, dbPath: join(tmp(), "d.db"), start: START, emlDir: null, heartbeatMs: 60_000 });
+  await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
+  const port = (api.server.address() as AddressInfo).port;
+  try {
+    const s = await sseClient(port, { cookie: await signIn(`http://127.0.0.1:${port}`, auth2) });
+    try {
+      assert.ok(!s.ended());
+      await until(() => s.ended(), 3000);
+      assert.match(s.text(), /"reason":"expired"/);
+    } finally {
+      s.close();
+    }
+  } finally {
+    await api.close();
+  }
 });

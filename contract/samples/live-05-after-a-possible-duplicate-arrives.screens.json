@@ -1,0 +1,416 @@
+{
+  "workspace": "live",
+  "now": "2026-11-07 15:00 UTC",
+  "extractionSource": "sample",
+  "emailSource": "gmail",
+  "nextStep": {
+    "text": "PM decides whether BC-7160 is the same charge as CONTRA-0001 (in its Inbox row)",
+    "action": null
+  },
+  "inbox": [
+    {
+      "kind": "backCharge",
+      "emailId": "gmail-18c2f0a1b2c3d4e5",
+      "ref": "BC-7151",
+      "bcNumber": "BC-7151",
+      "refLabel": "BC-7151",
+      "emailSubject": "Summit MOB - back-charge for stair core drywall",
+      "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+      "vendorAsWritten": "Ridgeline Drywall",
+      "amount": "$900.00",
+      "estimate": null,
+      "sourceSentence": "BC-7151: patch the stair core drywall damaged during framing, Summit, $900.00.",
+      "sourceLocation": "email body",
+      "photoAmount": null,
+      "attachments": [],
+      "linkExplanation": [
+        "job: \"Summit\" -> SUM-01 Summit Medical Office",
+        "alias: \"Ridgeline Drywall\" -> Ridgeline Interiors LLC (seed)",
+        "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
+      ],
+      "status": {
+        "label": "Waiting for PM to confirm the link",
+        "tone": "warn"
+      },
+      "actions": [
+        {
+          "command": "confirmLink",
+          "ref": "BC-7151"
+        }
+      ]
+    },
+    {
+      "kind": "backCharge",
+      "emailId": "gmail-18c2f0a1b2c3d4f6",
+      "ref": "BC-7152",
+      "bcNumber": "BC-7152",
+      "refLabel": "BC-7152",
+      "emailSubject": "Summit - two back-charges, estimate and ticket photo attached",
+      "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+      "vendorAsWritten": "Ridgeline Interiors LLC",
+      "amount": "$1,250.00",
+      "estimate": null,
+      "sourceSentence": "BC-7152: corridor wall repair, L3, $1,250.00 per our painter's quote.",
+      "sourceLocation": "attachment estimate.pdf, page 2",
+      "photoAmount": null,
+      "attachments": [
+        "attachment estimate.pdf: PDF, 2 pages, text read",
+        "attachment IMG_2041.jpg: photo, read by the model as an image (not verifiable word for word)",
+        "attachment IMG_2042.heic skipped: image/heic is not an image type the model reads (JPEG, PNG, GIF or WebP); send the photo as a JPEG"
+      ],
+      "linkExplanation": [
+        "job: \"Summit\" -> SUM-01 Summit Medical Office",
+        "party: \"Ridgeline Interiors LLC\" = legal name Ridgeline Interiors LLC",
+        "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
+      ],
+      "status": {
+        "label": "Waiting for PM to confirm the link",
+        "tone": "warn"
+      },
+      "actions": [
+        {
+          "command": "confirmLink",
+          "ref": "BC-7152"
+        }
+      ]
+    },
+    {
+      "kind": "backCharge",
+      "emailId": "gmail-18c2f0a1b2c3d4f6",
+      "ref": "BC-7153",
+      "bcNumber": "BC-7153",
+      "refLabel": "BC-7153",
+      "emailSubject": "Summit - two back-charges, estimate and ticket photo attached",
+      "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+      "vendorAsWritten": "Ridgeline Interiors LLC",
+      "amount": "$640.00",
+      "estimate": null,
+      "sourceSentence": "BC-7153 FLOOR PROTECTION $604.00",
+      "sourceLocation": "attachment IMG_2041.jpg",
+      "photoAmount": {
+        "pmEntered": "$640.00",
+        "modelRead": "$604.00"
+      },
+      "attachments": [
+        "attachment estimate.pdf: PDF, 2 pages, text read",
+        "attachment IMG_2041.jpg: photo, read by the model as an image (not verifiable word for word)",
+        "attachment IMG_2042.heic skipped: image/heic is not an image type the model reads (JPEG, PNG, GIF or WebP); send the photo as a JPEG"
+      ],
+      "linkExplanation": [
+        "job: \"Summit\" -> SUM-01 Summit Medical Office",
+        "party: \"Ridgeline Interiors LLC\" = legal name Ridgeline Interiors LLC",
+        "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
+      ],
+      "status": {
+        "label": "Linked, no notice yet",
+        "tone": "info"
+      },
+      "actions": []
+    },
+    {
+      "kind": "backCharge",
+      "emailId": "gmail-18c2f0a1b2c3d4f8",
+      "ref": "CONTRA-0001",
+      "bcNumber": null,
+      "refLabel": "CONTRA-0001 (no BC number yet)",
+      "emailSubject": "Summit - stairwell debris",
+      "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+      "vendorAsWritten": "Ridgeline Drywall",
+      "amount": "$360.00",
+      "estimate": "approximately",
+      "sourceSentence": "Please back-charge Ridgeline Drywall approximately $360.00 for the stairwell cleanup.",
+      "sourceLocation": "email body",
+      "photoAmount": null,
+      "attachments": [],
+      "linkExplanation": [
+        "job: \"Summit\" -> SUM-01 Summit Medical Office",
+        "alias: \"Ridgeline Drywall\" -> Ridgeline Interiors LLC (seed)",
+        "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
+      ],
+      "status": {
+        "label": "Waiting for PM to confirm the link",
+        "tone": "warn"
+      },
+      "actions": [
+        {
+          "command": "confirmLink",
+          "ref": "CONTRA-0001"
+        }
+      ]
+    },
+    {
+      "kind": "backCharge",
+      "emailId": "gmail-18c2f0a1b2c3d4f9",
+      "ref": "BC-7160",
+      "bcNumber": "BC-7160",
+      "refLabel": "BC-7160",
+      "emailSubject": "Summit - BC-7160 stairwell debris",
+      "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+      "vendorAsWritten": "Ridgeline Drywall",
+      "amount": "$360.00",
+      "estimate": null,
+      "sourceSentence": "BC-7160: stair 2 debris cleanup, $360.00, as sent last week.",
+      "sourceLocation": "email body",
+      "photoAmount": null,
+      "attachments": [],
+      "linkExplanation": [
+        "job: \"Summit\" -> SUM-01 Summit Medical Office",
+        "alias: \"Ridgeline Drywall\" -> Ridgeline Interiors LLC (seed)",
+        "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
+      ],
+      "status": {
+        "label": "Held: possible duplicate of CONTRA-0001",
+        "tone": "danger"
+      },
+      "actions": [
+        {
+          "command": "sameCharge",
+          "ref": "BC-7160",
+          "duplicateOf": "CONTRA-0001"
+        },
+        {
+          "command": "differentCharge",
+          "ref": "BC-7160",
+          "duplicateOf": "CONTRA-0001"
+        }
+      ]
+    },
+    {
+      "kind": "rejected",
+      "emailId": "gmail-18c2f0a1b2c3d4f7",
+      "ref": "BC-7154",
+      "bcNumber": "BC-7154",
+      "refLabel": "BC-7154",
+      "emailSubject": "Summit - stair nosing estimate attached",
+      "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+      "vendorAsWritten": "",
+      "amount": "",
+      "estimate": null,
+      "sourceSentence": "",
+      "sourceLocation": "",
+      "photoAmount": null,
+      "attachments": [
+        "attachment nosing-estimate.pdf: PDF, 2 pages, text read"
+      ],
+      "linkExplanation": [],
+      "status": {
+        "label": "Held: not taken in: the model said the amount is on page 3 of nosing-estimate.pdf, which has only 2 pages; a person must read the email",
+        "tone": "danger"
+      },
+      "actions": []
+    }
+  ],
+  "outbox": [],
+  "credits": [],
+  "bills": [],
+  "pmQueue": [
+    {
+      "kind": "backCharge",
+      "ref": "BC-7160",
+      "refLabel": "BC-7160",
+      "status": {
+        "label": "Held: possible duplicate of CONTRA-0001",
+        "tone": "danger"
+      }
+    },
+    {
+      "kind": "rejected",
+      "ref": "BC-7154",
+      "refLabel": "BC-7154",
+      "status": {
+        "label": "Held: not taken in: the model said the amount is on page 3 of nosing-estimate.pdf, which has only 2 pages; a person must read the email",
+        "tone": "danger"
+      }
+    }
+  ],
+  "opener": {
+    "sampleData": true,
+    "notDeducted": "$12,850.00",
+    "possible": "$1,850.00",
+    "deducted": "$5,500.00",
+    "rows": [
+      {
+        "ref": "BC-4391",
+        "status": "deducted",
+        "amount": "$3,100.00",
+        "evidence": "credit VC-OLD-1: \"Backcharge BC-4391 cleanup Lakeview\""
+      },
+      {
+        "ref": "BC-4415",
+        "status": "deducted",
+        "amount": "$2,400.00",
+        "evidence": "short-paid bill B-OLD-1: \"Pay app 3 less BC-4415 glass breakage\""
+      },
+      {
+        "ref": "BC-4402",
+        "status": "possible match",
+        "amount": "$1,850.00",
+        "evidence": "same vendor and amount, no ref: VC-OLD-2"
+      },
+      {
+        "ref": "BC-4410",
+        "status": "not deducted",
+        "amount": "$5,600.00",
+        "evidence": "no credit or short-pay for V-RIDGE names BC-4410 or equals $5,600.00"
+      },
+      {
+        "ref": "BC-4420",
+        "status": "not deducted",
+        "amount": "$7,250.00",
+        "evidence": "no credit or short-pay for V-HARBOR names BC-4420 or equals $7,250.00"
+      }
+    ]
+  },
+  "audit": [
+    {
+      "seq": 15,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Contra",
+      "what": "backcharge BC-7160: held: possible_duplicate (extracted → held)",
+      "evidence": [
+        "possible duplicate of CONTRA-0001 (no BC number yet): same subcontract (SC-SUM-0912) and job (SUM-01), same amount ($360.00)"
+      ]
+    },
+    {
+      "seq": 14,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Sample extractions (hand-written)",
+      "what": "backcharge BC-7160: extracted $360.00 (new → extracted)",
+      "evidence": [
+        "BC-7160: stair 2 debris cleanup, $360.00, as sent last week."
+      ]
+    },
+    {
+      "seq": 13,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Contra",
+      "what": "email gmail-18c2f0a1b2c3d4f9: ingested from Gmail",
+      "evidence": [
+        "Summit - BC-7160 stairwell debris",
+        "received 2026-11-07T16:00:00.000Z"
+      ]
+    },
+    {
+      "seq": 12,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Sample extractions (hand-written)",
+      "what": "backcharge CONTRA-0001: extracted $360.00 (new → extracted)",
+      "evidence": [
+        "Please back-charge Ridgeline Drywall approximately $360.00 for the stairwell cleanup.",
+        "no BC number in the email yet; Contra reference CONTRA-0001"
+      ]
+    },
+    {
+      "seq": 11,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Contra",
+      "what": "email gmail-18c2f0a1b2c3d4f8: ingested from Gmail",
+      "evidence": [
+        "Summit - stairwell debris",
+        "received 2026-11-07T16:00:00.000Z"
+      ]
+    },
+    {
+      "seq": 10,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "dana.ortiz (PM)",
+      "what": "backcharge BC-7153: link confirmed (held → linked)",
+      "evidence": [
+        "job: \"Summit\" -> SUM-01 Summit Medical Office",
+        "party: \"Ridgeline Interiors LLC\" = legal name Ridgeline Interiors LLC",
+        "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
+      ]
+    },
+    {
+      "seq": 9,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "dana.ortiz (PM)",
+      "what": "backcharge BC-7153: amount confirmed by dana.ortiz (PM) from attachment IMG_2041.jpg: $640.00",
+      "evidence": [
+        "PM entered $640.00; model read $604.00",
+        "the model's reading of the image (not verifiable word for word): BC-7153 FLOOR PROTECTION $604.00"
+      ]
+    },
+    {
+      "seq": 8,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Sample extractions (hand-written)",
+      "what": "email gmail-18c2f0a1b2c3d4f7: BC-7154 not taken in, held for a person: the model said the amount is on page 3 of nosing-estimate.pdf, which has only 2 pages",
+      "evidence": [
+        "validation: BC-7154: amountPage 3 is not a page of nosing-estimate.pdf (1-2)"
+      ]
+    },
+    {
+      "seq": 7,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Contra",
+      "what": "email gmail-18c2f0a1b2c3d4f7: ingested from Gmail",
+      "evidence": [
+        "Summit - stair nosing estimate attached",
+        "received 2026-11-07T15:40:00.000Z",
+        "attachment nosing-estimate.pdf: PDF, 2 pages, text read"
+      ]
+    },
+    {
+      "seq": 6,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Contra",
+      "what": "backcharge BC-7153: held: amount_only_in_image (extracted → held)",
+      "evidence": [
+        "evidence is read from an image (attachment IMG_2041.jpg); nothing in an image can be verified word for word"
+      ]
+    },
+    {
+      "seq": 5,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Sample extractions (hand-written)",
+      "what": "backcharge BC-7153: extracted $604.00 (new → extracted)",
+      "evidence": [
+        "BC-7153 FLOOR PROTECTION $604.00",
+        "in attachment IMG_2041.jpg"
+      ]
+    },
+    {
+      "seq": 4,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Sample extractions (hand-written)",
+      "what": "backcharge BC-7152: extracted $1,250.00 (new → extracted)",
+      "evidence": [
+        "BC-7152: corridor wall repair, L3, $1,250.00 per our painter's quote.",
+        "in attachment estimate.pdf, page 2"
+      ]
+    },
+    {
+      "seq": 3,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Contra",
+      "what": "email gmail-18c2f0a1b2c3d4f6: ingested from Gmail",
+      "evidence": [
+        "Summit - two back-charges, estimate and ticket photo attached",
+        "received 2026-11-07T15:20:00.000Z",
+        "attachment estimate.pdf: PDF, 2 pages, text read",
+        "attachment IMG_2041.jpg: photo, read by the model as an image (not verifiable word for word)",
+        "attachment IMG_2042.heic skipped: image/heic is not an image type the model reads (JPEG, PNG, GIF or WebP); send the photo as a JPEG"
+      ]
+    },
+    {
+      "seq": 2,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Sample extractions (hand-written)",
+      "what": "backcharge BC-7151: extracted $900.00 (new → extracted)",
+      "evidence": [
+        "BC-7151: patch the stair core drywall damaged during framing, Summit, $900.00."
+      ]
+    },
+    {
+      "seq": 1,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Contra",
+      "what": "email gmail-18c2f0a1b2c3d4e5: ingested from Gmail",
+      "evidence": [
+        "Summit MOB - back-charge for stair core drywall",
+        "received 2026-11-07T15:00:00.000Z"
+      ]
+    }
+  ]
+}

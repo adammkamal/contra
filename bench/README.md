@@ -47,8 +47,9 @@ set), so the comparison isolates matching. Columns, per system and per run:
   it, and validation refused no item from the email. In the product nothing reaches the Inbox, so nobody
   sees it: a missed run is never matching (even when the label says review) and never counted as routed
   to human. With at least one refused item it is routed to human instead (still never matching): the
-  refused row sends a person to the email. Only refused items count: a row saying the email holds no
-  back-charge, if the product ever shows one, would not send anyone to look, so it would not count. A
+  refused row sends a person to the email. Only refused items count: the product's row saying the email
+  holds no back-charge ("No back-charge found", which a PM dismisses) doesn't send anyone to look for one,
+  so it doesn't count. A
   `"none"` label with nothing extracted is correct, not missed.
 
 The first runs kept in `results/` are not re-scored under this rule. At those commits the product dropped
@@ -70,6 +71,12 @@ protected, human-written `labels/`. Run it with `--set fresh`. Recordings go to
 the other sets' numbers. Its labels can also use the items form (several charges per email, charges
 without a BC number); see `bench/fresh/LABEL-FORMAT.md`. Labels in the single-item form are scored exactly
 as in the other sets.
+
+**The fresh set is no longer held-out.** Its cases were read while building extraction of back-charges
+without a BC number (and the Contra references, duplicate checks and estimates that go with it), so its
+scores from then on are not held-out; `npm run bench -- --set fresh` says so in its output and in
+`bench/fresh/results.json` (`heldOut: false`). Its last held-out scores are in
+`bench/results/fresh-first-run.txt` (Contra 1/8); after the change, `bench/results/fresh-after-bc-number-fix.txt`.
 
 ## Labels: "none"
 

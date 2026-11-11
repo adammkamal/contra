@@ -71,13 +71,23 @@ On Windows, edit `.env.local` in Notepad. A PowerShell redirect saves it as UTF-
 
 On our held-out set, measured once before any fixes: **6/8 correct, 1 wrong credit, 1 missed**. The baseline field matcher scored 4/8 with 3 wrong credits.
 
-On 8 emails written by someone outside the team, Contra got **1/8**: none had a BC number, and Contra skipped every charge without one. A working PM then confirmed that first emails usually have no number, so we changed the design. The full numbers, including that failure, are in [DECISIONS.md §9](DECISIONS.md#9-the-benchmark-reported-honestly).
+On 8 emails written by someone outside the team, Contra got **1/8** on its first run: none had a BC number, and Contra skipped every charge without one. A working PM then confirmed that first emails usually have no number, so we changed the design. The full numbers, including that failure, are in [DECISIONS.md §9](DECISIONS.md#9-the-benchmark-reported-honestly).
+
+After the BC-number fix (each set re-recorded, 3 runs per case, every run the same for Contra):
+
+| Set | Contra correct | Contra wrong credits | Contra missed | Baseline correct | Baseline wrong credits |
+|---|---|---|---|---|---|
+| Main | 19/20 | 0 | 0 | 13/20 | 6 |
+| Held-out (no longer held-out) | 8/8 | 0 | 0 | 5/8 | 3 |
+| Fresh (**no longer held-out**; its held-out first run stays 1/8) | 5/8 | 0 | 0 | 6–7/8 | 0–1 |
+
+On the fresh set the 3 cases Contra doesn't get right all go to a person, none is credited: a charge stated only in forwarded mail (held), a misspelled sub name (sent to the PM to choose), and an amount written only in words (not taken in). Main and held-out are unchanged by the fix, row for row.
 
 ## Status at submission
 
 - **On `main`:** everything above, including roles (the PM approves notices, the controller approves credits, AP turns credits on; nobody approves a credit on a charge they raised or linked).
 - **Sign-in:** sign-in, roles and the login page are on `main`. Known limit: sign-in attempts are limited per network address, and sign-ins arrive through the UI server, so a deployed copy would need the UI to pass on the client's address (not done).
-- **On branch `bc-fix`, not merged:** handling back-charge emails with no BC number, which our independent test showed Contra misses (see Results). In progress at the deadline.
+- **Merged: the BC-number fix.** Back-charge emails with no BC number, which our independent test showed Contra missed, are taken in with a Contra reference; a later email citing a BC number for the same charge is held as a possible duplicate for the PM; estimates are marked; every email from an allowed sender leaves a visible row (see Results).
 - **Not done:** a deployed copy, and the independent money review.
 
 ## Docs

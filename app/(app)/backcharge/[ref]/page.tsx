@@ -40,7 +40,7 @@ export default async function Detail({ params }: { params: Promise<{ ref: string
       <div className="detail-head">
         <div className="stack">
           <h1>
-            {d.ref} <span className="describe">{d.description}</span>
+            {d.refLabel} <span className="describe">{d.description}</span>
           </h1>
           <p>
             <StatusWord s={d.status} />

@@ -13,11 +13,15 @@
   "inbox": [
     {
       "kind": "backCharge",
+      "emailId": "gmail-18c2f0a1b2c3d4e5",
       "ref": "BC-7151",
+      "bcNumber": "BC-7151",
+      "refLabel": "BC-7151",
       "emailSubject": "Summit MOB - back-charge for stair core drywall",
       "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
       "vendorAsWritten": "Ridgeline Drywall",
       "amount": "$900.00",
+      "estimate": null,
       "sourceSentence": "BC-7151: patch the stair core drywall damaged during framing, Summit, $900.00.",
       "sourceLocation": "email body",
       "photoAmount": null,
@@ -40,11 +44,15 @@
     },
     {
       "kind": "backCharge",
+      "emailId": "gmail-18c2f0a1b2c3d4f6",
       "ref": "BC-7152",
+      "bcNumber": "BC-7152",
+      "refLabel": "BC-7152",
       "emailSubject": "Summit - two back-charges, estimate and ticket photo attached",
       "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
       "vendorAsWritten": "Ridgeline Interiors LLC",
       "amount": "$1,250.00",
+      "estimate": null,
       "sourceSentence": "BC-7152: corridor wall repair, L3, $1,250.00 per our painter's quote.",
       "sourceLocation": "attachment estimate.pdf, page 2",
       "photoAmount": null,
@@ -71,11 +79,15 @@
     },
     {
       "kind": "backCharge",
+      "emailId": "gmail-18c2f0a1b2c3d4f6",
       "ref": "BC-7153",
+      "bcNumber": "BC-7153",
+      "refLabel": "BC-7153",
       "emailSubject": "Summit - two back-charges, estimate and ticket photo attached",
       "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
       "vendorAsWritten": "Ridgeline Interiors LLC",
       "amount": "",
+      "estimate": null,
       "sourceSentence": "",
       "sourceLocation": "attachment IMG_2041.jpg",
       "photoAmount": null,
@@ -105,7 +117,9 @@
   "bills": [],
   "pmQueue": [
     {
+      "kind": "backCharge",
       "ref": "BC-7153",
+      "refLabel": "BC-7153",
       "status": {
         "label": "Held: amount read from a photo or scanned page, which can't be checked word for word; a person must confirm it",
         "tone": "danger"

@@ -1,10 +1,54 @@
 {
   "model": "claude-opus-5-5",
   "effort": "medium",
-  "recordedAt": "2026-11-11T03:36:25.210Z",
-  "items": [],
+  "recordedAt": "2026-11-11T07:13:26.749Z",
+  "items": [
+    {
+      "ref": null,
+      "description": "Debris left in stairwell; removal cost",
+      "amountCents": 36000,
+      "amountEvidence": {
+        "emailId": "fh-04",
+        "sentence": "Ridgeline Drywall left debris in the stairwell that cost us $360 to remove."
+      },
+      "vendorNameAsWritten": "Ridgeline Drywall",
+      "jobRef": "Summit Medical Office",
+      "disputeNoted": false
+    },
+    {
+      "ref": null,
+      "description": "Damaged sprinkler access panel during duct installation; replacement cost",
+      "amountCents": 72500,
+      "amountEvidence": {
+        "emailId": "fh-04",
+        "sentence": "Harbor Mechanical also damaged a sprinkler access panel during duct installation; replacing it cost $725."
+      },
+      "vendorNameAsWritten": "Harbor Mechanical",
+      "jobRef": "Summit Medical Office",
+      "disputeNoted": false
+    }
+  ],
   "rejected": [],
   "rawToolInput": {
-    "items": []
+    "items": [
+      {
+        "ref": null,
+        "description": "Debris left in stairwell; removal cost",
+        "amountText": "$360",
+        "amountSentence": "Ridgeline Drywall left debris in the stairwell that cost us $360 to remove.",
+        "vendorNameAsWritten": "Ridgeline Drywall",
+        "jobRef": "Summit Medical Office",
+        "disputeNoted": false
+      },
+      {
+        "ref": null,
+        "description": "Damaged sprinkler access panel during duct installation; replacement cost",
+        "amountText": "$725",
+        "amountSentence": "Harbor Mechanical also damaged a sprinkler access panel during duct installation; replacing it cost $725.",
+        "vendorNameAsWritten": "Harbor Mechanical",
+        "jobRef": "Summit Medical Office",
+        "disputeNoted": false
+      }
+    ]
   }
 }

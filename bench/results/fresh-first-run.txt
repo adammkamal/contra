@@ -1,0 +1,55 @@
+Fresh set, first scored run (npx tsx bench/run.ts --set fresh), kept as its held-out score: Contra 1/8 matching per run.
+Scored at commit af1354a (2026-11-10, before back-charges without a BC number were taken in), on the recordings
+committed at that commit. Every charge without a BC number was skipped by the extractor then, so 7 of 8 cases were missed.
+The set's cases were read while building that change, so every later score on this set is NOT held-out.
+---
+Set: fresh (scored separately, never merged into the main numbers)
+Extractions: fixtures/bench-extractions/fresh, 3 run(s), claude-opus-5-5 (medium)
+┌─────────┬─────────┬─────┬───────┬─────────────────────┬─────────┬───────────┬──────────┬─────────────────────┬─────────┬───────────┬──────────┐
+│ (index) │ case    │ run │ items │ contra              │ c match │ c dispute │ c missed │ baseline            │ b match │ b dispute │ b missed │
+├─────────┼─────────┼─────┼───────┼─────────────────────┼─────────┼───────────┼──────────┼─────────────────────┼─────────┼───────────┼──────────┤
+│ 0       │ 'fh-01' │ 1   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 1       │ 'fh-01' │ 2   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 2       │ 'fh-01' │ 3   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 3       │ 'fh-02' │ 1   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 4       │ 'fh-02' │ 2   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 5       │ 'fh-02' │ 3   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 6       │ 'fh-03' │ 1   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 7       │ 'fh-03' │ 2   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 8       │ 'fh-03' │ 3   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 9       │ 'fh-04' │ 1   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 10      │ 'fh-04' │ 2   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 11      │ 'fh-04' │ 3   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 12      │ 'fh-05' │ 1   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 13      │ 'fh-05' │ 2   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 14      │ 'fh-05' │ 3   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 15      │ 'fh-06' │ 1   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 16      │ 'fh-06' │ 2   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 17      │ 'fh-06' │ 3   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 18      │ 'fh-07' │ 1   │ 0     │ 'nothing extracted' │ true    │ true      │ false    │ 'nothing extracted' │ true    │ true      │ false    │
+│ 19      │ 'fh-07' │ 2   │ 0     │ 'nothing extracted' │ true    │ true      │ false    │ 'nothing extracted' │ true    │ true      │ false    │
+│ 20      │ 'fh-07' │ 3   │ 0     │ 'nothing extracted' │ true    │ true      │ false    │ 'nothing extracted' │ true    │ true      │ false    │
+│ 21      │ 'fh-08' │ 1   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 22      │ 'fh-08' │ 2   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+│ 23      │ 'fh-08' │ 3   │ 0     │ 'nothing extracted' │ false   │ true      │ true     │ 'nothing extracted' │ false   │ true      │ true     │
+└─────────┴─────────┴─────┴───────┴─────────────────────┴─────────┴───────────┴──────────┴─────────────────────┴─────────┴───────────┴──────────┘
+
+contra (per run; matching = correct link or correct review; missed = a labeled back-charge nothing was extracted or refused for, which nobody sees)
+┌─────────┬─────┬────────┬────────┬──────────┬─────────┬────────────┬──────────────┬───────────────┬────────┐
+│ (index) │ run │ scored │ failed │ matching │ dispute │ wrongLinks │ wrongCredits │ routedToHuman │ missed │
+├─────────┼─────┼────────┼────────┼──────────┼─────────┼────────────┼──────────────┼───────────────┼────────┤
+│ 0       │ 1   │ 8      │ 0      │ 1        │ 8       │ 0          │ 0            │ 0             │ 7      │
+│ 1       │ 2   │ 8      │ 0      │ 1        │ 8       │ 0          │ 0            │ 0             │ 7      │
+│ 2       │ 3   │ 8      │ 0      │ 1        │ 8       │ 0          │ 0            │ 0             │ 7      │
+└─────────┴─────┴────────┴────────┴──────────┴─────────┴────────────┴──────────────┴───────────────┴────────┘
+
+baseline (per run; matching = correct link or correct review; missed = a labeled back-charge nothing was extracted or refused for, which nobody sees)
+┌─────────┬─────┬────────┬────────┬──────────┬─────────┬────────────┬──────────────┬───────────────┬────────┐
+│ (index) │ run │ scored │ failed │ matching │ dispute │ wrongLinks │ wrongCredits │ routedToHuman │ missed │
+├─────────┼─────┼────────┼────────┼──────────┼─────────┼────────────┼──────────────┼───────────────┼────────┤
+│ 0       │ 1   │ 8      │ 0      │ 1        │ 8       │ 0          │ 0            │ 0             │ 7      │
+│ 1       │ 2   │ 8      │ 0      │ 1        │ 8       │ 0          │ 0            │ 0             │ 7      │
+│ 2       │ 3   │ 8      │ 0      │ 1        │ 8       │ 0          │ 0            │ 0             │ 7      │
+└─────────┴─────┴────────┴────────┴──────────┴─────────┴────────────┴──────────────┴───────────────┴────────┘
+
+Unstable cases (outcome differs between runs): contra none; baseline none

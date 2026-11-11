@@ -38,7 +38,7 @@ function item(emailId: string, ref: string, sentence: string, amount: number): E
 function ingest(e: Email, x: ExtractedBackCharge) {
   const ctx = setup();
   ctx.contra.ingestBackChargeEmail(e, [x], LLM);
-  return { ctx, bc: ctx.contra.backCharges.get(x.ref)! };
+  return { ctx, bc: ctx.contra.backCharges.get(x.ref!)! };
 }
 
 // ---- only_in_quoted_text -------------------------------------------------------------------

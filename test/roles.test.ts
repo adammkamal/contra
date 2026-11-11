@@ -72,7 +72,7 @@ test("separation of duties: the person who raised a charge (a human on its audit
   const raiser = person("jo.raise", "controller");
   // jo.raise entered E-1's back-charge by hand (a human extractor), and Dana confirmed the links.
   for (const e of seed.emails) contra.ingestBackChargeEmail(e, seed.extractions[e.id]!, e.id === "E-1" ? raiser : LLM);
-  const raised = seed.extractions["E-1"]!.map((x) => x.ref);
+  const raised = seed.extractions["E-1"]!.map((x) => x.ref!);
   for (const ref of contra.backCharges.keys()) contra.confirmLink(ref, PM);
   const n = contra.draftNotice("SC-SUM-0912")!;
   contra.approveNotice(n.id, PM);

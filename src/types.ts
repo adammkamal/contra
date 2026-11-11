@@ -112,7 +112,12 @@ export interface Evidence {
 
 /** What the extractor (LLM) returns for one back-charge. Untrusted until verified. */
 export interface ExtractedBackCharge {
-  ref: string;
+  /**
+   * The back-charge number as the email writes it ("BC-4467"), or null when the email gives none. Initial
+   * back-charge emails usually have none: accounting assigns it later. Never invented (validation refuses
+   * a number the email doesn't contain).
+   */
+  ref: string | null;
   description: string;
   amountCents: Cents;
   amountEvidence: Evidence;
@@ -133,6 +138,28 @@ export interface RejectedExtraction {
   reason: string;
   words: string;
   ref?: string;
+}
+
+/**
+ * An email that yielded no back-charge, kept as an Inbox row so nothing a PM sends vanishes:
+ * - "no_back_charge": from an allowed sender, ingested, and the extractor found nothing in it (and refused
+ *   nothing). A person reads it and dismisses the row with a reason.
+ * - "not_processed": the model failed on it after every retry. The email isn't ingested (a later try may
+ *   still succeed, which closes the row); the row says why, in a fixed sentence per failure kind.
+ */
+export interface EmailNote {
+  kind: "no_back_charge" | "not_processed";
+  emailId: string;
+  messageId: string | null;
+  subject: string;
+  from: string;
+  receivedAt: Date;
+  /** not_processed: why, in words (never the model service's own message). */
+  reason?: string;
+  /** not_processed: how many model calls failed on it. */
+  attempts?: number;
+  /** Set when a PM dismissed the row: who, when and why. The row stays, as history. */
+  dismissed?: { by: string; at: Date; reason: string };
 }
 
 /** A rejected extraction as ingest keeps it, with the email it came from. */
@@ -156,7 +183,9 @@ export type BackChargeState =
   | "held"
   | "eligible"
   | "credited"
-  | "applied";
+  | "applied"
+  /** The PM confirmed this is the same charge as another item (mergedInto): that item carries it from here on. Final. */
+  | "merged";
 
 export type HoldReason =
   | "dispute_noted_in_source"
@@ -171,10 +200,32 @@ export type HoldReason =
   | "only_in_quoted_text"
   | "suspicious_instructions"
   | "unaccounted_reference"
-  | "amount_only_in_image";
+  | "amount_only_in_image"
+  /** Plausibly the same charge as another item (BackCharge.duplicate): the PM says same charge or different charge. */
+  | "possible_duplicate";
 
 export interface BackCharge {
+  /**
+   * The item's reference, stable for its whole life (notices, credits and the audit log name it): its BC
+   * number when the first email gave one, else a Contra reference assigned at ingest (CONTRA-0001), a
+   * format no accounting BC number has.
+   */
   ref: string;
+  /**
+   * The accounting BC number: null while there is none yet ("no BC number yet"). A later email citing a BC
+   * number for the same charge supplies it, once the PM confirms it is the same charge. Absent (older
+   * snapshots): `ref` is the BC number. Read it with bcNumberOf (src/workflow.ts).
+   */
+  bcNumber?: string | null;
+  /**
+   * Set when the item was held as a possible duplicate: the item it may be the same charge as, and why, in
+   * words. Kept after the PM decides, as history.
+   */
+  duplicate?: { of: string; why: string };
+  /** State "merged": the item this one was merged into. */
+  mergedInto?: string;
+  /** Other emails that state this same charge (merged on the PM's confirmation, or citing its BC number). */
+  alsoIn?: Evidence[];
   extracted: ExtractedBackCharge;
   state: BackChargeState;
   subcontractId: string | null;

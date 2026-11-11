@@ -1,10 +1,33 @@
 {
   "model": "claude-opus-5-5",
   "effort": "medium",
-  "recordedAt": "2026-11-11T03:36:09.454Z",
-  "items": [],
+  "recordedAt": "2026-11-11T07:12:59.283Z",
+  "items": [
+    {
+      "ref": null,
+      "description": "Cleanup of drywall scraps and compound buckets left in the Level 3 hallway, done by GC laborers before inspection",
+      "amountCents": 47500,
+      "amountEvidence": {
+        "emailId": "fh-01",
+        "sentence": "Please back-charge Ridgeline Drywall $475.00 for the cleanup."
+      },
+      "vendorNameAsWritten": "Ridgeline Drywall",
+      "jobRef": "Summit Medical Office",
+      "disputeNoted": false
+    }
+  ],
   "rejected": [],
   "rawToolInput": {
-    "items": []
+    "items": [
+      {
+        "ref": null,
+        "description": "Cleanup of drywall scraps and compound buckets left in the Level 3 hallway, done by GC laborers before inspection",
+        "amountText": "$475.00",
+        "amountSentence": "Please back-charge Ridgeline Drywall $475.00 for the cleanup.",
+        "vendorNameAsWritten": "Ridgeline Drywall",
+        "jobRef": "Summit Medical Office",
+        "disputeNoted": false
+      }
+    ]
   }
 }

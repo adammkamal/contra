@@ -5,8 +5,8 @@ import { formatUsd, scanUsdAmounts } from "./money.ts";
 import { matchJobs, resolve, type Resolution } from "./resolver.ts";
 import { attachmentPages, describeAt, describeAttachment, inEmailText, readFromImage } from "./span.ts";
 import { conflictingStatements } from "./intake.ts";
-import { EMAIL_INGESTED, ROLE_WORDS, type Actor, type BackCharge, type Credit, type Email, type EmailOrigin, type HoldReason, type Job, type Notice, type RejectedItem, type Subcontract } from "./types.ts";
-import { amountNotes, Contra } from "./workflow.ts";
+import { EMAIL_INGESTED, ROLE_WORDS, type Actor, type BackCharge, type Credit, type Email, type EmailNote, type EmailOrigin, type HoldReason, type Job, type Notice, type RejectedItem, type Subcontract } from "./types.ts";
+import { amountNotes, bcNumberOf, Contra, estimateOf, refLabel } from "./workflow.ts";
 import { backChargeAmount } from "./credits.ts";
 
 /**
@@ -25,6 +25,9 @@ export type Action =
   | { command: "confirmLink"; ref: string }
   | { command: "chooseSubcontract"; ref: string; options: string[] }
   | { command: "confirmImageAmount"; ref: string; options: string[] }
+  | { command: "dismissEmail"; emailId: string }
+  | { command: "sameCharge"; ref: string; duplicateOf: string }
+  | { command: "differentCharge"; ref: string; duplicateOf: string }
   | { command: "draftNotice"; subcontractId: string }
   | { command: "approveNotice"; noticeId: string }
   | { command: "sendNotice"; noticeId: string }
@@ -53,7 +56,13 @@ export const HOLD_WORDS: Record<HoldReason, string> = {
   suspicious_instructions: "email contains instructions aimed at an AI or automated system",
   unaccounted_reference: "the email mentions a back-charge number that wasn't extracted",
   amount_only_in_image: "amount read from a photo or scanned page, which can't be checked word for word; a person must confirm it",
+  possible_duplicate: "possible duplicate of another back-charge; the PM decides: same charge or different charge",
 };
+
+/** A hold reason in words for this item: a possible duplicate names the item it may duplicate. */
+function holdWords(b: Readonly<BackCharge>, r: HoldReason): string {
+  return r === "possible_duplicate" && b.duplicate ? `possible duplicate of ${b.duplicate.of}` : HOLD_WORDS[r];
+}
 
 export function backChargeStatus(b: Readonly<BackCharge>): Status {
   switch (b.state) {
@@ -66,13 +75,15 @@ export function backChargeStatus(b: Readonly<BackCharge>): Status {
     case "noticed":
       return { label: "Notice sent, response window open", tone: "info" };
     case "held":
-      return { label: `Held: ${b.holdReasons.map((r) => HOLD_WORDS[r]).join("; ")}`, tone: "danger" };
+      return { label: `Held: ${b.holdReasons.map((r) => holdWords(b, r)).join("; ")}`, tone: "danger" };
     case "eligible":
       return { label: "Eligible to deduct", tone: "ok" };
     case "credited":
       return { label: `On credit ${b.creditId}`, tone: "ok" };
     case "applied":
       return { label: `Deducted (credit ${b.creditId})`, tone: "ok" };
+    case "merged":
+      return { label: `Merged into ${b.mergedInto}: the PM confirmed it is the same charge`, tone: "idle" };
   }
 }
 
@@ -119,6 +130,16 @@ export function rejectedStatus(r: Readonly<RejectedItem>): Status {
   return { label: `Held: not taken in: ${r.words}; a person must read the email`, tone: "danger" };
 }
 
+/**
+ * The status of an email's own row: no back-charge found, or couldn't process; or dismissed, with who and
+ * why. A person reads the email; the PM dismisses the row with a reason.
+ */
+export function emailNoteStatus(n: Readonly<EmailNote>): Status {
+  if (n.dismissed) return { label: `Dismissed by ${n.dismissed.by}: ${n.dismissed.reason}`, tone: "idle" };
+  if (n.kind === "no_back_charge") return { label: "No back-charge found in this email; a person should read it, then dismiss it with a reason", tone: "warn" };
+  return { label: `Couldn't process: ${n.reason ?? "the model failed"}; a person must read the email`, tone: "danger" };
+}
+
 export interface InboxRow {
   /**
    * "backCharge": an extracted back-charge (backChargeDetail(app, ref) has its detail screen).
@@ -126,15 +147,35 @@ export interface InboxRow {
    * `status.label`; `ref` is its BC number if it had a readable one, else ""; `vendorAsWritten`, `amount`,
    * `sourceSentence` and `sourceLocation` are "" (the model's unchecked text is never shown as if checked);
    * no detail screen and no actions.
+   * "noBackCharge": an email from an allowed sender in which nothing was found; "notProcessed": an email the
+   * model failed on after every retry. Both are the email's own row: `ref` and `refLabel` are "", `bcNumber`
+   * null, no amount or sentence, no detail screen; `dismissEmail` until a PM dismisses it.
    */
-  kind: "backCharge" | "rejected";
+  kind: "backCharge" | "rejected" | "noBackCharge" | "notProcessed";
+  /** The email the row came from. */
+  emailId: string;
   ref: string;
+  /**
+   * A backCharge row's accounting BC number, or null while it has none yet (its `ref` is then a Contra
+   * reference, CONTRA-0001). A rejected row: the BC number the model gave, or null.
+   */
+  bcNumber: string | null;
+  /**
+   * The reference to show: "BC-4467", "CONTRA-0001 (no BC number yet)", or "CONTRA-0001 (BC-4480)" once a
+   * later email supplied the number. "" for a rejected row without a BC number.
+   */
+  refLabel: string;
   emailSubject: string;
   /** Who sent the email the row came from. */
   emailFrom: string;
   vendorAsWritten: string;
   /** "" while the amount is a reading of an image that no person has confirmed (see photoAmount). */
   amount: string;
+  /**
+   * The source sentence's wording that makes the amount an estimate ("approximately", "~"), or null. Not a
+   * hold: show "Estimate" beside the amount. null while the amount is withheld, and on a rejected row.
+   */
+  estimate: string | null;
   /** "" while the amount is a reading of an image that no person has confirmed: the sentence is the model's reading too. */
   sourceSentence: string;
   /** Where sourceSentence is: "email body", "attachment <name>, page <n>", or "attachment <name>" for a photo. */
@@ -207,7 +248,7 @@ function shownEvent(contra: Contra, e: AuditEvent): { action: string; evidence: 
       return { action: e.action, evidence: stored.evidence.map((v) => (full.includes(v) ? shown[full.indexOf(v)]! : v)) };
     }
   }
-  if (e.action === "held: conflicting_amounts") {
+  if (e.action === "held: conflicting_amounts" || e.action === "also held: conflicting_amounts") {
     const evidence = stored.evidence.map((v) => {
       const m = /^([^\s:]+): ([\s\S]*)$/.exec(v);
       const other = m ? contra.emails.get(m[1]!) : undefined;
@@ -235,7 +276,9 @@ export interface Screens {
   /**
    * memo: the memo's delivery to the AP inbox, or null when the credit has no memo yet (not approved).
    * amountNotes: one line per item whose amount a person confirmed from an image, with both readings:
-   * "BC-7403: amount confirmed by dana.ortiz (PM) from attachment IMG_2041.jpg (PM entered $640.00; model read $604.00)".
+   * "BC-7403: amount confirmed by dana.ortiz (PM) from attachment IMG_2041.jpg (PM entered $640.00; model read $604.00)";
+   * and one per item whose source email calls the amount an estimate:
+   * "CONTRA-0001: the amount is an estimate (the email says "approximately")".
    */
   credits: { id: string; amount: string; job: string; refs: string[]; amountNotes: string[]; status: Status; actions: Action[]; hasMemo: boolean; memo: Status | null }[];
   bills: {
@@ -250,7 +293,8 @@ export interface Screens {
     actions: Action[];
     simulated: true;
   }[];
-  pmQueue: { ref: string; status: Status }[];
+  /** kind and refLabel: as in the Inbox row. Only a "backCharge" entry has a detail screen. */
+  pmQueue: { kind: InboxRow["kind"]; ref: string; refLabel: string; status: Status }[];
   opener: { sampleData: true; notDeducted: string; possible: string; deducted: string; rows: { ref: string; status: string; amount: string; evidence: string }[] };
   audit: { seq: number; at: string; actor: string; what: string; evidence: string[] }[];
 }
@@ -289,14 +333,23 @@ export function buildScreens(app: App): Screens {
       const r = resolve(b.extracted, erp);
       actions.push({ command: "confirmImageAmount", ref: b.ref, options: r.kind === "linked" ? [r.subcontractId] : subcontractOptions(b.extracted.jobRef, r, erp.jobs, erp.subcontracts) });
     }
+    // A possible duplicate: the PM says same charge (only when that is its only hold) or different charge.
+    if (b.state === "held" && b.duplicate && b.holdReasons.includes("possible_duplicate")) {
+      if (b.holdReasons.length === 1) actions.push({ command: "sameCharge", ref: b.ref, duplicateOf: b.duplicate.of });
+      actions.push({ command: "differentCharge", ref: b.ref, duplicateOf: b.duplicate.of });
+    }
     const withheld = readingWithheld(b, email);
     return {
       kind: "backCharge" as const,
+      emailId: b.extracted.amountEvidence.emailId,
       ref: b.ref,
+      bcNumber: bcNumberOf(b),
+      refLabel: refLabel(b),
       emailSubject: email?.subject ?? "",
       emailFrom: email?.from ?? "",
       vendorAsWritten: b.extracted.vendorNameAsWritten,
       amount: withheld ? "" : formatUsd(backChargeAmount(b)),
+      estimate: withheld ? null : estimateOf(b),
       sourceSentence: withheld ? "" : b.extracted.amountEvidence.sentence,
       sourceLocation: email ? describeAt(email, b.extracted.amountEvidence.at) : "email body",
       photoAmount: photoAmount(b),
@@ -311,11 +364,15 @@ export function buildScreens(app: App): Screens {
     const email = contra.emails.get(r.emailId);
     inbox.push({
       kind: "rejected",
+      emailId: r.emailId,
       ref: r.ref ?? "",
+      bcNumber: r.ref ?? null,
+      refLabel: r.ref ?? "",
       emailSubject: email?.subject ?? "",
       emailFrom: email?.from ?? "",
       vendorAsWritten: "",
       amount: "",
+      estimate: null,
       sourceSentence: "",
       sourceLocation: "",
       photoAmount: null,
@@ -323,6 +380,29 @@ export function buildScreens(app: App): Screens {
       linkExplanation: [],
       status: rejectedStatus(r),
       actions: [],
+    });
+  }
+  // Nor an email that yielded no back-charge: its own row, until a PM reads it and dismisses it with a reason.
+  for (const n of contra.emailNotes) {
+    const email = contra.emails.get(n.emailId);
+    inbox.push({
+      kind: n.kind === "no_back_charge" ? "noBackCharge" : "notProcessed",
+      emailId: n.emailId,
+      ref: "",
+      bcNumber: null,
+      refLabel: "",
+      emailSubject: n.subject,
+      emailFrom: n.from,
+      vendorAsWritten: "",
+      amount: "",
+      estimate: null,
+      sourceSentence: "",
+      sourceLocation: "",
+      photoAmount: null,
+      attachments: email?.attachments?.map(describeAttachment) ?? [],
+      linkExplanation: [],
+      status: emailNoteStatus(n),
+      actions: n.dismissed ? [] : [{ command: "dismissEmail", emailId: n.emailId }],
     });
   }
 
@@ -396,7 +476,7 @@ export function buildScreens(app: App): Screens {
     notDeducted: formatUsd(recon.totals.not_deducted),
     possible: formatUsd(recon.totals.possible_match),
     deducted: formatUsd(recon.totals.deducted),
-    rows: recon.rows.map((r) => ({ ref: r.item.ref, status: r.status.replace("_", " "), amount: formatUsd(r.item.amountCents), evidence: r.evidence })),
+    rows: recon.rows.map((r) => ({ ref: r.item.ref ?? "no BC number", status: r.status.replace("_", " "), amount: formatUsd(r.item.amountCents), evidence: r.evidence })),
   };
 
   const audit = [...contra.audit.all()]
@@ -429,7 +509,11 @@ export function buildScreens(app: App): Screens {
     outbox,
     credits: creditRows,
     bills,
-    pmQueue: [...contra.pmQueue().map((b) => ({ ref: b.ref, status: backChargeStatus(b) })), ...contra.rejected.map((r) => ({ ref: r.ref ?? "", status: rejectedStatus(r) }))],
+    pmQueue: [
+      ...contra.pmQueue().map((b) => ({ kind: "backCharge" as const, ref: b.ref, refLabel: refLabel(b), status: backChargeStatus(b) })),
+      ...contra.rejected.map((r) => ({ kind: "rejected" as const, ref: r.ref ?? "", refLabel: r.ref ?? "", status: rejectedStatus(r) })),
+      ...contra.emailNotes.filter((n) => !n.dismissed).map((n) => ({ kind: n.kind === "no_back_charge" ? ("noBackCharge" as const) : ("notProcessed" as const), ref: "", refLabel: "", status: emailNoteStatus(n) })),
+    ],
     opener,
     audit,
   };
@@ -492,6 +576,8 @@ export function nextStep(app: App): { text: string; action: Action | null } {
 function liveNextStep(app: App): { text: string; action: Action | null } {
   const { contra } = app.ctx;
   const bcs = [...contra.backCharges.values()];
+  const duplicate = bcs.find((b) => b.state === "held" && b.duplicate && b.holdReasons.includes("possible_duplicate"));
+  if (duplicate) return { text: `PM decides whether ${duplicate.ref} is the same charge as ${duplicate.duplicate!.of} (in its Inbox row)`, action: null };
   const toConfirm = bcs.find((b) => b.state === "extracted" && contra.proposals.get(b.ref)?.kind === "linked");
   if (toConfirm) return { text: `PM confirms the link for ${toConfirm.ref}`, action: { command: "confirmLink", ref: toConfirm.ref } };
   const toChoose = bcs.find((b) => b.state === "needs_review");
@@ -519,15 +605,22 @@ function liveNextStep(app: App): { text: string; action: Action | null } {
   if (eligible) return { text: `Propose the vendor credit for ${eligible.subcontractId}`, action: { command: "proposeCredit", subcontractId: eligible.subcontractId! } };
   const unsent = app.ctx.memoSender ? credits.find((c) => Contra.memoSendable(c) && !c.memoDelivery) : undefined;
   if (unsent) return { text: `Send the credit memo for ${unsent.id} to the AP inbox`, action: { command: "sendCreditMemo", creditId: unsent.id } };
+  const note = contra.emailNotes.find((n) => !n.dismissed);
+  if (note) return { text: `PM reads the email "${note.subject}" (${note.kind === "no_back_charge" ? "no back-charge found" : "couldn't process"}) and dismisses it with a reason (in its Inbox row)`, action: null };
   return { text: "Waiting for back-charge emails from the live inbox", action: null };
 }
 
 export interface BackChargeDetail {
   ref: string;
+  /** As in the Inbox row: the accounting BC number or null ("no BC number yet"), and the reference to show. */
+  bcNumber: string | null;
+  refLabel: string;
   /** The model's description; while the amount is withheld (see amount), any dollar amount in it reads "[amount withheld]". */
   description: string;
   /** "" while the amount is a reading of an image that no person has confirmed, as in the Inbox row. */
   amount: string;
+  /** As in the Inbox row: the wording that makes the amount an estimate, or null. */
+  estimate: string | null;
   /** As in the Inbox row: both readings once a person confirmed an image amount, else null. */
   photoAmount: PhotoAmount | null;
   status: Status;
@@ -542,6 +635,15 @@ export interface BackChargeDetail {
   /** null when there is none; while the amount is withheld, a sentence read from an image has its dollar amounts taken out. */
   disputeSentence: string | null;
   link: { subcontractId: string | null; explanation: string[] };
+  /**
+   * Set when the item was held as a possible duplicate (kept after the PM decides): the item it may be the
+   * same charge as (`of`, its ref; `ofLabel`, as shown) and why, in words.
+   */
+  duplicate: { of: string; ofLabel: string; why: string } | null;
+  /** Set when the PM confirmed it is the same charge as another item: that item's ref. */
+  mergedInto: string | null;
+  /** Other emails that state this same charge: each email's id, subject and sender, and the sentence. */
+  alsoIn: { emailId: string; subject: string; from: string; sentence: string }[];
   /** The subcontract's back-charge clause, quoted, or null if not linked / no clause. */
   clause: { section: string; text: string; responseWindow: string; deductionAllowed: boolean; noticeRequired: boolean } | null;
   eligibility: { status: "eligible" | "pending" | "held"; holdReasons: string[]; waitingFor: string[]; trace: string[] };
@@ -549,6 +651,12 @@ export interface BackChargeDetail {
 }
 
 const WINDOW_WORDS = { hours: "hours", calendar_days: "calendar days", working_days: "working days" } as const;
+
+/** An item's reference as shown (refLabel), or the ref itself when there is no such item. */
+const labelOf = (contra: Contra, ref: string) => {
+  const o = contra.backCharges.get(ref);
+  return o ? refLabel(o) : ref;
+};
 
 /** Everything the back-charge detail screen shows. Read-only. Throws for an unknown ref. */
 export function backChargeDetail(app: App, ref: string): BackChargeDetail {
@@ -565,8 +673,11 @@ export function backChargeDetail(app: App, ref: string): BackChargeDetail {
   const disputeSentence = dispute?.sentence || null;
   return {
     ref,
+    bcNumber: bcNumberOf(b),
+    refLabel: refLabel(b),
     description: withheld ? withoutAmounts(b.extracted.description) : b.extracted.description,
     amount: withheld ? "" : formatUsd(backChargeAmount(b)),
+    estimate: withheld ? null : estimateOf(b),
     photoAmount: photoAmount(b),
     status: backChargeStatus(b),
     vendorAsWritten: b.extracted.vendorNameAsWritten,
@@ -585,6 +696,12 @@ export function backChargeDetail(app: App, ref: string): BackChargeDetail {
     sourceLocation: email ? describeAt(email, b.extracted.amountEvidence.at) : "email body",
     disputeSentence: disputeSentence && withheld && email && readFromImage(email, dispute!.at) ? withoutAmounts(disputeSentence) : disputeSentence,
     link: { subcontractId: b.subcontractId, explanation: b.linkExplanation.length ? b.linkExplanation : proposal?.kind === "review" ? proposal.reasons : proposal?.kind === "linked" ? proposal.explanation : [] },
+    duplicate: b.duplicate ? { of: b.duplicate.of, ofLabel: labelOf(contra, b.duplicate.of), why: b.duplicate.why } : null,
+    mergedInto: b.mergedInto ?? null,
+    alsoIn: (b.alsoIn ?? []).map((ev) => {
+      const e = contra.emails.get(ev.emailId);
+      return { emailId: ev.emailId, subject: e?.subject ?? "", from: e?.from ?? "", sentence: ev.sentence };
+    }),
     clause: sc?.clause
       ? {
           section: sc.clause.section,

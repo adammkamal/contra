@@ -133,6 +133,9 @@ never put it in a URL, `localStorage`, a log or client-side JavaScript.
 
 Any route can answer 401 `"sign in first"` once the session has expired or been ended, including the
 SSE stream (its connection is refused; `EventSource` reports an error and keeps retrying, so close it).
+An open stream doesn't outlive its session: at sign-out, or when the session expires, the server sends
+`event: session-ended` with `data: {"reason": "signed out" | "expired"}` and closes that session's
+streams (only that session's: the same account signed in elsewhere keeps its own). Treat it like a 401.
 On a 401 from anything but `/api/login`: close the stream, drop cached screens, show the sign-in page with
 "Your session has ended; sign in again", and after sign-in return to the screen the person was on and
 re-read it. Don't re-send the request that got the 401: nothing ran, and the screen it came from may be
@@ -170,11 +173,11 @@ shown as `<session id>`), `auth-me-live-pm.json`, `auth-me-demo-only.json`, `aut
 | `emailSource` | `"eml"`, `"builtin"`, `"gmail"`, `"mixed"` or `null` (before ingest). Where the Inbox's PM emails were read from. Show it in the Inbox beside the extraction note: **"Emails: .eml files"** for `"eml"`, **"Emails: built-in sample"** for `"builtin"`, **"Emails: Gmail inbox"** for `"gmail"`, **"Emails: more than one source"** for `"mixed"`. |
 | `nextStep` | `{ text, action }` for the presenter bar. Highlight `action`'s button. In `demo`, `action` is `null` only at "Demo complete". In `live`, it is also `null` while waiting for mail ("Waiting for back-charge emails from the live inbox") while the PM must choose a subcontract in an Inbox row, and while the PM must confirm an amount read from an image in an Inbox row; show the text without a button. |
 | `opener` | The missed back-charges screen. Always show **"Sample data"**. Totals are already formatted; rows carry `ref`, `status`, `amount` and `evidence`. |
-| `inbox[]` | `kind`, `ref`, `emailSubject`, `emailFrom`, `vendorAsWritten`, `amount`, `sourceSentence` (show beside the amount), `sourceLocation` (where that sentence is: `"email body"`, `"attachment estimate.pdf, page 2"`, or `"attachment IMG_2041.jpg"` for a photo; show it with the sentence), `photoAmount` (`{ pmEntered, modelRead }`, both formatted like every amount, once a person confirmed an amount read from an image; else `null`; see [Amounts read from an image](#amounts-read-from-an-image)), `attachments[]` (what became of each of the email's attachments, in words; show them all, skipped ones included, as written), `linkExplanation[]`, `status`, `actions[]`. `kind` is `"backCharge"` (an extracted back-charge, with a detail screen) or `"rejected"` (see [Items not taken in](#items-not-taken-in)). For a `"backCharge"` row, `amount` and `sourceSentence` are `""` only while its amount is an unconfirmed reading of an image. |
+| `inbox[]` | `kind`, `emailId` (the email the row came from), `ref`, `bcNumber`, `refLabel` (see [Back-charges without a BC number](#back-charges-without-a-bc-number)), `emailSubject`, `emailFrom`, `vendorAsWritten`, `amount`, `sourceSentence` (show beside the amount), `sourceLocation` (where that sentence is: `"email body"`, `"attachment estimate.pdf, page 2"`, or `"attachment IMG_2041.jpg"` for a photo; show it with the sentence), `photoAmount` (`{ pmEntered, modelRead }`, both formatted like every amount, once a person confirmed an amount read from an image; else `null`; see [Amounts read from an image](#amounts-read-from-an-image)), `attachments[]` (what became of each of the email's attachments, in words; show them all, skipped ones included, as written), `linkExplanation[]`, `status`, `actions[]`. `kind` is `"backCharge"` (an extracted back-charge, with a detail screen), `"rejected"` (see [Items not taken in](#items-not-taken-in)), or `"noBackCharge"` / `"notProcessed"` (see [Emails without a back-charge](#emails-without-a-back-charge)). For a `"backCharge"` row, `amount` and `sourceSentence` are `""` only while its amount is an unconfirmed reading of an image. |
 | `outbox[]` | Notices: `id`, `total`, `refs`, `body` (shown as written, preformatted), `status`, `actions[]`. |
-| `credits[]` | `id`, `amount`, `job`, `refs`, `amountNotes[]` (one line per item whose amount a person confirmed from an image, with both readings, e.g. `"BC-7403: amount confirmed by dana.ortiz (PM) from attachment IMG_2041.jpg (PM entered $640.00; model read $604.00)"`; show them beside the amount, above the Approve button, as written; usually empty), `status`, `actions[]`, `hasMemo` (when true, offer "View memo"), `memo`: the memo's delivery to the AP inbox as a `Status` (e.g. "Memo not sent", "Memo sent to …", "Memo not sent: … You can send it again."), or `null` when there is no memo yet. Show `memo.label` as written. |
+| `credits[]` | `id`, `amount`, `job`, `refs`, `amountNotes[]` (one line per item whose amount a person confirmed from an image, with both readings, e.g. `"BC-7403: amount confirmed by dana.ortiz (PM) from attachment IMG_2041.jpg (PM entered $640.00; model read $604.00)"`, and one per item whose source email calls its amount an estimate, e.g. `"CONTRA-0001: the amount is an estimate (the email says \"approximately\")"`; show them beside the amount, above the Approve button, as written; usually empty), `status`, `actions[]`, `hasMemo` (when true, offer "View memo"), `memo`: the memo's delivery to the AP inbox as a `Status` (e.g. "Memo not sent", "Memo sent to …", "Memo not sent: … You can send it again."), or `null` when there is no memo yet. Show `memo.label` as written. |
 | `bills[]` | Always show **"Simulated Ramp"**. `vendor`, `job`, `amount`, `creditsOn`, `status`, `paid`, plus `check`: `status`, `actions[]` (sentences), `warnings[]`, `wouldPay`. Also has `actions[]` (buttons). |
-| `pmQueue[]` | `ref` and `status` for items a person must look at, including items not taken in (their `ref` can be `""`). |
+| `pmQueue[]` | `kind` (as in `inbox[]`; only `"backCharge"` has a detail screen), `ref`, `refLabel` (show it in place of `ref`) and `status` for items a person must look at, including items not taken in (their `ref` can be `""`) and emails not yet dismissed. |
 | `audit[]` | Newest first: `seq`, `at`, `actor` (already worded: `"lee.chen (Controller)"`, or in the demo `"lee.chen (Controller), presented by <username>"`), `what`, `evidence[]`. |
 
 `Status` is `{ label, tone }`. **The label carries the meaning; show it as text.** `tone` (`ok`, `warn`,
@@ -191,6 +194,9 @@ Render each `actions[]` entry as a button, and when clicked send exactly that ob
 | `ingestPmEmails` | none | Ingest PM emails |
 | `confirmLink` | `ref` | Confirm link |
 | `chooseSubcontract` | `ref`, `options[]` | A picker plus Confirm. Send `input.choice` as one of `options`. |
+| `dismissEmail` | `emailId` | A reason field plus Dismiss, on an email's own row (no back-charge found, or couldn't process). Send `input.reason`; it must not be empty. A PM's step. Test id: `dismissEmail-{emailId}`. |
+| `sameCharge` | `ref`, `duplicateOf` | Same charge (merge). Only on an item held just as a possible duplicate (see [Possible duplicates](#possible-duplicates)). A PM's step. |
+| `differentCharge` | `ref`, `duplicateOf` | Different charge. On an item held as a possible duplicate (also with other hold reasons, which stay). A PM's step. |
 | `confirmImageAmount` | `ref`, `options[]` | Only on an item held just because its amount was read from a photo or scanned page. An amount field ("Type the amount you see in the image"), a picker of `options` (often one) and Confirm. Send `input.amount` (what the person typed, e.g. `"$640.00"` or `"640.00"`) and `input.choice`. The typed amount may differ from the model's reading (a misread photo): it becomes the item's amount, both are recorded, and the credit shows both in `amountNotes`. It is refused (409, the item stays held) when it isn't more than $0.00, or when the email's text (body or a PDF page) gives the back-charge a different amount; the message says which. Don't prefill the amount field: the server sends nothing to prefill it with (see [Amounts read from an image](#amounts-read-from-an-image)). Contra doesn't keep the image: the person checks it in the original email (`sourceLocation` names the file). |
 | `draftNotice` | `subcontractId` | Draft notice |
 | `approveNotice` | `noticeId` | Approve notice (a PM's step; see [Who may do what](#who-may-do-what)) |
@@ -223,6 +229,9 @@ events reach only streams opened by `--live` accounts.
   `"live"`). One stream carries both workspaces: re-read `GET /api/screens?workspace=<workspace>` only
   when it is the workspace on screen. The event never carries screen data itself.
 - `event: heartbeat`, `data: {}`: every 15 seconds, so the connection stays open. Ignore it.
+- `event: session-ended`, `data: {"reason": "signed out" | "expired"}`: the last event on a stream whose
+  session ended; the server then closes it. Close the `EventSource` (so it doesn't reconnect) and show the
+  sign-in page (see [Handling 401](#handling-401)).
 
 ## Workspaces
 
@@ -351,31 +360,102 @@ being anchored on the model's figure:
 | `suspicious_instructions` | email contains instructions aimed at an AI or automated system |
 | `unaccounted_reference` | the email mentions a back-charge number that wasn't extracted |
 | `amount_only_in_image` | amount read from a photo or scanned page, which can't be checked word for word; a person must confirm it |
+| `possible_duplicate` | possible duplicate of another back-charge; the PM decides: same charge or different charge |
 
-Only `amount_only_in_image`, when it is an item's only reason, has a button (`confirmImageAmount`).
+In `status.label`, a possible duplicate names the other item: `Held: possible duplicate of CONTRA-0001`. The detail
+screen's `eligibility.holdReasons` uses the words in the table.
+
+Only `amount_only_in_image`, when it is an item's only reason, has a button (`confirmImageAmount`). An item held
+as `possible_duplicate` has `sameCharge` (when it is its only reason) and `differentCharge`.
+
+## Possible duplicates
+
+The same charge can arrive twice under two references: a first email without a BC number (`CONTRA-0001`),
+then a follow-up citing the number accounting assigned (`BC-4480`); or the same charge sent twice without a
+number. It is never charged twice, and Contra never merges on its own. The newer item is **held** as
+`possible duplicate of <ref>` when, on the same subcontract and job, the two have the same amount, or one
+has a BC number and the other doesn't and their descriptions overlap (an initial amount is often an
+estimate). Two different BC numbers are never duplicates. While the question is open, the two are never on
+one notice.
+
+- **Same charge** (`sameCharge`): the held item becomes `Merged into <ref>: the PM confirmed it is the same
+  charge` (final, no buttons). The other item carries the charge: it takes the BC number if it had none
+  (`refLabel` `"CONTRA-0001 (BC-4480)"`), lists the held item's email in its detail's `alsoIn[]`, and is held
+  too if that email gives a different amount (`conflicting_amounts`) or notes a dispute. A later email citing
+  that BC number is the same charge again: no new item.
+- **Different charge** (`differentCharge`): the pair is never asked about again, and the item goes back to
+  where it was (linked, or waiting for its link).
+
+`nextStep` in `live` says `PM decides whether <ref> is the same charge as <ref> (in its Inbox row)` with
+`action: null`. Samples: `live-05-after-a-possible-duplicate-arrives.screens.json`,
+`live-06-after-the-pm-confirms-the-same-charge.screens.json` and `live-detail-CONTRA-0001.json`.
+
+## Estimates
+
+A first back-charge email often gives an estimate ("approximately $6,000.00", "~$475", "estimated at
+$1,200.00"). When the amount's own source sentence calls it one, the item is marked, never held:
+
+- Inbox row and detail: `estimate` is that wording (`"approximately"`, `"~"`, `"Estimated"`), else `null`.
+  Show **Estimate** beside the amount, with the wording. It is `null` while the amount is withheld.
+- The notice line says `(estimate: the email says "approximately")`, and the credit's `amountNotes[]` (also in
+  the approval's audit record) says `CONTRA-0001: the amount is an estimate (the email says "approximately")`.
+- A later email giving a different amount for the same charge holds it as `conflicting_amounts`.
+
+## Back-charges without a BC number
+
+A PM's first back-charge email usually has no BC number (accounting assigns one later). Contra takes such
+a charge in like any other and gives it its own reference, `CONTRA-0001`, `CONTRA-0002`, ... (a format no
+accounting BC number has). That reference is its `ref`: use it for the detail screen, test ids and every
+action, as with a BC number.
+
+- `bcNumber` is the accounting BC number, or `null` while there is none yet.
+- `refLabel` is what to show as the item's reference, as written: `"BC-4467"`;
+  `"CONTRA-0001 (no BC number yet)"`; or `"CONTRA-0001 (BC-4480)"` once a later email supplied the number
+  and the PM confirmed it is the same charge. The notice to the sub and the credit memo name it the same way.
+- In `POST /api/try`, an item without a BC number has `ref: ""` and `refLabel: "no BC number yet"`.
 
 ## Items not taken in
 
 Nothing a PM sends vanishes. When the model returns something for an email that validation refuses (a
-page or attachment that doesn't exist, an amount that can't be read exactly, a missing BC number, an answer
+page or attachment that doesn't exist, an amount that can't be read exactly, a back-charge number that isn't one or that the email doesn't contain, an answer
 in the wrong form, ...), it is never a back-charge, but it is an Inbox row with `kind: "rejected"`:
 
 - `status.label` is `Held: not taken in: <the reason in plain words>; a person must read the email`, for example
   `Held: not taken in: the model said the amount is on page 3 of estimate.pdf, which has only 2 pages; a person
   must read the email`. Show it as written.
 - `emailSubject`, `emailFrom` and `attachments[]` say which email it came from.
-- `ref` is its BC number when the model gave a readable one, else `""`. `vendorAsWritten`, `amount`,
+- `ref` and `refLabel` are its BC number when the model gave a readable one, else `""`; `bcNumber` is it or `null`. `vendorAsWritten`, `amount`,
   `sourceSentence` and `sourceLocation` are `""`: the model's unchecked text is never shown as if it were checked.
 - No `actions` and no detail screen: don't link it to `backChargeDetail` (its `ref` may be another row's,
   or empty). A person reads the original email. It is also in `pmQueue[]` and in the audit log.
+
+## Emails without a back-charge
+
+Nothing a PM sends vanishes, even when nothing in it becomes a back-charge. Each such email is its own
+Inbox row (and in `pmQueue[]` until dismissed), persisted:
+
+- `kind: "noBackCharge"`: an email from an allowed sender in which the extractor found no back-charge and
+  refused nothing. `status.label` is `No back-charge found in this email; a person should read it, then
+  dismiss it with a reason`.
+- `kind: "notProcessed"`: an email the model failed on after every retry. `status.label` is `Couldn't
+  process: <reason>; a person must read the email`, the reason one fixed sentence per failure kind. If a later
+  try succeeds (after a restart), the email is taken in and this row goes away.
+- Both: `emailId`, `emailSubject`, `emailFrom` and `attachments[]` say which email; `ref` and `refLabel` are
+  `""`, `bcNumber` `null`, no amount, no sentence, no detail screen. `actions` is `[dismissEmail]` until a PM
+  dismisses it; then the row stays, with `status.label` `Dismissed by <who>: <reason>` and no actions.
+- In `live`, `nextStep` says `PM reads the email "<subject>" (...) and dismisses it with a reason (in its Inbox
+  row)` with `action: null` once nothing else is waiting.
+
+Samples: `live-07-after-emails-with-no-back-charge.screens.json` and `live-08-after-the-pm-dismisses-one.screens.json`.
 
 ## Detail screen: `BackChargeDetail`
 
 | Field | Contents |
 |---|---|
-| Identity | `ref`, `description`, `amount`, `photoAmount` (as in the Inbox row), `status`. `amount` is `""` while it is an unconfirmed reading of an image ([Amounts read from an image](#amounts-read-from-an-image)). |
+| Identity | `ref`, `bcNumber`, `refLabel` (as in the Inbox row), `description`, `amount`, `photoAmount` (as in the Inbox row), `status`. `amount` is `""` while it is an unconfirmed reading of an image ([Amounts read from an image](#amounts-read-from-an-image)). |
 | Source | `vendorAsWritten`, `jobRef`, `email` (`{ id, subject, from, body, attachments, attachmentText }`), `sourceSentence`, `sourceLocation`, `disputeSentence`. Highlight `sourceSentence` inside `email.body` when `sourceLocation` is `"email body"`, else inside the `attachmentText` entry whose `where` equals `sourceLocation` (`attachmentText` is `{ where, text }[]`, one per page of each PDF read as text; a photo has none). `email.attachments` is the same list of words as the Inbox row's. A sentence can cross a line break in `body` (an .eml's HTML part is re-wrapped), so match it with runs of whitespace treated as equal. |
 | `link` | `subcontractId` and `explanation[]`, e.g. alias, then party, then job |
+| `duplicate`, `mergedInto`, `alsoIn[]` | `duplicate`: `{ of, ofLabel, why }` when the item was held as a possible duplicate (kept after the PM decides), else `null`. `mergedInto`: the ref it was merged into, or `null`. `alsoIn[]`: other emails that state this same charge, `{ emailId, subject, from, sentence }`. |
 | `clause` | `section`, `text` (quote it), `responseWindow` (e.g. "5 working days"), `deductionAllowed`, `noticeRequired`. Can be `null`. |
 | `eligibility` | `status`, `holdReasons[]` (already in words), `waitingFor[]`, `trace[]` (lines beginning PASS, HOLD or WAIT). For an amount a person confirmed from an image, the evidence line is `PASS amount confirmed by <who> from <attachment>`, never "verbatim". |
 | `history[]` | This item's audit events |
@@ -414,7 +494,8 @@ and let the person try again later; don't retry automatically.
   latencyMs: number;        // the model call only
   note: string;             // what each outcome means and what a credit still needs; show it (see UI rules)
   items: {
-    ref: string;            // "BC-6612"
+    ref: string;            // "BC-6612", or "" when the email gives no BC number
+    refLabel: string;       // "BC-6612", or "no BC number yet": show this
     amount: string;         // formatted, "$1,275.00"; never parse it
     description: string;
     vendorAsWritten: string;

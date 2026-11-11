@@ -4,6 +4,8 @@
  *   npm run bench:record              # 3 runs per case
  *   npm run bench:record -- --runs 5
  *   npm run bench:record -- --set heldout   # held-out set (default: main); --set fresh for the fresh set
+ *   npm run bench:record -- --cases bc-17,bc-18     # only these cases (their runs are replaced)
+ *   npm run bench:record -- --cases bc-08 --run 1   # only run 1 of bc-08; its other runs are kept
  * Writes fixtures/bench-extractions/<caseId>/run-<n>.json (held-out and fresh: fixtures/bench-extractions/<set>/<caseId>/). A failed call is recorded (with `error`)
  * and the recording continues. Each run also stores the model's raw tool input (`rawToolInput`), which `npm run bench`
  * re-validates with the current validator. Never touches fixtures/extractions/ (the demo's).
@@ -42,21 +44,36 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const paths = setPaths(root, set);
 const outRoot = paths.recordings;
 const outRel = relative(root, outRoot).replaceAll("\\", "/");
-const cases = loadCases(paths.cases);
+const casesArg = process.argv.indexOf("--cases");
+const only = casesArg > 0 ? new Set((process.argv[casesArg + 1] ?? "").split(",").filter(Boolean)) : null;
+const runArg = process.argv.indexOf("--run");
+const oneRun = runArg > 0 ? Number(process.argv[runArg + 1]) : null;
+if (oneRun !== null && (!Number.isInteger(oneRun) || oneRun < 1 || oneRun > RUNS)) {
+  console.error(`--run must be a whole number from 1 to ${RUNS}`);
+  process.exit(2);
+}
+const all = loadCases(paths.cases);
+const unknown = only ? [...only].filter((id) => !all.some((c) => c.id === id)) : [];
+if (unknown.length) {
+  console.error(`No such case in ${relative(root, paths.cases)}: ${unknown.join(", ")}`);
+  process.exit(2);
+}
+const cases = only ? all.filter((c) => only.has(c.id)) : all;
 if (!cases.length) {
   console.error(`No cases in ${relative(root, paths.cases)}`);
   process.exit(1);
 }
 const effort = cfg.settings.effort ?? "medium";
 
-console.log(`Recording ${set} set: ${cases.length} cases x ${RUNS} runs with ${cfg.settings.model} (${effort})`);
+console.log(`Recording ${set} set: ${cases.length} cases x ${oneRun === null ? `${RUNS} runs` : `run ${oneRun} only`} with ${cfg.settings.model} (${effort})`);
 let failed = 0;
 for (const c of cases) {
   const dir = join(outRoot, c.id);
   mkdirSync(dir, { recursive: true });
-  for (const f of readdirSync(dir).filter((f) => /^run-\d+\.json$/.test(f))) rmSync(join(dir, f));
+  // A whole case is re-recorded from scratch; with --run, only that run's file is replaced.
+  if (oneRun === null) for (const f of readdirSync(dir).filter((f) => /^run-\d+\.json$/.test(f))) rmSync(join(dir, f));
   const parts: string[] = [];
-  for (let n = 1; n <= RUNS; n++) {
+  for (let n = oneRun ?? 1; n <= (oneRun ?? RUNS); n++) {
     let rec: BenchRun;
     try {
       const r = await extractBackCharges(cfg.settings, c.email);
@@ -72,4 +89,4 @@ for (const c of cases) {
   }
   console.log(`${c.id}  ${parts.join(" | ")}`);
 }
-console.log(`\nDone: ${cases.length} cases x ${RUNS} runs, ${failed} failed call(s). Written to ${outRel}/.`);
+console.log(`\nDone: ${cases.length} cases x ${oneRun === null ? `${RUNS} runs` : `run ${oneRun}`}, ${failed} failed call(s). Written to ${outRel}/.`);

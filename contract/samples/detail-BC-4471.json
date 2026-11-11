@@ -1,7 +1,10 @@
 {
   "ref": "BC-4471",
+  "bcNumber": "BC-4471",
+  "refLabel": "BC-4471",
   "description": "Overtime for missed inspection",
   "amount": "$4,000.00",
+  "estimate": null,
   "photoAmount": null,
   "status": {
     "label": "Held: disputed by the sub",
@@ -28,6 +31,9 @@
       "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
     ]
   },
+  "duplicate": null,
+  "mergedInto": null,
+  "alsoIn": [],
   "clause": {
     "section": "§14.3 Back-Charges",
     "text": "Contractor shall give Subcontractor written notice of any back-charge. Subcontractor shall have five (5) working days from receipt to dispute in writing. Undisputed back-charges may be deducted from any payment due Subcontractor.",

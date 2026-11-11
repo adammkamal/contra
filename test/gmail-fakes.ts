@@ -126,14 +126,16 @@ export function fakeExtract(vendor = "Harbor Mechanical Co", jobRef = "Summit") 
 }
 
 /** Collects a Server-Sent Events stream from GET /api/events. */
-export function sseClient(port: number, headers: Record<string, string> = {}): Promise<{ text: () => string; close: () => void }> {
+export function sseClient(port: number, headers: Record<string, string> = {}): Promise<{ text: () => string; close: () => void; ended: () => boolean }> {
   return new Promise((resolve, reject) => {
     let text = "";
+    let ended = false;
     const req = request({ host: "127.0.0.1", port, path: "/api/events", headers }, (res) => {
       res.setEncoding("utf8");
       res.on("data", (c: string) => (text += c));
+      res.on("end", () => (ended = true));
       res.on("error", () => {});
-      resolve({ text: () => text, close: () => req.destroy() });
+      resolve({ text: () => text, close: () => req.destroy(), ended: () => ended });
     });
     req.on("error", (e) => (text ? undefined : reject(e)));
     req.end();

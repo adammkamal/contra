@@ -154,3 +154,17 @@ export function disputeSentencesFor(body: string, ref: string, opts: { excludeQu
     .split(/(?<=[.!?])\s+/)
     .filter((s) => refRe.test(s) && DISPUTE_WORDS.test(s));
 }
+
+/** A back-charge number as the extractor writes it, anywhere in a sentence. */
+const ANY_BC_NUMBER = /(?<![A-Za-z0-9])BC[ -]?\d{3,6}(?!\d)/i;
+
+/**
+ * Code backstop for a back-charge WITHOUT a BC number: any sentence with a dispute word that names no BC
+ * number. Such a sentence can't be tied to one charge, so it counts against every charge in the email that
+ * has no number. Used only to make outcomes MORE conservative (a false hit costs a PM review, never a credit).
+ */
+export function disputeSentencesWithoutRef(body: string, opts: { excludeQuoted?: boolean } = {}): string[] {
+  return normalize(body, opts)
+    .split(/(?<=[.!?])\s+/)
+    .filter((s) => DISPUTE_WORDS.test(s) && !ANY_BC_NUMBER.test(s));
+}

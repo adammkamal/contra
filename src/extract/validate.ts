@@ -1,5 +1,5 @@
 import { findUsdAmounts, unreadableUsd } from "../money.ts";
-import { normalize } from "../span.ts";
+import { attachmentPages, normalize } from "../span.ts";
 import type { Email, Evidence, ExtractedBackCharge, ExtractedResponse, RejectedExtraction } from "../types.ts";
 
 /**
@@ -14,6 +14,19 @@ const str = (x: unknown, max: number): string | null => (typeof x === "string" &
 export function normalizeRef(x: string): string | null {
   const m = /^\s*BC[\s-]?(\d{3,6})\s*$/i.exec(x);
   return m ? `BC-${m[1]}` : null;
+}
+
+/**
+ * True when the email's own text names this BC number: its subject, body (quoted mail included) or a page
+ * of an attachment read as text, written "BC-4467", "BC 4467", "BC4467" or as the bare number. An email
+ * with an attachment the model saw as an image may carry the number only there, where code can't read it,
+ * so that email isn't checked.
+ */
+export function refInEmail(ref: string, email: Email): boolean {
+  if (email.attachments?.some((a) => a.read === "image")) return true;
+  const digits = ref.replace(/^\D+/, "");
+  const re = new RegExp(`(?<![A-Za-z0-9$,.])(?:BC[ #-]?)?${digits}(?![0-9]|[.,]\\d)`, "i");
+  return [email.subject, email.body, ...attachmentPages(email).map((p) => p.text)].some((t) => re.test(normalize(t)));
 }
 
 const ITEM_KEYS = new Set([
@@ -72,29 +85,32 @@ export function parseBackCharges(input: unknown, email: Email): { items: Extract
     ref = typeof raw.ref === "string" ? normalizeRef(raw.ref) : null;
     const extra = Object.keys(raw).filter((k) => !ITEM_KEYS.has(k));
     if (extra.length) return bad(`unexpected fields: ${extra.slice(0, 5).join(", ")}`, "the model returned an item with details Contra doesn't ask for");
-    if (!ref) return bad("ref is not a BC number", "the model didn't give a back-charge number in the form BC-1234");
-    if (seen.has(ref)) return bad(`${ref} appears twice`, `the model listed ${ref} twice from this email`);
+    // null: the email gives this charge no BC number (usual for a first email). Anything else must be a BC
+    // number; "UNKNOWN", "" or "Item 7" is refused, never read as "no number".
+    if (raw.ref !== null && !ref) return bad("ref is not a BC number or null", "the model gave a back-charge number that isn't in the form BC-1234");
+    if (ref && seen.has(ref)) return bad(`${ref} appears twice`, `the model listed ${ref} twice from this email`);
+    const tag = ref ?? `item ${index + 1} (no BC number)`;
     const description = str(raw.description, 200);
     const amountText = str(raw.amountText, 40);
     const amountSentence = str(raw.amountSentence, 1000);
     const vendor = str(raw.vendorNameAsWritten, 120);
     const jobRef = str(raw.jobRef, 120);
     if (!description || !amountText || !amountSentence || !vendor || !jobRef) {
-      return bad(`${ref}: missing or oversized field`, "the model left out a detail (description, amount, quoted sentence, sub's name or job), or gave one that is too long");
+      return bad(`${tag}: missing or oversized field`, "the model left out a detail (description, amount, quoted sentence, sub's name or job), or gave one that is too long");
     }
-    if (typeof raw.disputeNoted !== "boolean") return bad(`${ref}: disputeNoted must be true or false`, "the model didn't say whether the back-charge is disputed");
+    if (typeof raw.disputeNoted !== "boolean") return bad(`${tag}: disputeNoted must be true or false`, "the model didn't say whether the back-charge is disputed");
     // An amount that can't be read exactly (in the copied text or anywhere in its sentence) is never
     // guessed or truncated: "$1,200.5" must not pass as "$1,200" just because that is a substring.
     const unreadable = [...new Set([...unreadableUsd(amountText), ...unreadableUsd(amountSentence)])];
     if (unreadable.length) {
       const list = unreadable.map((u) => `"${u}"`).join(", ");
-      return bad(`${ref}: amount can't be read exactly: ${list}`, `the amount can't be read exactly (${list})`);
+      return bad(`${tag}: amount can't be read exactly: ${list}`, `the amount can't be read exactly (${list})`);
     }
     const amounts = findUsdAmounts(amountText);
-    if (amounts.length !== 1) return bad(`${ref}: amountText "${amountText}" is not exactly one $ amount`, "the model's amount isn't exactly one dollar amount");
-    if (!normalize(amountSentence).includes(normalize(amountText))) return bad(`${ref}: amountText not inside amountSentence`, "the amount the model gave isn't in the sentence it quoted");
+    if (amounts.length !== 1) return bad(`${tag}: amountText "${amountText}" is not exactly one $ amount`, "the model's amount isn't exactly one dollar amount");
+    if (!normalize(amountSentence).includes(normalize(amountText))) return bad(`${tag}: amountText not inside amountSentence`, "the amount the model gave isn't in the sentence it quoted");
     const amountAt = citedAt(raw, "amountAttachment", "amountPage", email);
-    if (!amountAt.ok) return bad(`${ref}: ${amountAt.reason}`, amountAt.words);
+    if (!amountAt.ok) return bad(`${tag}: ${amountAt.reason}`, amountAt.words);
     let disputeEvidence: ExtractedBackCharge["disputeEvidence"];
     if (raw.disputeNoted) {
       const ds = str(raw.disputeSentence, 1000);
@@ -103,7 +119,9 @@ export function parseBackCharges(input: unknown, email: Email): { items: Extract
       const disputeAt = citedAt(raw, "disputeAttachment", "disputePage", email);
       disputeEvidence = { emailId: email.id, sentence: ds ?? "", ...(disputeAt.ok && disputeAt.at ? { at: disputeAt.at } : {}) };
     }
-    seen.add(ref);
+    // A BC number must be the email's own, never invented: one the email doesn't contain is refused.
+    if (ref && !refInEmail(ref, email)) return bad(`${ref} is not in the email`, `the model gave ${ref}, which isn't in the email (a back-charge number is never made up)`);
+    if (ref) seen.add(ref);
     items.push({
       ref,
       description,

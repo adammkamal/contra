@@ -117,6 +117,22 @@ export function ingestInboxEmail(
 }
 
 /**
+ * Records that the model failed on a live inbox email after every retry: a "couldn't process" Inbox row,
+ * persisted, with the reason in words. The email isn't ingested, so a later successful try still takes it
+ * in (and closes the row). Live workspace only.
+ */
+export function recordUnprocessedEmail(app: App, email: Pick<Email, "id" | "messageId" | "subject" | "from" | "receivedAt">, reason: string, attempts: number): void {
+  if (app.ctx.workspace !== "live") throw new WrongWorkspace("live inbox mail goes only to the live workspace, never to the demo");
+  app.run(({ contra }) => contra.recordUnprocessed(email, reason, attempts));
+}
+
+/** A PM dismisses an email's row (no back-charge found, or couldn't process) with a reason. */
+export function dismissEmail(app: App, emailId: string, reason: string, by?: Human) {
+  const actor = actorFor(app, PM, by);
+  app.run(({ contra }) => contra.dismissEmailNote(emailId, actor, reason));
+}
+
+/**
  * Sends a credit's memo with the injected MemoSender, in three steps: queue it (app.run), hand it to the
  * sender, then record sent or failed (app.run). If the process stops between the send and the record,
  * the memo stays queued and is never re-sent automatically (retry is only from failed).
@@ -150,6 +166,18 @@ export function confirmImageAmount(app: App, ref: string, amount: string, subcon
   // "1,250.00" and "$1,250.00" both read; anything that isn't exactly one readable amount is refused.
   const typed = parseUsd(/^\d/.test(t) ? "$" + t : t);
   app.run(({ contra }) => contra.confirmImageAmount(ref, actor, typed, subcontractId));
+}
+
+/** The PM confirms a possible duplicate is the same charge as the item it was held against (one charge, both emails as evidence). */
+export function sameCharge(app: App, ref: string, by?: Human) {
+  const actor = actorFor(app, PM, by);
+  app.run(({ contra }) => contra.confirmSameCharge(ref, actor));
+}
+
+/** The PM says a possible duplicate is a different charge. */
+export function differentCharge(app: App, ref: string, by?: Human) {
+  const actor = actorFor(app, PM, by);
+  app.run(({ contra }) => contra.confirmDifferentCharge(ref, actor));
 }
 
 export function draftNotice(app: App, subcontractId = DEMO_SC) {
@@ -221,7 +249,7 @@ export function payBill(app: App, billId = DEMO_BILL, by?: Human) {
 export interface ActionInput {
   /** For chooseSubcontract: the subcontract the PM picked (must be one of action.options). */
   choice?: string;
-  /** For rejectCredit: the reason the controller typed. */
+  /** For rejectCredit: the reason the controller typed. For dismissEmail: the reason the PM typed. */
   reason?: string;
   /** For confirmImageAmount: the amount the PM typed from the image, e.g. "$1,250.00". */
   amount?: string;
@@ -262,6 +290,15 @@ export async function runAction(
       if (!input.amount?.trim()) throw new Error("type the amount you see in the image");
       return confirmImageAmount(app, action.ref, input.amount, input.choice, by);
     }
+    case "dismissEmail": {
+      const why = (input.reason ?? "").trim();
+      if (!why) throw new Error("dismissing needs a reason");
+      return dismissEmail(app, action.emailId, why.slice(0, 500), by);
+    }
+    case "sameCharge":
+      return sameCharge(app, action.ref, by);
+    case "differentCharge":
+      return differentCharge(app, action.ref, by);
     case "draftNotice":
       draftNotice(app, action.subcontractId);
       return;
