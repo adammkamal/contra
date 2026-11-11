@@ -8,6 +8,7 @@ import { assessExtractedItem, conflictingStatements } from "./intake.ts";
 import { ambiguousWith, matchJobs, resolve, type Resolution } from "./resolver.ts";
 import { describeAt, describeAttachment, disputeSentencesFor, normalize, readFromImage, verifySpan } from "./span.ts";
 import { duplicateReason, type DuplicateView } from "./duplicates.ts";
+import { estimateWording } from "./estimate.ts";
 import { IllegalTransition, transitionBackCharge, transitionCredit, transitionMemo, transitionNotice } from "./state.ts";
 import type { MockERP } from "./mocks/erp.ts";
 import { planApplication, type PaymentsPlatform, type PlannedApplication } from "./mocks/ramp.ts";
@@ -54,9 +55,24 @@ export function confirmationNote(c: Readonly<AmountConfirmation>): string {
   return `${c.byRole} entered ${formatUsd(c.enteredCents)}; model read ${formatUsd(c.modelCents)}`;
 }
 
-/** For each item whose amount a person confirmed from an image: who, from where, and both readings. */
+/** The wording that makes the item's amount an estimate in its source sentence ("approximately"), or null. */
+export function estimateOf(b: Readonly<BackCharge>): string | null {
+  return estimateWording(b.extracted.amountEvidence.sentence);
+}
+
+/**
+ * What the person approving a credit must see about its amounts, one line per note:
+ * - an amount a person confirmed from an image: who, from where, and both readings;
+ * - an amount the source email calls an estimate: `BC-4480: the amount is an estimate (the email says "approximately")`.
+ */
 export function amountNotes(items: readonly Readonly<BackCharge>[]): string[] {
-  return items.flatMap((b) => (b.amountConfirmation ? [`${b.ref}: amount confirmed by ${b.amountConfirmation.by} from ${b.amountConfirmation.from} (${confirmationNote(b.amountConfirmation)})`] : []));
+  return items.flatMap((b) => {
+    const est = estimateOf(b);
+    return [
+      ...(b.amountConfirmation ? [`${b.ref}: amount confirmed by ${b.amountConfirmation.by} from ${b.amountConfirmation.from} (${confirmationNote(b.amountConfirmation)})`] : []),
+      ...(est ? [`${b.ref}: the amount is an estimate (the email says "${est}")`] : []),
+    ];
+  });
 }
 
 export interface Deps {
@@ -435,7 +451,10 @@ export class Contra {
       `To: ${sc.partyLegalName}`,
       `Job: ${job.id} ${job.name}`,
       ``,
-      ...include.map((b) => `- ${refLabel(b)}: ${b.extracted.description} - ${formatUsd(backChargeAmount(b))}`),
+      ...include.map((b) => {
+        const est = estimateOf(b);
+        return `- ${refLabel(b)}: ${b.extracted.description} - ${formatUsd(backChargeAmount(b))}${est ? ` (estimate: the email says "${est}")` : ""}`;
+      }),
       `Total: ${formatUsd(total)}`,
       ``,
       `${clause.section}: "${clause.text}"`,

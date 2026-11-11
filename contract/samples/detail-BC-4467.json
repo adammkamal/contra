@@ -4,6 +4,7 @@
   "refLabel": "BC-4467",
   "description": "Replace ceiling grid damaged by drywall lift, L2",
   "amount": "$6,800.00",
+  "estimate": null,
   "photoAmount": null,
   "status": {
     "label": "Deducted (credit VC-1)",

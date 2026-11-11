@@ -175,7 +175,7 @@ shown as `<session id>`), `auth-me-live-pm.json`, `auth-me-demo-only.json`, `aut
 | `opener` | The missed back-charges screen. Always show **"Sample data"**. Totals are already formatted; rows carry `ref`, `status`, `amount` and `evidence`. |
 | `inbox[]` | `kind`, `ref`, `bcNumber`, `refLabel` (see [Back-charges without a BC number](#back-charges-without-a-bc-number)), `emailSubject`, `emailFrom`, `vendorAsWritten`, `amount`, `sourceSentence` (show beside the amount), `sourceLocation` (where that sentence is: `"email body"`, `"attachment estimate.pdf, page 2"`, or `"attachment IMG_2041.jpg"` for a photo; show it with the sentence), `photoAmount` (`{ pmEntered, modelRead }`, both formatted like every amount, once a person confirmed an amount read from an image; else `null`; see [Amounts read from an image](#amounts-read-from-an-image)), `attachments[]` (what became of each of the email's attachments, in words; show them all, skipped ones included, as written), `linkExplanation[]`, `status`, `actions[]`. `kind` is `"backCharge"` (an extracted back-charge, with a detail screen) or `"rejected"` (see [Items not taken in](#items-not-taken-in)). For a `"backCharge"` row, `amount` and `sourceSentence` are `""` only while its amount is an unconfirmed reading of an image. |
 | `outbox[]` | Notices: `id`, `total`, `refs`, `body` (shown as written, preformatted), `status`, `actions[]`. |
-| `credits[]` | `id`, `amount`, `job`, `refs`, `amountNotes[]` (one line per item whose amount a person confirmed from an image, with both readings, e.g. `"BC-7403: amount confirmed by dana.ortiz (PM) from attachment IMG_2041.jpg (PM entered $640.00; model read $604.00)"`; show them beside the amount, above the Approve button, as written; usually empty), `status`, `actions[]`, `hasMemo` (when true, offer "View memo"), `memo`: the memo's delivery to the AP inbox as a `Status` (e.g. "Memo not sent", "Memo sent to …", "Memo not sent: … You can send it again."), or `null` when there is no memo yet. Show `memo.label` as written. |
+| `credits[]` | `id`, `amount`, `job`, `refs`, `amountNotes[]` (one line per item whose amount a person confirmed from an image, with both readings, e.g. `"BC-7403: amount confirmed by dana.ortiz (PM) from attachment IMG_2041.jpg (PM entered $640.00; model read $604.00)"`, and one per item whose source email calls its amount an estimate, e.g. `"CONTRA-0001: the amount is an estimate (the email says \"approximately\")"`; show them beside the amount, above the Approve button, as written; usually empty), `status`, `actions[]`, `hasMemo` (when true, offer "View memo"), `memo`: the memo's delivery to the AP inbox as a `Status` (e.g. "Memo not sent", "Memo sent to …", "Memo not sent: … You can send it again."), or `null` when there is no memo yet. Show `memo.label` as written. |
 | `bills[]` | Always show **"Simulated Ramp"**. `vendor`, `job`, `amount`, `creditsOn`, `status`, `paid`, plus `check`: `status`, `actions[]` (sentences), `warnings[]`, `wouldPay`. Also has `actions[]` (buttons). |
 | `pmQueue[]` | `ref`, `refLabel` (show it in place of `ref`) and `status` for items a person must look at, including items not taken in (their `ref` can be `""`). |
 | `audit[]` | Newest first: `seq`, `at`, `actor` (already worded: `"lee.chen (Controller)"`, or in the demo `"lee.chen (Controller), presented by <username>"`), `what`, `evidence[]`. |
@@ -388,6 +388,17 @@ one notice.
 `nextStep` in `live` says `PM decides whether <ref> is the same charge as <ref> (in its Inbox row)` with
 `action: null`. Samples: `live-05-after-a-possible-duplicate-arrives.screens.json`,
 `live-06-after-the-pm-confirms-the-same-charge.screens.json` and `live-detail-CONTRA-0001.json`.
+
+## Estimates
+
+A first back-charge email often gives an estimate ("approximately $6,000.00", "~$475", "estimated at
+$1,200.00"). When the amount's own source sentence calls it one, the item is marked, never held:
+
+- Inbox row and detail: `estimate` is that wording (`"approximately"`, `"~"`, `"Estimated"`), else `null`.
+  Show **Estimate** beside the amount, with the wording. It is `null` while the amount is withheld.
+- The notice line says `(estimate: the email says "approximately")`, and the credit's `amountNotes[]` (also in
+  the approval's audit record) says `CONTRA-0001: the amount is an estimate (the email says "approximately")`.
+- A later email giving a different amount for the same charge holds it as `conflicting_amounts`.
 
 ## Back-charges without a BC number
 

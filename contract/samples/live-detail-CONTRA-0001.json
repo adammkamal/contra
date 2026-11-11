@@ -4,6 +4,7 @@
   "refLabel": "CONTRA-0001 (BC-7160)",
   "description": "Stairwell debris cleanup",
   "amount": "$360.00",
+  "estimate": "approximately",
   "photoAmount": null,
   "status": {
     "label": "Waiting for PM to confirm the link",
@@ -15,11 +16,11 @@
     "id": "gmail-18c2f0a1b2c3d4f8",
     "subject": "Summit - stairwell debris",
     "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
-    "body": "Hi,\n\nRidgeline Drywall left debris in stair 2 at Summit again.\n\nPlease back-charge Ridgeline Drywall $360.00 for the stairwell cleanup.\n\nThanks,\nDana",
+    "body": "Hi,\n\nRidgeline Drywall left debris in stair 2 at Summit again.\n\nPlease back-charge Ridgeline Drywall approximately $360.00 for the stairwell cleanup.\n\nThanks,\nDana",
     "attachments": [],
     "attachmentText": []
   },
-  "sourceSentence": "Please back-charge Ridgeline Drywall $360.00 for the stairwell cleanup.",
+  "sourceSentence": "Please back-charge Ridgeline Drywall approximately $360.00 for the stairwell cleanup.",
   "sourceLocation": "email body",
   "disputeSentence": null,
   "link": {
@@ -70,7 +71,7 @@
       "actor": "Sample extractions (hand-written)",
       "what": "extracted $360.00 (new → extracted)",
       "evidence": [
-        "Please back-charge Ridgeline Drywall $360.00 for the stairwell cleanup.",
+        "Please back-charge Ridgeline Drywall approximately $360.00 for the stairwell cleanup.",
         "no BC number in the email yet; Contra reference CONTRA-0001"
       ]
     },

@@ -165,7 +165,8 @@ write("live-04-after-a-photo-amount-is-confirmed.screens.json", buildScreens(liv
 // CONTRA-0001 ("no BC number yet") and proceeds. A week later a follow-up cites BC-7160, which accounting
 // assigned, for the same charge: it is held as a possible duplicate of CONTRA-0001, with Same charge /
 // Different charge buttons. Then the PM confirms it is the same charge: one charge, both emails as evidence.
-const noNumSentence = "Please back-charge Ridgeline Drywall $360.00 for the stairwell cleanup.";
+// The first email calls its amount an estimate ("approximately"): marked, never held.
+const noNumSentence = "Please back-charge Ridgeline Drywall approximately $360.00 for the stairwell cleanup.";
 const noNumEmail = {
   id: "gmail-18c2f0a1b2c3d4f8",
   from: "Dana Ortiz <dana.ortiz@apexbuilders.example>",

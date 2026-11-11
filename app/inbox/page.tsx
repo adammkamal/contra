@@ -96,6 +96,11 @@ export default async function Inbox() {
               ) : (
                 <div className="amt">
                   <div data-testid={`amount-${r.ref}`}>{r.amount}</div>
+                  {r.estimate && (
+                    <div className="meta" style={{ fontSize: ".85rem", fontWeight: 400, whiteSpace: "normal" }} data-testid={`estimate-${r.ref}`}>
+                      Estimate (the email says “{r.estimate}”)
+                    </div>
+                  )}
                   {diff && (
                     <div className="meta" style={{ fontSize: ".85rem", fontWeight: 400, whiteSpace: "normal" }} data-testid={`amount-difference-${r.ref}`}>
                       {diff}

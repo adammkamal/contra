@@ -6,7 +6,7 @@ import { matchJobs, resolve, type Resolution } from "./resolver.ts";
 import { attachmentPages, describeAt, describeAttachment, inEmailText, readFromImage } from "./span.ts";
 import { conflictingStatements } from "./intake.ts";
 import { EMAIL_INGESTED, ROLE_WORDS, type Actor, type BackCharge, type Credit, type Email, type EmailOrigin, type HoldReason, type Job, type Notice, type RejectedItem, type Subcontract } from "./types.ts";
-import { amountNotes, bcNumberOf, Contra, refLabel } from "./workflow.ts";
+import { amountNotes, bcNumberOf, Contra, estimateOf, refLabel } from "./workflow.ts";
 import { backChargeAmount } from "./credits.ts";
 
 /**
@@ -155,6 +155,11 @@ export interface InboxRow {
   vendorAsWritten: string;
   /** "" while the amount is a reading of an image that no person has confirmed (see photoAmount). */
   amount: string;
+  /**
+   * The source sentence's wording that makes the amount an estimate ("approximately", "~"), or null. Not a
+   * hold: show "Estimate" beside the amount. null while the amount is withheld, and on a rejected row.
+   */
+  estimate: string | null;
   /** "" while the amount is a reading of an image that no person has confirmed: the sentence is the model's reading too. */
   sourceSentence: string;
   /** Where sourceSentence is: "email body", "attachment <name>, page <n>", or "attachment <name>" for a photo. */
@@ -255,7 +260,9 @@ export interface Screens {
   /**
    * memo: the memo's delivery to the AP inbox, or null when the credit has no memo yet (not approved).
    * amountNotes: one line per item whose amount a person confirmed from an image, with both readings:
-   * "BC-7403: amount confirmed by dana.ortiz (PM) from attachment IMG_2041.jpg (PM entered $640.00; model read $604.00)".
+   * "BC-7403: amount confirmed by dana.ortiz (PM) from attachment IMG_2041.jpg (PM entered $640.00; model read $604.00)";
+   * and one per item whose source email calls the amount an estimate:
+   * "CONTRA-0001: the amount is an estimate (the email says "approximately")".
    */
   credits: { id: string; amount: string; job: string; refs: string[]; amountNotes: string[]; status: Status; actions: Action[]; hasMemo: boolean; memo: Status | null }[];
   bills: {
@@ -325,6 +332,7 @@ export function buildScreens(app: App): Screens {
       emailFrom: email?.from ?? "",
       vendorAsWritten: b.extracted.vendorNameAsWritten,
       amount: withheld ? "" : formatUsd(backChargeAmount(b)),
+      estimate: withheld ? null : estimateOf(b),
       sourceSentence: withheld ? "" : b.extracted.amountEvidence.sentence,
       sourceLocation: email ? describeAt(email, b.extracted.amountEvidence.at) : "email body",
       photoAmount: photoAmount(b),
@@ -346,6 +354,7 @@ export function buildScreens(app: App): Screens {
       emailFrom: email?.from ?? "",
       vendorAsWritten: "",
       amount: "",
+      estimate: null,
       sourceSentence: "",
       sourceLocation: "",
       photoAmount: null,
@@ -566,6 +575,8 @@ export interface BackChargeDetail {
   description: string;
   /** "" while the amount is a reading of an image that no person has confirmed, as in the Inbox row. */
   amount: string;
+  /** As in the Inbox row: the wording that makes the amount an estimate, or null. */
+  estimate: string | null;
   /** As in the Inbox row: both readings once a person confirmed an image amount, else null. */
   photoAmount: PhotoAmount | null;
   status: Status;
@@ -622,6 +633,7 @@ export function backChargeDetail(app: App, ref: string): BackChargeDetail {
     refLabel: refLabel(b),
     description: withheld ? withoutAmounts(b.extracted.description) : b.extracted.description,
     amount: withheld ? "" : formatUsd(backChargeAmount(b)),
+    estimate: withheld ? null : estimateOf(b),
     photoAmount: photoAmount(b),
     status: backChargeStatus(b),
     vendorAsWritten: b.extracted.vendorNameAsWritten,

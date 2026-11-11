@@ -4,6 +4,7 @@
   "refLabel": "BC-4471",
   "description": "Overtime for missed inspection",
   "amount": "$4,000.00",
+  "estimate": null,
   "photoAmount": null,
   "status": {
     "label": "Held: disputed by the sub",

@@ -4,6 +4,7 @@
   "refLabel": "BC-7153",
   "description": "Floor protection",
   "amount": "",
+  "estimate": null,
   "photoAmount": null,
   "status": {
     "label": "Held: amount read from a photo or scanned page, which can't be checked word for word; a person must confirm it",

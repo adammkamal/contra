@@ -20,6 +20,7 @@
       "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
       "vendorAsWritten": "Ridgeline Drywall",
       "amount": "$900.00",
+      "estimate": null,
       "sourceSentence": "BC-7151: patch the stair core drywall damaged during framing, Summit, $900.00.",
       "sourceLocation": "email body",
       "photoAmount": null,

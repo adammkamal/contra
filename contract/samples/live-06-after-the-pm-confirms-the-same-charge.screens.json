@@ -20,6 +20,7 @@
       "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
       "vendorAsWritten": "Ridgeline Drywall",
       "amount": "$900.00",
+      "estimate": null,
       "sourceSentence": "BC-7151: patch the stair core drywall damaged during framing, Summit, $900.00.",
       "sourceLocation": "email body",
       "photoAmount": null,
@@ -49,6 +50,7 @@
       "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
       "vendorAsWritten": "Ridgeline Interiors LLC",
       "amount": "$1,250.00",
+      "estimate": null,
       "sourceSentence": "BC-7152: corridor wall repair, L3, $1,250.00 per our painter's quote.",
       "sourceLocation": "attachment estimate.pdf, page 2",
       "photoAmount": null,
@@ -82,6 +84,7 @@
       "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
       "vendorAsWritten": "Ridgeline Interiors LLC",
       "amount": "$640.00",
+      "estimate": null,
       "sourceSentence": "BC-7153 FLOOR PROTECTION $604.00",
       "sourceLocation": "attachment IMG_2041.jpg",
       "photoAmount": {
@@ -113,7 +116,8 @@
       "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
       "vendorAsWritten": "Ridgeline Drywall",
       "amount": "$360.00",
-      "sourceSentence": "Please back-charge Ridgeline Drywall $360.00 for the stairwell cleanup.",
+      "estimate": "approximately",
+      "sourceSentence": "Please back-charge Ridgeline Drywall approximately $360.00 for the stairwell cleanup.",
       "sourceLocation": "email body",
       "photoAmount": null,
       "attachments": [],
@@ -142,6 +146,7 @@
       "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
       "vendorAsWritten": "Ridgeline Drywall",
       "amount": "$360.00",
+      "estimate": null,
       "sourceSentence": "BC-7160: stair 2 debris cleanup, $360.00, as sent last week.",
       "sourceLocation": "email body",
       "photoAmount": null,
@@ -166,6 +171,7 @@
       "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
       "vendorAsWritten": "",
       "amount": "",
+      "estimate": null,
       "sourceSentence": "",
       "sourceLocation": "",
       "photoAmount": null,
@@ -285,7 +291,7 @@
       "actor": "Sample extractions (hand-written)",
       "what": "backcharge CONTRA-0001: extracted $360.00 (new → extracted)",
       "evidence": [
-        "Please back-charge Ridgeline Drywall $360.00 for the stairwell cleanup.",
+        "Please back-charge Ridgeline Drywall approximately $360.00 for the stairwell cleanup.",
         "no BC number in the email yet; Contra reference CONTRA-0001"
       ]
     },
