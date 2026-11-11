@@ -1,6 +1,7 @@
 /**
  * The API the Playwright suite runs against: the real server (createApiServer from server/api.ts, the same
- * code `npm run api` runs) on temp databases, with three things faked so no test touches the network:
+ * code `npm run api` runs) on temp databases, with made-up accounts (e2e/accounts.ts) and three things faked
+ * so no test touches the network:
  *  - the model call behind POST /api/try, through ApiOptions.try.callOptions.fetcher (the API's own
  *    injection point for a fake extractor); with dailyCap 1, so the second try shows the 429 daily cap;
  *  - Gmail, with the fake from test/gmail-fakes.ts (made-up messages) and a fake live extractor;
@@ -17,10 +18,11 @@ import type { MemoSender } from "../src/memo.ts";
 import { cents } from "../src/money.ts";
 import type { Actor } from "../src/types.ts";
 import { eml, png, textPdf } from "../test/attachment-fakes.ts";
+import { TEST_COST } from "../test/auth-fakes.ts";
 import { CONFIG, fakeGmail, gmailAuthPass, rfc822 } from "../test/gmail-fakes.ts";
+import { ACCOUNTS, E2E_PASSWORD } from "./accounts.ts";
 
 const PORT = Number(process.env.E2E_API_PORT ?? 4310);
-const UI_ORIGIN = process.env.E2E_UI_ORIGIN ?? "http://localhost:3310";
 
 /** "$1,240.00" -> 124000 cents, from the digits (no float arithmetic). */
 const centsOf = (dollars: string, cc: string) => cents(Number(dollars.replaceAll(",", "") + cc));
@@ -108,18 +110,23 @@ const fetcher = (async (_url: string, init?: RequestInit) => {
 }) as unknown as typeof fetch;
 
 const dir = mkdtempSync(join(tmpdir(), "contra-e2e-"));
-// Accounts: in memory; the UI's sign-in page comes with the ui branch (until then the API answers 401).
+// Accounts, in a temporary auth database (cheap scrypt, as the unit tests use): a presenter for the demo
+// without --live, and a PM, a controller and an AP account with --live (e2e/accounts.ts).
+const store = new AuthStore(join(dir, "auth.db"), { cost: TEST_COST });
+for (const a of Object.values(ACCOUNTS)) await store.addUser(a.username, a.role, E2E_PASSWORD, { live: a.live });
 const api = createApiServer({
-  auth: { store: new AuthStore(":memory:") },
+  auth: { store },
   dbPath: join(dir, "demo.db"),
   liveDbPath: join(dir, "live.db"),
   start: new Date("2026-11-07T15:00:00Z"),
-  allowedOrigins: [UI_ORIGIN],
+  // No browser origin is allowed: the browser talks only to the UI's server, which calls the API without an
+  // Origin header. A page calling the API directly would get 403 and fail the suite.
+  allowedOrigins: [],
   memoSender,
   inbox: { poller, intervalMs: 500 },
   try: { settings: () => ({ ok: true, settings: { apiKey: "e2e-fake-key", model: TRY_MODEL } }), dailyCap: 1, callOptions: { fetcher, maxRetries: 0 } },
 });
 api.server.listen(PORT, "127.0.0.1", () => {
-  console.log(`e2e API harness on http://127.0.0.1:${PORT} (CORS for ${UI_ORIGIN}); data in ${dir}`);
+  console.log(`e2e API harness on http://127.0.0.1:${PORT} (no browser origins allowed); data in ${dir}`);
   void api.pollNow();
 });

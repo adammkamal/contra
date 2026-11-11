@@ -59,6 +59,15 @@ function idOf(a: Action): string | undefined {
 
 const same = (a: Action, b: Action | null) => !!b && JSON.stringify(a) === JSON.stringify(b);
 
+/** The arrow inside the next-step button, in its own circle. Static, so it is created once. */
+const NEST = (
+  <span className="btn-nest" aria-hidden="true">
+    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 7h10M8 3l4 4-4 4" />
+    </svg>
+  </span>
+);
+
 export function ActionButton({ action, next, prefix = "" }: { action: Action; next: Action | null; prefix?: string }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string>();
@@ -79,6 +88,7 @@ export function ActionButton({ action, next, prefix = "" }: { action: Action; ne
     });
   const needsChoice = (action.command === "chooseSubcontract" || action.command === "confirmImageAmount") && !choice;
   const needsAmount = action.command === "confirmImageAmount" && !amount.trim();
+  const isNext = same(action, next);
   return (
     <span className="action">
       {action.command === "chooseSubcontract" && (
@@ -112,18 +122,19 @@ export function ActionButton({ action, next, prefix = "" }: { action: Action; ne
           </select>
         </>
       )}
-      {action.command === "rejectCredit" && <input aria-label="Reason for rejecting" placeholder="Reason" value={reason} onChange={(e) => setReason(e.target.value)} />}
-      {action.command === "dismissEmail" && (
+      {action.command === "rejectCredit" ? <input aria-label="Reason for rejecting" placeholder="Reason for rejecting" value={reason} onChange={(e) => setReason(e.target.value)} /> : null}
+      {action.command === "dismissEmail" ? (
         <input aria-label="Reason for dismissing" placeholder="Why dismiss it (e.g. not a back-charge)" data-testid={`${testId}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} />
-      )}
-      <button type="button" className={same(action, next) ? "btn next" : "btn"} data-testid={testId} disabled={pending || needsChoice || needsAmount} onClick={go}>
+      ) : null}
+      <button type="button" className={isNext ? "btn next" : "btn"} data-testid={testId} disabled={pending || needsChoice || needsAmount} aria-busy={pending} onClick={go}>
         {pending ? `${LABELS[action.command]}…` : LABELS[action.command]}
+        {isNext ? NEST : null}
       </button>
-      {error && (
+      {error ? (
         <span role="alert" className="err">
           {error}
         </span>
-      )}
+      ) : null}
     </span>
   );
 }
@@ -136,11 +147,11 @@ export function ResetDemoButton() {
       <button type="button" className="btn quiet" data-testid="resetDemo" disabled={pending} onClick={() => start(async () => setError((await resetDemo()).error))}>
         Reset demo
       </button>
-      {error && (
+      {error ? (
         <span role="alert" className="err">
           {error}
         </span>
-      )}
+      ) : null}
     </span>
   );
 }

@@ -107,8 +107,21 @@ const unstable = (k: "contraDecision" | "baselineDecision") =>
   cases.filter((c) => new Set(rows.filter((r) => r.caseId === c.id).map((r) => r[k])).size > 1).map((c) => c.id);
 
 const models = [...new Set([...runsByCase.values()].flat().map((r) => `${r.model} (${r.effort})`))];
+/**
+ * Whether a set's scores are still held-out (code never tuned on it). None is any more: each set's cases were
+ * seen before the code changed. Printed with every run and written to results.json.
+ */
+const HELD_OUT: Record<BenchSet, string> = {
+  main: "not held-out: the code was changed after its first scored run (bench/results/main-first-run.txt)",
+  heldout: "no longer held-out: the code was changed after its first scored run (bench/results/heldout-first-run.txt)",
+  fresh:
+    "NO LONGER HELD-OUT: back-charges without a BC number (extraction, Contra references, duplicates, estimates) were built after its cases were read; scores from then on are not held-out",
+};
+
 const summary = {
   set,
+  heldOut: false,
+  heldOutNote: HELD_OUT[set],
   extractions: `${rel(paths.recordings)}, ${runCount} run(s), ${models.join(", ")}`,
   contra: perRun("contra"),
   baseline: perRun("baseline"),
@@ -117,6 +130,7 @@ const summary = {
 };
 
 console.log(`Set: ${set}${set === "main" ? "" : " (scored separately, never merged into the main numbers)"}`);
+console.log(`Held-out: ${HELD_OUT[set]}`);
 console.log(`Extractions: ${summary.extractions}`);
 console.table(rows.map((r) => ({
   case: r.caseId, run: r.run, items: r.failed ? "failed" : r.items,

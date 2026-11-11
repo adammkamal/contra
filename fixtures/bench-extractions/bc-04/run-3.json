@@ -1,11 +1,11 @@
 {
   "model": "claude-opus-5-5",
   "effort": "medium",
-  "recordedAt": "2026-11-10T10:18:54.817Z",
+  "recordedAt": "2026-11-11T07:01:32.257Z",
   "items": [
     {
       "ref": "BC-5004",
-      "description": "Replace broken storefront lite, main entry",
+      "description": "Replace broken storefront lite at main entry, broken while sub's crew was setting adjacent panel",
       "amountCents": 320000,
       "amountEvidence": {
         "emailId": "bc-04",
@@ -21,7 +21,7 @@
     "items": [
       {
         "ref": "BC-5004",
-        "description": "Replace broken storefront lite, main entry",
+        "description": "Replace broken storefront lite at main entry, broken while sub's crew was setting adjacent panel",
         "amountText": "$3,200.00",
         "amountSentence": "BC-5004: replace broken storefront lite, main entry, $3,200.00.",
         "vendorNameAsWritten": "Ridgeline Glass & Glazing",

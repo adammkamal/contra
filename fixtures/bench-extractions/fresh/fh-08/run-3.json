@@ -1,10 +1,33 @@
 {
   "model": "claude-opus-5-5",
   "effort": "medium",
-  "recordedAt": "2026-11-11T03:36:45.287Z",
-  "items": [],
+  "recordedAt": "2026-11-11T07:14:36.728Z",
+  "items": [
+    {
+      "ref": null,
+      "description": "Repairs to corridor trim damaged after materials were moved through the area; responsible Ridgeline crew not yet identified",
+      "amountCents": 83000,
+      "amountEvidence": {
+        "emailId": "fh-08",
+        "sentence": "We had $830 in repairs to the corridor trim at Summit after materials were moved through the area."
+      },
+      "vendorNameAsWritten": "UNKNOWN",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    }
+  ],
   "rejected": [],
   "rawToolInput": {
-    "items": []
+    "items": [
+      {
+        "ref": null,
+        "description": "Repairs to corridor trim damaged after materials were moved through the area; responsible Ridgeline crew not yet identified",
+        "amountText": "$830",
+        "amountSentence": "We had $830 in repairs to the corridor trim at Summit after materials were moved through the area.",
+        "vendorNameAsWritten": "UNKNOWN",
+        "jobRef": "Summit",
+        "disputeNoted": false
+      }
+    ]
   }
 }

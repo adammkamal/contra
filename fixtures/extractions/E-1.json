@@ -3,7 +3,7 @@
   "items": [
     {
       "ref": "BC-4467",
-      "description": "Replace ceiling grid on Level 2 damaged by the drywall lift",
+      "description": "Replace ceiling grid on Level 2 that the drywall crew's lift damaged",
       "amountCents": 680000,
       "amountEvidence": {
         "emailId": "E-1",
@@ -26,5 +26,5 @@
       "disputeNoted": false
     }
   ],
-  "recordedAt": "2026-11-11T00:42:31.150Z"
+  "recordedAt": "2026-11-11T07:00:57.303Z"
 }

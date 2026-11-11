@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { presenterStep, shot, stepText, useWorkspace } from "./helpers.ts";
+import { API, apiSession, presenterStep, shot, signIn, signOut, stepText, useWorkspace } from "./helpers.ts";
 
 // The live workspace against the harness: made-up Gmail messages, a fake extractor and a memo sender that
-// fails once. Nothing here touches the network.
+// fails once. Nothing here touches the network. A PM does the PM's steps; a controller approves the credit.
 test("live inbox: status in words, choose a subcontract, notice, credit, memo failed then sent again", async ({ page }) => {
   await page.goto("/inbox");
+  await signIn(page, "pm");
   await useWorkspace(page, "live");
   await expect(page.getByTestId("live-badge")).toHaveText("Live inbox");
   await expect(page.getByTestId("intake-address")).toHaveText("demo.tester+backcharges@example.com");
@@ -37,10 +38,11 @@ test("live inbox: status in words, choose a subcontract, notice, credit, memo fa
 
   // Before the PM confirms, the API withholds the model's reading of the photo ($604.00): amount and
   // sourceSentence are "" and photoAmount is null, on the row and on the detail. The UI renders that as is.
-  const api = "http://127.0.0.1:4310/api";
+  // (Read straight from the API with the test's own session; the browser only ever talks to the UI.)
+  const headers = { cookie: await apiSession("pm") };
   type Row = { ref: string; amount: string; sourceSentence: string; photoAmount: { pmEntered: string; modelRead: string } | null };
-  const inboxRow = async (ref: string) => ((await (await page.request.get(`${api}/screens?workspace=live`)).json()) as { inbox: Row[] }).inbox.find((r) => r.ref === ref)!;
-  const detailOf = async (ref: string) => (await (await page.request.get(`${api}/backcharge/${ref}?workspace=live`)).json()) as Row;
+  const inboxRow = async (ref: string) => ((await (await page.request.get(`${API}/screens?workspace=live`, { headers })).json()) as { inbox: Row[] }).inbox.find((r) => r.ref === ref)!;
+  const detailOf = async (ref: string) => (await (await page.request.get(`${API}/backcharge/${ref}?workspace=live`, { headers })).json()) as Row;
   for (const r of [await inboxRow("BC-7612"), await detailOf("BC-7612")]) {
     expect(r.amount).toBe("");
     expect(r.sourceSentence).toBe("");
@@ -139,6 +141,16 @@ test("live inbox: status in words, choose a subcontract, notice, credit, memo fa
       await expect(page.getByTestId("amount-notes-VC-1")).toContainText("from attachment IMG_2041.png (PM entered $640.00; model read $604.00)");
       await expect(page.getByTestId("approveCredit-VC-1")).toBeVisible();
       await shot(page, "live-02b-credit-amount-notes");
+      // The PM may not approve it: the API refuses (409) in words, and nothing changes.
+      await page.getByTestId("approveCredit-VC-1").click();
+      await expect(page.getByRole("alert").filter({ hasText: "approving credit VC-1" })).toHaveText("approving credit VC-1 needs the Controller role; e2e.pm is a PM");
+      await expect(page.getByTestId("approveCredit-VC-1")).toBeVisible();
+      await shot(page, "live-02c-pm-may-not-approve");
+      // A controller, who neither raised nor linked any of its back-charges, approves it.
+      await signOut(page);
+      await signIn(page, "controller");
+      await expect(page.getByTestId("signed-in-role")).toHaveText("Controller");
+      await useWorkspace(page, "live");
     }
     const step = await presenterStep(page);
     if (step === null) break;
