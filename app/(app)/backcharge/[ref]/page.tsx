@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { chosenWorkspace, getDetail } from "../../../ui/api.ts";
-import { Chain, Files, findSentence, ImageReading, Marked, photoAmountNote, Quote, StatusWord, Trace } from "../../../ui/Bits.tsx";
+import { chosenWorkspace, getDetail } from "../../../../ui/api.ts";
+import { Chain, Files, findSentence, ImageReading, Marked, photoAmountNote, Quote, StatusWord, Trace } from "../../../../ui/Bits.tsx";
 
 export const dynamic = "force-dynamic";
 

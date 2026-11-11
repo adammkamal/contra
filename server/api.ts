@@ -17,7 +17,8 @@ import type { ExtractOptions } from "../src/extract/index.ts";
 import { tryEmail, TryUnavailable, type TryInput, type TrySettings } from "./try.ts";
 import { SAMPLE_INBOX, type InboxPoller, type InboxStatus } from "./gmail.ts";
 import type { MemoSender } from "../src/memo.ts";
-import { loginLimiter, sessionCookie, sessionIdFrom, SESSION_TTL_MS, type AuthStore, type Session, type User } from "./auth.ts";
+import type { Human } from "../src/types.ts";
+import { DEFAULT_LOGIN_LIMITS, loginLimiter, type LoginLimits, sessionCookie, sessionIdFrom, SESSION_TTL_MS, type AuthStore, type Session, type User } from "./auth.ts";
 
 /** POST /api/try: the model call is paid for with the demo's key, so it is capped and rate-limited. */
 export interface TryApiOptions {
@@ -150,8 +151,10 @@ export interface AuthOptions {
   secureCookies?: boolean;
   /** Session lifetime in ms. Default 12 hours. */
   sessionTtlMs?: number;
-  /** Failed sign-ins allowed per client IP / per username in a rolling 15 minutes. Default 20 / 5. */
-  loginLimits?: { perIp: number; perUser: number };
+  /** Sign-in limits (server/auth.ts loginLimiter); each field defaults to DEFAULT_LOGIN_LIMITS. */
+  loginLimits?: Partial<LoginLimits>;
+  /** Waits out a sign-in backoff. Default: a real timer; tests record the delay instead. */
+  sleep?: (ms: number) => Promise<void>;
   /** The clock sessions and the sign-in limits read (epoch ms). Default Date.now. */
   now?: () => number;
 }
@@ -241,6 +244,8 @@ export function createApiServer(opts: ApiOptions): {
   app: () => App;
   /** The live workspace's App, or null when there is none. */
   live: () => App | null;
+  /** The account store this server signs people in against. */
+  authStore: AuthStore;
   pollNow: () => Promise<void>;
   close: () => Promise<void>;
 } {
@@ -260,11 +265,16 @@ export function createApiServer(opts: ApiOptions): {
     apps.set(ws, new App(path, appOptions(ws)));
   }
   const appFor = (ws: Workspace) => apps.get(ws)!;
-  /** ?workspace= : absent or "demo" is the demo; "live" only when this server has one. */
-  const workspaceOf = (url: URL): Workspace => {
+  /**
+   * ?workspace= : absent or "demo" is the demo, for any signed-in person; "live" (real Gmail, real memo
+   * emails) only for an account created with --live (else 403, whether or not this server has one), and
+   * only when this server has one.
+   */
+  const workspaceOf = (url: URL, user: User): Workspace => {
     const raw = url.searchParams.get("workspace");
     if (raw === null || raw === "demo") return "demo";
     if (raw === "live") {
+      if (!user.live) throw Object.assign(new Error("the live workspace is only for accounts created with --live"), { status: 403 });
       if (!apps.has("live")) throw Object.assign(new Error("this server has no live workspace (start it with CONTRA_INBOX=gmail)"), { status: 404 });
       return "live";
     }
@@ -273,10 +283,11 @@ export function createApiServer(opts: ApiOptions): {
 
   // ---- Server-Sent Events: "screens-changed" after every change, plus a heartbeat. Event data never
   // carries state or secrets: the client re-reads GET /api/screens.
-  const sseClients = new Set<ServerResponse>();
+  const sseClients = new Map<ServerResponse, { live: boolean }>();
+  /** A live workspace's events go only to streams opened by accounts that may see it. */
   const broadcast = (event: string, data: Record<string, string>) => {
     const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-    for (const c of sseClients) c.write(msg);
+    for (const [c, who] of sseClients) if (data.workspace !== "live" || who.live) c.write(msg);
   };
   const changed = (reason: "action" | "reset" | "inbox", workspace: Workspace) => broadcast("screens-changed", { reason, workspace });
   const heartbeat = setInterval(() => broadcast("heartbeat", {}), opts.heartbeatMs ?? 15_000);
@@ -288,7 +299,11 @@ export function createApiServer(opts: ApiOptions): {
     if (!opts.inbox || polling) return;
     polling = true;
     try {
-      const r = await opts.inbox.poller.poll(appFor("live"));
+      // A sender whose address is an account's email is recorded as the raiser of its items.
+      const r = await opts.inbox.poller.poll(appFor("live"), (address) => {
+        const u = auth.store.userByEmail(address);
+        return u ? { kind: "human", id: u.username, role: u.role } : null;
+      });
       if (r.ingested > 0) changed("inbox", "live");
     } catch {
       /* the poller records errors in its status; a timer must never throw */
@@ -344,7 +359,8 @@ export function createApiServer(opts: ApiOptions): {
   const auth = opts.auth;
   const authNow = auth.now ?? Date.now;
   const ttl = auth.sessionTtlMs ?? SESSION_TTL_MS;
-  const logins = loginLimiter(auth.loginLimits ?? { perIp: 20, perUser: 5 }, authNow);
+  const logins = loginLimiter({ ...DEFAULT_LOGIN_LIMITS, ...auth.loginLimits }, authNow);
+  const sleep = auth.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const sessionOf = (req: IncomingMessage): Session | null => {
     const id = sessionIdFrom(req.headers.cookie);
     return id ? auth.store.session(id, authNow()) : null;
@@ -415,52 +431,59 @@ export function createApiServer(opts: ApiOptions): {
         const ip = req.socket.remoteAddress ?? "unknown"; // the socket address, never X-Forwarded-For (a client can set it)
         const blocked = logins.blocked(ip, input.username);
         if (blocked) return send(res, 429, { ok: false, error: blocked });
+        // Failures for this username from anywhere slow its sign-ins down; they never lock it.
+        const wait = logins.delayMs(input.username);
+        if (wait > 0) await sleep(wait);
         const user = await auth.store.verify(input.username, input.password);
         if (!user) {
           logins.failed(ip, input.username);
           return send(res, 401, { ok: false, error: "wrong username or password" });
         }
+        logins.succeeded(ip, input.username);
         const s = auth.store.createSession(user.username, authNow(), ttl);
         return send(res, 200, meBody({ user, expiresAt: s.expiresAt }, workspacesFor(user)), { "set-cookie": sessionCookie(s.id, Math.floor(ttl / 1000), !!auth.secureCookies) });
       }
-      if (req.method === "POST" && path === "/api/logout") {
-        const id = sessionIdFrom(req.headers.cookie);
-        if (!id || !auth.store.session(id, authNow())) return send(res, 401, { ok: false, error: "sign in first" });
-        auth.store.endSession(id);
-        return send(res, 200, { ok: true }, { "set-cookie": sessionCookie("", 0, !!auth.secureCookies) });
-      }
-      if (req.method === "GET" && path === "/api/me") {
+      // Health without a session is only "up": no workspaces, no inbox address, no counts.
+      if (req.method === "GET" && path === "/api/health") {
         const s = sessionOf(req);
-        if (!s) return send(res, 401, { ok: false, error: "sign in first" });
-        return send(res, 200, meBody(s, workspacesFor(s.user)));
+        if (!s) return send(res, 200, { ok: true });
+        return send(res, 200, { ok: true, workspaces: workspacesFor(s.user), inbox: s.user.live ? inboxStatus() : null });
       }
 
-      if (req.method === "GET" && path === "/api/health") return send(res, 200, { ok: true, workspaces: [...apps.keys()], inbox: inboxStatus() });
+      // Every other route needs a session (an unknown route too: 401 says nothing about which routes exist).
+      const session = sessionOf(req);
+      if (!session) return send(res, 401, { ok: false, error: "sign in first" });
+
+      if (req.method === "GET" && path === "/api/me") return send(res, 200, meBody(session, workspacesFor(session.user)));
+      if (req.method === "POST" && path === "/api/logout") {
+        auth.store.endSession(sessionIdFrom(req.headers.cookie));
+        return send(res, 200, { ok: true }, { "set-cookie": sessionCookie("", 0, !!auth.secureCookies) });
+      }
       if (req.method === "GET" && path === "/api/events") {
         res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
         res.write("retry: 3000\n\n");
-        sseClients.add(res);
+        sseClients.set(res, { live: session.user.live });
         req.on("close", () => sseClients.delete(res));
         return;
       }
-      if (req.method === "GET" && path === "/api/screens") return send(res, 200, buildScreens(appFor(workspaceOf(url))));
+      if (req.method === "GET" && path === "/api/screens") return send(res, 200, buildScreens(appFor(workspaceOf(url, session.user))));
       let m = /^\/api\/backcharge\/([A-Za-z0-9-]{1,20})$/.exec(path);
-      if (req.method === "GET" && m) return send(res, 200, backChargeDetail(appFor(workspaceOf(url)), decodeURIComponent(m[1]!)));
+      if (req.method === "GET" && m) return send(res, 200, backChargeDetail(appFor(workspaceOf(url, session.user)), decodeURIComponent(m[1]!)));
       m = /^\/api\/credit\/([A-Za-z0-9-]{1,20})\/memo$/.exec(path);
       if (req.method === "GET" && m) {
         const id = m[1]!;
-        const app = appFor(workspaceOf(url));
+        const app = appFor(workspaceOf(url, session.user));
         if (!app.ctx.contra.credits.has(id)) return send(res, 404, { ok: false, error: `no credit ${id}` });
         return send(res, 200, app.ctx.contra.creditMemo(id));
       }
       if (req.method === "POST" && path === "/api/reset") {
-        const ws = workspaceOf(url);
+        const ws = workspaceOf(url, session.user);
         reset(ws);
         changed("reset", ws);
         return send(res, 200, { ok: true, screens: buildScreens(appFor(ws)) });
       }
       if (req.method === "POST" && path === "/api/action") {
-        const ws = workspaceOf(url);
+        const ws = workspaceOf(url, session.user);
         const body = (await readJson(req)) as { action?: unknown; input?: unknown };
         const action = parseAction(body?.action);
         if (!action) return send(res, 400, { ok: false, error: "invalid action; send { action: <an Action from /api/screens>, input?: { choice?, reason?, amount? } }" });
@@ -470,8 +493,12 @@ export function createApiServer(opts: ApiOptions): {
           ...(typeof rawInput.reason === "string" ? { reason: rawInput.reason } : {}),
           ...(typeof rawInput.amount === "string" ? { amount: rawInput.amount.slice(0, 40) } : {}),
         };
+        // Sending a memo emails the AP inbox for real (from either workspace): only accounts created with --live.
+        if (action.command === "sendCreditMemo" && !session.user.live) return send(res, 403, { ok: false, error: "sending a credit memo emails the AP inbox for real; only accounts created with --live can" });
         const app = appFor(ws);
-        await runAction(app, action, input, action.command === "ingestPmEmails" ? { pmEmails: await pmEmails } : {});
+        // Demo: each step keeps its scripted actor, presented by this person. Live: this person and their role.
+        const by: Human = { kind: "human", id: session.user.username, role: session.user.role };
+        await runAction(app, action, input, { by, ...(action.command === "ingestPmEmails" ? { pmEmails: await pmEmails } : {}) });
         changed("action", ws);
         return send(res, 200, { ok: true, screens: buildScreens(app) });
       }
@@ -509,12 +536,13 @@ export function createApiServer(opts: ApiOptions): {
     server,
     app: () => appFor("demo"),
     live: () => apps.get("live") ?? null,
+    authStore: auth.store,
     pollNow,
     close: () =>
       new Promise<void>((resolve) => {
         clearInterval(heartbeat);
         if (pollTimer) clearInterval(pollTimer);
-        for (const c of sseClients) c.end();
+        for (const c of sseClients.keys()) c.end();
         sseClients.clear();
         server.close(() => {
           for (const a of apps.values()) a.close();

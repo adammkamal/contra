@@ -4,7 +4,7 @@
  * live inbox CONTRA_INBOX=gmail, CONTRA_INTAKE_ALLOWED_SENDERS, CONTRA_LIVE_DAILY_CAP (default 50 model calls a UTC day),
  * CONTRA_GMAIL_POLL_SECONDS (default 20, at least 10), CONTRA_AP_INBOX, plus the
  * CONTRA_GMAIL_* values written by npm run gmail:auth, and CONTRA_SECURE_COOKIES=1 behind HTTPS.
- * Accounts: data/auth.db (or CONTRA_AUTH_DB), created with npm run user:add -- <username> <role> [--live].
+ * Accounts: data/auth.db (or CONTRA_AUTH_DB), created with npm run user:add -- <username> <role> [--live] [--email <address>].
  */
 import { allowedOriginsFromEnv, createApiServer, tryDailyCapFromEnv, type ApiOptions } from "../server/api.ts";
 import { AuthStore, authDbFromEnv } from "../server/auth.ts";

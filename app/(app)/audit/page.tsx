@@ -1,4 +1,4 @@
-import { currentScreens } from "../../ui/api.ts";
+import { currentScreens } from "../../../ui/api.ts";
 
 export const dynamic = "force-dynamic";
 

@@ -1,0 +1,15 @@
+{
+  "status": 200,
+  "body": {
+    "ok": true,
+    "user": {
+      "username": "dee.demo",
+      "role": "controller",
+      "live": false
+    },
+    "expiresAt": "2026-11-08T03:00:00.000Z",
+    "workspaces": [
+      "demo"
+    ]
+  }
+}

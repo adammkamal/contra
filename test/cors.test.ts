@@ -6,7 +6,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { allowedOriginsFromEnv, createApiServer, DEFAULT_ALLOWED_ORIGINS } from "../server/api.ts";
-import { testAuth } from "./auth-fakes.ts";
+import { sessionFetch, signIn, testAuth } from "./auth-fakes.ts";
+
+const http = sessionFetch();
 
 const ALLOWED = "https://demo.contra.example";
 const OTHER = "https://evil.example";
@@ -14,6 +16,7 @@ const OTHER = "https://evil.example";
 async function withApi(fn: (port: number) => Promise<void>) {
   const api = createApiServer({ auth: testAuth(), dbPath: join(mkdtempSync(join(tmpdir(), "contra-cors-")), "d.db"), start: new Date("2026-11-07T15:00:00Z"), emlDir: null, allowedOrigins: [ALLOWED] });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
+  http.use(await signIn(`http://127.0.0.1:${(api.server.address() as AddressInfo).port}`, api.authStore));
   try {
     await fn((api.server.address() as AddressInfo).port);
   } finally {
@@ -24,7 +27,7 @@ async function withApi(fn: (port: number) => Promise<void>) {
 /** Raw request, so the Origin header is sent exactly as given. */
 function call(port: number, method: string, path: string, headers: Record<string, string>, body?: string): Promise<{ status: number; headers: IncomingHttpHeaders }> {
   return new Promise((resolve, reject) => {
-    const req = request({ host: "127.0.0.1", port, method, path, headers }, (res) => {
+    const req = request({ host: "127.0.0.1", port, method, path, headers: { ...headers, ...(http.cookie ? { cookie: http.cookie } : {}) } }, (res) => {
       res.resume();
       res.on("end", () => resolve({ status: res.statusCode!, headers: res.headers }));
     });

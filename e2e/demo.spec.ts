@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { presenterStep, shot, stepText, useWorkspace } from "./helpers.ts";
+import { presenterStep, shot, signIn, stepText, useWorkspace } from "./helpers.ts";
 
 // The scripted demo (SPEC section 3), driven only through the presenter bar, against the API.
 test("scripted demo: notice $15,500.00, credit $11,500.00, bill pays $36,500.00", async ({ page }) => {
   await page.goto("/");
+  await signIn(page, "presenter"); // signed out, / opens the sign-in page; afterwards it returns to /
   await useWorkspace(page, "demo");
   await page.getByTestId("resetDemo").click();
   await expect(stepText(page)).toHaveText("Ingest the PM's back-charge emails");

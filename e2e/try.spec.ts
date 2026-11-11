@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { shot } from "./helpers.ts";
+import { shot, signIn } from "./helpers.ts";
 
 // POST /api/try against the harness: its model call is a fake fetcher (no real model call), and its daily
 // cap is 1, so the second check shows the 429 daily-cap message exactly as the API words it.
@@ -7,6 +7,7 @@ test("try panel: outcome in words, checks as Passed/Failed sentences, highlighte
   const sentence = "BC-5521: ceiling tile and grid repair, level 3 corridor, Summit MOB, $1,840.00.";
   const body = `Hi,\n\nA condensate line from the level 3 fan coil was left uncapped and leaked onto the corridor ceiling.\n\n${sentence}\n\nThanks,\nNoor Haddad\nProject Manager`;
   await page.goto("/try");
+  await signIn(page, "presenter");
   await expect(page.locator("main")).toContainText("This is a live model call. Nothing is saved");
   await page.getByTestId("try-subject").fill("Summit MOB - back-charge for ceiling repair");
   await page.getByTestId("try-body").fill(body);

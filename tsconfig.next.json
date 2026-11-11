@@ -33,6 +33,7 @@
     "next-env.d.ts",
     "app",
     "ui",
+    "middleware.ts",
     "src",
     ".next/types/**/*.ts"
   ],

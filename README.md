@@ -41,11 +41,14 @@ Requires Node 22.13+ (it uses `node:sqlite`). CI checks a fresh install on Linux
 git clone https://github.com/adammkamal/contra
 cd contra
 npm ci
+npm run user:add -- presenter ap   # prompts for a password of 12+ characters, typed twice; this account runs the scripted demo
 npm run check        # typecheck and all tests, no API key needed
 npm run api          # API on http://127.0.0.1:4100, using recorded extractions
 # in a second terminal:
 npm run dev     # UI on http://localhost:3000 (use localhost, not 127.0.0.1)
 ```
+
+Then sign in at http://localhost:3000/login. PM, controller and AP accounts made with `--live` are only needed for the live Gmail workspace.
 
 **Optional live features.** Put these in `.env.local` (copy `.env.example`):
 - `CONTRA_ANTHROPIC_API_KEY`, for live extraction and the try panel
@@ -73,7 +76,7 @@ On 8 emails written by someone outside the team, Contra got **1/8**: none had a 
 ## Status at submission
 
 - **On `main`:** everything above, including roles (the PM approves notices, the controller approves credits, AP turns credits on; nobody approves a credit on a charge they raised or linked).
-- **On branch `logins`, not merged:** required sign-in on every route, roles tied to accounts, lockout protection, and the notice rule moved into the core. The UI's login page wasn't finished in time, so `main` doesn't require sign-in.
+- **Sign-in:** sign-in, roles and the login page are on `main`. Known limit: sign-in attempts are limited per network address, and sign-ins arrive through the UI server, so a deployed copy would need the UI to pass on the client's address (not done).
 - **On branch `bc-fix`, not merged:** handling back-charge emails with no BC number, which our independent test showed Contra misses (see Results). In progress at the deadline.
 - **Not done:** a deployed copy, and the independent money review.
 

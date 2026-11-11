@@ -6,8 +6,8 @@ import { ROLE_WORDS, type Actor, type Human, type Role } from "./types.ts";
  * Who may do what. Pure functions of the actor and the audit log; refusals throw NotPermitted (an
  * IllegalTransition: the API answers 409) with the reason in words, and change nothing.
  *
- * - Approving a notice needs the PM role (enforced in src/commands.ts approveNotice: every UI and script
- *   path goes through it).
+ * - Approving a notice needs the PM role: the PM owns the sub relationship and the notice (src/state.ts,
+ *   the notice table, and Contra.approveNotice).
  * - Approving or rejecting a credit needs the Controller role (src/state.ts, the credit table).
  * - Turning credits on for a bill needs the AP role (Contra.turnOnCredits).
  * - Separation of duties: a person who raised or linked a back-charge can't approve a credit for it

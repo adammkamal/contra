@@ -21,6 +21,7 @@ import type {
   ExtractedBackCharge,
   ExtractedResponse,
   HoldReason,
+  Human,
   Notice,
   RejectedExtraction,
   RejectedItem,
@@ -134,8 +135,18 @@ export class Contra {
    * messageId was already ingested changes nothing (no back-charge, notice or audit entry) and returns [].
    * `rejected` is what validation refused from the same extraction: each is kept (an Inbox row, held) and
    * logged with its reason, so nothing the PM sent vanishes. It never becomes a back-charge.
+   * `raisedBy`: the person whose account's email is the sender's address (matched by the host). Each new
+   * back-charge logs them as its raiser, so separation of duties (src/roles.ts) keeps them from approving
+   * a credit for it.
    */
-  ingestBackChargeEmail(email: Email, extracted: ExtractedBackCharge[], extractor: Actor, origin: EmailOrigin = "builtin", rejected: readonly RejectedExtraction[] = []): BackCharge[] {
+  ingestBackChargeEmail(
+    email: Email,
+    extracted: ExtractedBackCharge[],
+    extractor: Actor,
+    origin: EmailOrigin = "builtin",
+    rejected: readonly RejectedExtraction[] = [],
+    raisedBy: Human | null = null,
+  ): BackCharge[] {
     if (email.messageId && this.hasMessage(email.messageId)) return [];
     this.emails.set(email.id, email);
     // One line per attachment: read as text, read as an image, or skipped and why. Never dropped silently.
@@ -201,6 +212,10 @@ export class Contra {
           ...a.backstop,
         ],
       });
+
+      if (raisedBy) {
+        this.d.log.append({ actor: { kind: "human", id: raisedBy.id, role: raisedBy.role }, entity: "backcharge", entityId: x.ref, action: `raised by ${raisedBy.id} (${ROLE_WORDS[raisedBy.role]}): the email came from their address`, from: null, to: null, evidence: [`From: ${email.from}`] });
+      }
 
       if (a.holdReasons.length) {
         this.#hold(bc, a.holdReasons, a.holdEvidence);
@@ -337,8 +352,10 @@ export class Contra {
     return n;
   }
 
+  /** Only a PM approves a notice (also in the state table). */
   approveNotice(id: string, human: Actor): void {
     const n = this.#notice(id);
+    requireRole(human, "pm", `approving notice ${id}`);
     transitionNotice(this.d.log, n, "approved", human, "notice approved", [n.body]);
     n.approvedBy = human.id;
   }

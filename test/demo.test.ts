@@ -28,7 +28,7 @@ test("demo script: $48,000 bill, $11,500 credit, $36,500 paid", () => {
   assert.equal(formatUsd(notice.totalCents), "$15,500.00");
   assert.match(notice.body, /§14\.3/);
   assert.throws(() => contra.sendNotice(notice.id), /not allowed/); // no send before approval
-  contra.approveNotice(notice.id, CONTROLLER);
+  contra.approveNotice(notice.id, PM);
   contra.sendNotice(notice.id);
 
   // Step 3: "Fine, except 4471."

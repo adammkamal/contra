@@ -1,6 +1,8 @@
 /**
  * Adds an account to data/auth.db (or CONTRA_AUTH_DB).
- *   npm run user:add -- <username> <pm|controller|ap> [--live]
+ *   npm run user:add -- <username> <pm|controller|ap> [--live] [--email <address>]
+ * --email: the address this person sends back-charge emails from; live mail from it records them as the
+ * raiser of its items, so separation of duties keeps them from approving a credit for those items.
  * The password is asked for, never taken as an argument, never echoed and never printed. On a terminal it
  * is typed twice, hidden; from a pipe, the first line is read (for scripts and tests).
  * --live: the account may open the live workspace (real Gmail, real memo emails). Without it, only the
@@ -73,8 +75,12 @@ async function main(): Promise<number> {
       console.error("the two passwords differ; nothing was added");
       return 1;
     }
-    await store.addUser(args.username, args.role, password, { live: args.live });
-    console.log(`added ${args.username} (${ROLE_WORDS[args.role]}, ${args.live ? "demo and live workspaces" : "demo workspace only"}) to ${path}`);
+    if (args.email && store.userByEmail(args.email)) {
+      console.error(`another account already has the email ${args.email}; nothing was added`);
+      return 1;
+    }
+    await store.addUser(args.username, args.role, password, { live: args.live, ...(args.email ? { email: args.email } : {}) });
+    console.log(`added ${args.username} (${ROLE_WORDS[args.role]}, ${args.live ? "demo and live workspaces" : "demo workspace only"}${args.email ? `, email ${args.email}` : ""}) to ${path}`);
     return 0;
   } finally {
     store.close();

@@ -67,7 +67,7 @@ Why Contra is built the way it is. Each entry gives the choice, the reason, what
 
 **Why.** Back-charges are contractual. A sub has a window to respond (the demo clause gives 5 working days, in the style of AIA A401), and a disputed charge is a negotiation, not a deduction.
 
-**Roles.** Contra enforces who may do what: the PM approves notices, the controller approves or rejects credits, and AP turns credits on for a bill. Nobody approves a credit for a charge they raised or linked. (Required sign-in is on the `logins` branch, not yet on `main`.)
+**Roles.** Contra enforces who may do what: the PM approves notices, the controller approves or rejects credits, and AP turns credits on for a bill. Nobody approves a credit for a charge they raised or linked. Sign-in is required on every route, with lockout per username and address.
 
 **Enforced by.** INVARIANTS.md #4–6, #9, #11, #15; `test/invariants.test.ts`; `test/roles.test.ts`.
 

@@ -20,7 +20,7 @@ test("restart mid-demo loses nothing; demo still ends at $36,500", () => {
   });
   const noticeId = app.run(({ contra }) => {
     const n = contra.draftNotice("SC-SUM-0912")!;
-    contra.approveNotice(n.id, CONTROLLER);
+    contra.approveNotice(n.id, PM);
     contra.sendNotice(n.id);
     return n.id;
   });

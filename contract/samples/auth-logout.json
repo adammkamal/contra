@@ -1,0 +1,7 @@
+{
+  "status": 200,
+  "setCookie": "contra_session=; Path=<session id>; HttpOnly; SameSite=Lax; Max-Age=0",
+  "body": {
+    "ok": true
+  }
+}

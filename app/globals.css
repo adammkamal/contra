@@ -331,6 +331,21 @@ details pre.body { padding-top: 10px; }
 .checks { display: grid; gap: 4px; font-size: 0.95rem; }
 .checks li { padding: 9px 14px; border-radius: 10px; background: var(--paper); line-height: 1.45; overflow-wrap: anywhere; }
 
+/* ---- Signing in ----------------------------------------------------------------------------------------- */
+.login { min-height: 100dvh; display: grid; place-items: center; padding: 32px 16px; }
+.login-panel { width: min(100%, 440px); display: grid; gap: 18px; }
+.login-panel .page-head { padding: 4px 0 0; }
+.login-form { display: grid; gap: 16px; }
+.login-form .btn { justify-self: start; }
+.login-note { padding: 14px 18px; box-shadow: inset 0 0 0 2px var(--ink); font-weight: 600; }
+.signed-in { display: grid; gap: 10px; padding: 12px 14px; border-radius: var(--r-row); background: var(--tray); }
+.signed-in-who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 0.9rem; overflow-wrap: anywhere; }
+.signed-in-role { padding: 1px 8px; border-radius: 8px; background: var(--surface); font-size: 0.8rem; font-weight: 600; }
+.signed-in form { margin: 0; }
+.signed-in .btn { background: var(--surface); }
+.switch-wrap { display: grid; gap: 6px; }
+.switch-note { color: var(--muted); font-size: 0.8rem; line-height: 1.4; }
+
 /* ---- Small screens --------------------------------------------------------------------------------------- */
 @media (max-width: 1100px) {
   .item-body, .detail-grid, .try-grid { grid-template-columns: minmax(0, 1fr); }
