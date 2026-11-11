@@ -1,0 +1,26 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-11T07:36:57.861Z",
+  "items": [],
+  "rejected": [
+    {
+      "index": 0,
+      "reason": "item 1 (no BC number): amountText \"twelve hundred dollars even\" is not exactly one $ amount",
+      "words": "the model's amount isn't exactly one dollar amount"
+    }
+  ],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": null,
+        "description": "Separate cleanup crew to remove joint compound dust and offcuts left above the ceiling in the north wing before the ceiling closes (estimate; final cost to be confirmed)",
+        "amountText": "twelve hundred dollars even",
+        "amountSentence": "My cost estimate is twelve hundred dollars even.",
+        "vendorNameAsWritten": "Ridgeline Drywall",
+        "jobRef": "Lakeview Library",
+        "disputeNoted": false
+      }
+    ]
+  }
+}

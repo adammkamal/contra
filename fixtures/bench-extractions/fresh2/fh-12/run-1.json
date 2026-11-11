@@ -1,0 +1,33 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-11T07:36:12.509Z",
+  "items": [
+    {
+      "ref": "BC-5102",
+      "description": "Ridgeline Drywall tore up the Level 2 west corridor floor protection; cost updated from the $680 estimate to the actual $715 (same charge, not a new one)",
+      "amountCents": 71500,
+      "amountEvidence": {
+        "emailId": "fh-12",
+        "sentence": "Please update BC-5102 to $715."
+      },
+      "vendorNameAsWritten": "Ridgeline Drywall",
+      "jobRef": "Summit MOB",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": "BC-5102",
+        "description": "Ridgeline Drywall tore up the Level 2 west corridor floor protection; cost updated from the $680 estimate to the actual $715 (same charge, not a new one)",
+        "amountText": "$715",
+        "amountSentence": "Please update BC-5102 to $715.",
+        "vendorNameAsWritten": "Ridgeline Drywall",
+        "jobRef": "Summit MOB",
+        "disputeNoted": false
+      }
+    ]
+  }
+}

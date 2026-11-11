@@ -1,0 +1,54 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-11T07:36:04.486Z",
+  "items": [
+    {
+      "ref": null,
+      "description": "Adhesive left on the lobby glazing after film removal; outside cleaning crew",
+      "amountCents": 18500,
+      "amountEvidence": {
+        "emailId": "fh-11",
+        "sentence": "Ridgeline Glass & Glazing: adhesive left on the lobby glazing after film removal; outside cleaning crew estimated $185."
+      },
+      "vendorNameAsWritten": "Ridgeline Glass & Glazing",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    },
+    {
+      "ref": null,
+      "description": "Cut pipe and packaging left in the service corridor; labor and haul-off",
+      "amountCents": 24000,
+      "amountEvidence": {
+        "emailId": "fh-11",
+        "sentence": "Harbor Mechanical: cut pipe and packaging left in the service corridor; labor and haul-off estimated $240."
+      },
+      "vendorNameAsWritten": "Harbor Mechanical",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": null,
+        "description": "Adhesive left on the lobby glazing after film removal; outside cleaning crew",
+        "amountText": "$185",
+        "amountSentence": "Ridgeline Glass & Glazing: adhesive left on the lobby glazing after film removal; outside cleaning crew estimated $185.",
+        "vendorNameAsWritten": "Ridgeline Glass & Glazing",
+        "jobRef": "Summit",
+        "disputeNoted": false
+      },
+      {
+        "ref": null,
+        "description": "Cut pipe and packaging left in the service corridor; labor and haul-off",
+        "amountText": "$240",
+        "amountSentence": "Harbor Mechanical: cut pipe and packaging left in the service corridor; labor and haul-off estimated $240.",
+        "vendorNameAsWritten": "Harbor Mechanical",
+        "jobRef": "Summit",
+        "disputeNoted": false
+      }
+    ]
+  }
+}

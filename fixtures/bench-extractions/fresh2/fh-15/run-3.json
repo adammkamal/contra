@@ -1,0 +1,33 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-11T07:36:48.246Z",
+  "items": [
+    {
+      "ref": null,
+      "description": "Repairs to freight elevator trim damaged during material deliveries (sub not yet identified: Ridgeline Drywall or Ridgeline Glass & Glazing)",
+      "amountCents": 89000,
+      "amountEvidence": {
+        "emailId": "fh-15",
+        "sentence": "We've got an estimated $890 in repairs to the freight elevator trim at Summit after material deliveries."
+      },
+      "vendorNameAsWritten": "UNKNOWN",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": null,
+        "description": "Repairs to freight elevator trim damaged during material deliveries (sub not yet identified: Ridgeline Drywall or Ridgeline Glass & Glazing)",
+        "amountText": "$890",
+        "amountSentence": "We've got an estimated $890 in repairs to the freight elevator trim at Summit after material deliveries.",
+        "vendorNameAsWritten": "UNKNOWN",
+        "jobRef": "Summit",
+        "disputeNoted": false
+      }
+    ]
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-11T07:35:43.433Z",
+  "items": [
+    {
+      "ref": null,
+      "description": "Replacement of floor protection in Level 2 west corridor torn up while moving board (estimate, labor and material)",
+      "amountCents": 68000,
+      "amountEvidence": {
+        "emailId": "fh-09",
+        "sentence": "I'm estimating about $680 for labor and material until the tickets come in."
+      },
+      "vendorNameAsWritten": "Ridgeline Drywall",
+      "jobRef": "Summit MOB",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": null,
+        "description": "Replacement of floor protection in Level 2 west corridor torn up while moving board (estimate, labor and material)",
+        "amountText": "$680",
+        "amountSentence": "I'm estimating about $680 for labor and material until the tickets come in.",
+        "vendorNameAsWritten": "Ridgeline Drywall",
+        "jobRef": "Summit MOB",
+        "disputeNoted": false
+      }
+    ]
+  }
+}

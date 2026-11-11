@@ -1,0 +1,33 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-11T07:36:39.330Z",
+  "items": [
+    {
+      "ref": null,
+      "description": "Cart cracked a lobby glass panel during material delivery; glass panel replacement (rough estimate, final invoice to follow)",
+      "amountCents": 127500,
+      "amountEvidence": {
+        "emailId": "fh-14",
+        "sentence": "Glazier's rough replacement estimate is USD 1,275.00; I'll forward the final invoice later."
+      },
+      "vendorNameAsWritten": "Ridgline Glas & Glazng",
+      "jobRef": "Summit MOB",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": null,
+        "description": "Cart cracked a lobby glass panel during material delivery; glass panel replacement (rough estimate, final invoice to follow)",
+        "amountText": "USD 1,275.00",
+        "amountSentence": "Glazier's rough replacement estimate is USD 1,275.00; I'll forward the final invoice later.",
+        "vendorNameAsWritten": "Ridgline Glas & Glazng",
+        "jobRef": "Summit MOB",
+        "disputeNoted": false
+      }
+    ]
+  }
+}

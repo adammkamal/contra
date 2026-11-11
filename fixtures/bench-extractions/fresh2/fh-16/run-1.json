@@ -1,0 +1,26 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-11T07:36:51.486Z",
+  "items": [],
+  "rejected": [
+    {
+      "index": 0,
+      "reason": "item 1 (no BC number): missing or oversized field",
+      "words": "the model left out a detail (description, amount, quoted sentence, sub's name or job), or gave one that is too long"
+    }
+  ],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": null,
+        "description": "Separate cleanup crew to remove joint compound dust and offcuts that Ridgeline Drywall left above the ceiling in the north wing, before the ceiling closes (estimate; final cost to be confirmed after the work)",
+        "amountText": "twelve hundred dollars even",
+        "amountSentence": "My cost estimate is twelve hundred dollars even.",
+        "vendorNameAsWritten": "Ridgeline Drywall",
+        "jobRef": "Lakeview Library",
+        "disputeNoted": false
+      }
+    ]
+  }
+}

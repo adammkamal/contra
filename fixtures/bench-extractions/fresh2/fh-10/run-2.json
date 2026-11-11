@@ -1,0 +1,33 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-11T07:35:53.565Z",
+  "items": [
+    {
+      "ref": null,
+      "description": "Replacement and paint of access panel outside the mechanical room, bent while pulling duct sections through",
+      "amountCents": 95000,
+      "amountEvidence": {
+        "emailId": "fh-10",
+        "sentence": "Replacement and paint should run around $950."
+      },
+      "vendorNameAsWritten": "Harbor Mechanical",
+      "jobRef": "Summit MOB",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": null,
+        "description": "Replacement and paint of access panel outside the mechanical room, bent while pulling duct sections through",
+        "amountText": "$950",
+        "amountSentence": "Replacement and paint should run around $950.",
+        "vendorNameAsWritten": "Harbor Mechanical",
+        "jobRef": "Summit MOB",
+        "disputeNoted": false
+      }
+    ]
+  }
+}

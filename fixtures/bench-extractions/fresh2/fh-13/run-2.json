@@ -1,0 +1,38 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-11T07:36:25.837Z",
+  "items": [
+    {
+      "ref": null,
+      "description": "Patching and repainting finished wall in reading room damaged by Ridgeline Drywall's cart (on hold pending photo review)",
+      "amountCents": 106000,
+      "amountEvidence": {
+        "emailId": "fh-13",
+        "sentence": "We have about $1,060 in patching and repainting after Ridgeline Drywall's cart hit the finished wall in the Lakeview Library reading room."
+      },
+      "vendorNameAsWritten": "Ridgeline Drywall",
+      "jobRef": "Lakeview Library",
+      "disputeNoted": true,
+      "disputeEvidence": {
+        "emailId": "fh-13",
+        "sentence": "I told them we'd be issuing a back-charge, but their foreman is disputing it and says another crew made the damage."
+      }
+    }
+  ],
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": null,
+        "description": "Patching and repainting finished wall in reading room damaged by Ridgeline Drywall's cart (on hold pending photo review)",
+        "amountText": "$1,060",
+        "amountSentence": "We have about $1,060 in patching and repainting after Ridgeline Drywall's cart hit the finished wall in the Lakeview Library reading room.",
+        "vendorNameAsWritten": "Ridgeline Drywall",
+        "jobRef": "Lakeview Library",
+        "disputeNoted": true,
+        "disputeSentence": "I told them we'd be issuing a back-charge, but their foreman is disputing it and says another crew made the damage."
+      }
+    ]
+  }
+}
