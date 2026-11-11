@@ -24,6 +24,10 @@ jobs:
           node-version: ">=22.13.0 <23"
           cache: npm
       - run: npm ci
+      # test/auth.test.ts signs in from 127.0.0.2 to act as a second client. Linux and Windows route all of
+      # 127.0.0.0/8 to loopback; macOS has only 127.0.0.1 on lo0, so add the alias there.
+      - if: runner.os == 'macOS'
+        run: sudo ifconfig lo0 alias 127.0.0.2 up
       - run: npm run check
       - run: npm run typecheck:ui
 
