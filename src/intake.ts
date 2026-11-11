@@ -58,8 +58,10 @@ export function unaccountedRefs(email: Email, extractedRefs: readonly string[]):
  * sentence ends, that names the ref and has readable dollar amounts, none equal to the extracted amount.
  * Sections are only compared with each other, never with themselves, so an email without attachments
  * never has any.
+ * `withholdAmount`: the message leaves out x's own amount (the model's unconfirmed reading of an image,
+ * which no screen or audit entry shows before a person confirms the amount).
  */
-export function conflictingStatements(email: Email, x: ExtractedBackCharge): string[] {
+export function conflictingStatements(email: Email, x: ExtractedBackCharge, opts: { withholdAmount?: boolean } = {}): string[] {
   const own = x.amountEvidence.at;
   const sections = [
     ...(own ? [{ where: "email body", lines: ownLines(email.body, { excludeQuoted: true }) }] : []),
@@ -73,7 +75,10 @@ export function conflictingStatements(email: Email, x: ExtractedBackCharge): str
     for (const st of sec.lines.flatMap((l) => normalize(l).split(/(?<=[.!?])\s+/))) {
       if (!ref.test(st) || unreadableUsd(st).length) continue;
       const amounts = findUsdAmounts(st);
-      if (amounts.length && !amounts.includes(x.amountCents)) out.push(`${sec.where} gives ${x.ref} ${amounts.map(formatUsd).join(", ")}, not ${formatUsd(x.amountCents)}: ${st}`);
+      if (amounts.length && !amounts.includes(x.amountCents)) {
+        const not = opts.withholdAmount ? ", not the amount read from the image" : `, not ${formatUsd(x.amountCents)}`;
+        out.push(`${sec.where} gives ${x.ref} ${amounts.map(formatUsd).join(", ")}${not}: ${st}`);
+      }
     }
   }
   return out;
@@ -124,7 +129,7 @@ export function assessExtractedItem(email: Email, x: ExtractedBackCharge, data: 
     holdEvidence.push(...unverified);
   }
   // Another section of the email (the body, or a page of an attachment) gives this back-charge another amount.
-  const conflicts = amountCheck.ok || imageAmount ? conflictingStatements(email, x) : [];
+  const conflicts = amountCheck.ok || imageAmount ? conflictingStatements(email, x, { withholdAmount: imageAmount }) : [];
   if (conflicts.length) {
     holdReasons.push("conflicting_amounts");
     holdEvidence.push(...conflicts);

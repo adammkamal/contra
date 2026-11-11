@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { MAX_ATTACHMENTS, readAttachments } from "../ingest/attachments.ts";
 import { parseEmlWithMedia } from "../ingest/eml.ts";
-import { parseAction } from "../server/api.ts";
+import { createApiServer, parseAction } from "../server/api.ts";
 import { GmailClient, InboxPoller, modelExtractor } from "../server/gmail.ts";
 import { App } from "../src/app.ts";
 import * as cmd from "../src/commands.ts";
@@ -14,7 +15,7 @@ import { backChargeInput, extractBackCharges, wrap } from "../src/extract/index.
 import { parseBackCharges } from "../src/extract/validate.ts";
 import { assessExtractedItem } from "../src/intake.ts";
 import type { AttachmentMedia, Email } from "../src/types.ts";
-import { buildScreens, HOLD_WORDS } from "../src/view.ts";
+import { buildScreens, HOLD_WORDS, type InboxRow, type Screens } from "../src/view.ts";
 import { eml, png, scannedPdf, textPdf, type Part } from "./attachment-fakes.ts";
 import { CONFIG, fakeGmail, gmailAuthPass } from "./gmail-fakes.ts";
 import { LLM, PM, setup } from "./helpers.ts";
@@ -555,4 +556,86 @@ test("attachments: media for an attachment the email doesn't list as an image is
   const email: Email = { id: "x", from: "a", to: "b", subject: "s", receivedAt: new Date(0), body: "hello there", attachments: [{ n: 1, filename: "a.pdf", mediaType: "application/pdf", read: "skipped", reason: "r" }] };
   const stray: AttachmentMedia = { n: 1, mediaType: "image/png", data: png(4, 4) };
   assert.equal(typeof backChargeInput(email, [stray]).user, "string");
+});
+
+// ---- The model's reading of an image amount, withheld until a person confirms the amount ----------------
+
+test("attachments: before a PM confirms an image amount, no API response carries the model's reading; after, the row has both as fields", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "contra-"));
+  const api = createApiServer({ dbPath: join(dir, "d.db"), liveDbPath: join(dir, "live.db"), start: LIVE_START, realClock: { now: () => LIVE_START }, emlDir: null });
+  await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
+  // The model's readings below, in any form a response could carry them.
+  const MODEL_READING = /604\.00|\$604\b|60400|617\.00|\$617\b|61700/;
+  const sse = await fetch(`${base}/api/events`);
+  const reader = sse.body!.getReader();
+  let events = "";
+  const pump = (async () => {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      events += new TextDecoder().decode(value);
+    }
+  })().catch(() => {});
+  const responses: string[] = [];
+  const call = async (path: string, body?: unknown) => {
+    const r = await fetch(`${base}${path}`, body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const text = await r.text();
+    responses.push(`${path} -> ${r.status}: ${text}`);
+    return { status: r.status, body: JSON.parse(text) as any };
+  };
+  try {
+    const live = api.live()!;
+    const photo: Part = { filename: "IMG_2041.jpg", contentType: "image/jpeg", data: png(64, 48) };
+    const ingest = async (id: string, body: string, parts: Part[], item: Record<string, unknown>) => {
+      const { email } = await parseEmlWithMedia(eml({ id, subject: `Summit - ${String(item.ref)}`, body, parts }), `gmail-${id}`);
+      const { items } = parseBackCharges({ items: [item] }, email);
+      assert.equal(items.length, 1);
+      cmd.ingestInboxEmail(live, email, items, LLM, "gmail");
+    };
+    // BC-7403: the photo says $640.00; the model read $604.00 (and put it in its description too).
+    await ingest("w1", "Photo of the ticket attached.", [photo], photoItem({ amountText: "$604.00", amountSentence: "BC-7403 FLOOR PROTECTION $604.00", description: "Floor protection, $604.00" }));
+    // BC-7404: read from a photo as $617.00, while the body says $1,111.00 (held for both reasons, no button).
+    await ingest("w2", "BC-7404 is $1,111.00 per the ticket.", [photo], photoItem({ ref: "BC-7404", amountText: "$617.00", amountSentence: "BC-7404 FLOOR PROTECTION $617.00" }));
+    // BC-7405: an ordinary item stated in the body, so there is another action to take before the confirmation.
+    const sentence = "BC-7405: corridor wall repair, Summit L3, $1,250.00.";
+    await ingest("w3", `Hi,\n\n${sentence}\n\nDana`, [], rawItem({ ref: "BC-7405", amountText: "$1,250.00", amountSentence: sentence, amountAttachment: 0, amountPage: undefined }));
+    assert.deepEqual(live.ctx.contra.backCharges.get("BC-7404")!.holdReasons, ["amount_only_in_image", "conflicting_amounts"]);
+
+    const screens = (await call("/api/screens?workspace=live")).body as Screens;
+    const row = (s: Screens, ref: string) => s.inbox.find((r) => r.ref === ref)!;
+    for (const ref of ["BC-7403", "BC-7404"]) {
+      assert.deepEqual([row(screens, ref).amount, row(screens, ref).sourceSentence, row(screens, ref).photoAmount], ["", "", null]);
+      assert.equal(row(screens, ref).sourceLocation, "attachment IMG_2041.jpg");
+      await call(`/api/backcharge/${ref}?workspace=live`);
+    }
+    assert.equal(row(screens, "BC-7405").amount, "$1,250.00");
+    assert.ok(screens.pmQueue.some((q) => q.ref === "BC-7403"));
+    await call("/api/health");
+    // Another item's action: its response carries the live screens, and the SSE stream announces it.
+    await call("/api/action?workspace=live", { action: row(screens, "BC-7405").actions[0] });
+    const confirm = row(screens, "BC-7403").actions.find((a) => a.command === "confirmImageAmount")!;
+    assert.equal((await call("/api/action?workspace=live", { action: confirm, input: { choice: "SC-SUM-0912", amount: "$0.00" } })).status, 409);
+    for (let i = 0; i < 200 && !events.includes("screens-changed"); i++) await new Promise((r) => setTimeout(r, 10));
+    assert.match(events, /screens-changed/);
+
+    assert.equal(responses.length, 6); // screens, 2 details, health, an action, a refused confirmation
+    for (const text of [...responses, events]) assert.doesNotMatch(text, MODEL_READING, text.slice(0, 2000));
+
+    // The PM types what the photo says. From then on both readings are fields of the row (and the detail).
+    const after = (await call("/api/action?workspace=live", { action: confirm, input: { choice: "SC-SUM-0912", amount: "$640.00" } })).body.screens as Screens;
+    const confirmed: InboxRow = row(after, "BC-7403");
+    assert.deepEqual(confirmed.photoAmount, { pmEntered: "$640.00", modelRead: "$604.00" });
+    assert.equal(confirmed.amount, "$640.00");
+    assert.equal(confirmed.sourceSentence, "BC-7403 FLOOR PROTECTION $604.00");
+    assert.deepEqual((await call("/api/backcharge/BC-7403?workspace=live")).body.photoAmount, { pmEntered: "$640.00", modelRead: "$604.00" });
+    // The other photo item is still unconfirmed: still withheld.
+    assert.deepEqual([row(after, "BC-7404").amount, row(after, "BC-7404").photoAmount], ["", null]);
+    assert.doesNotMatch(JSON.stringify(after), /617\.00/);
+    assert.equal(row(after, "BC-7405").photoAmount, null);
+  } finally {
+    await reader.cancel().catch(() => {});
+    await pump;
+    await api.close();
+  }
 });
