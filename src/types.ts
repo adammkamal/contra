@@ -112,7 +112,12 @@ export interface Evidence {
 
 /** What the extractor (LLM) returns for one back-charge. Untrusted until verified. */
 export interface ExtractedBackCharge {
-  ref: string;
+  /**
+   * The back-charge number as the email writes it ("BC-4467"), or null when the email gives none. Initial
+   * back-charge emails usually have none: accounting assigns it later. Never invented (validation refuses
+   * a number the email doesn't contain).
+   */
+  ref: string | null;
   description: string;
   amountCents: Cents;
   amountEvidence: Evidence;
@@ -174,7 +179,18 @@ export type HoldReason =
   | "amount_only_in_image";
 
 export interface BackCharge {
+  /**
+   * The item's reference, stable for its whole life (notices, credits and the audit log name it): its BC
+   * number when the first email gave one, else a Contra reference assigned at ingest (CONTRA-0001), a
+   * format no accounting BC number has.
+   */
   ref: string;
+  /**
+   * The accounting BC number: null while there is none yet ("no BC number yet"). A later email citing a BC
+   * number for the same charge supplies it, once the PM confirms it is the same charge. Absent (older
+   * snapshots): `ref` is the BC number. Read it with bcNumberOf (src/workflow.ts).
+   */
+  bcNumber?: string | null;
   extracted: ExtractedBackCharge;
   state: BackChargeState;
   subcontractId: string | null;

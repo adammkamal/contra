@@ -29,6 +29,25 @@ import type {
 
 const SYSTEM: Actor = { kind: "system", id: "contra" };
 
+/** Contra's own reference for a back-charge the email gave no BC number: "CONTRA-0001". No accounting BC number looks like it. */
+export const CONTRA_REF = /^CONTRA-\d{4,}$/;
+const contraRef = (n: number) => `CONTRA-${String(n).padStart(4, "0")}`;
+
+/** The item's accounting BC number, or null while it has none yet. */
+export function bcNumberOf(b: Readonly<BackCharge>): string | null {
+  return b.bcNumber === undefined ? b.ref : b.bcNumber;
+}
+
+/**
+ * The item's reference as screens and notices show it: "BC-4467"; "CONTRA-0001 (no BC number yet)"; or,
+ * once a later email supplied the BC number for it, "CONTRA-0001 (BC-4480)".
+ */
+export function refLabel(b: Readonly<BackCharge>): string {
+  const bc = bcNumberOf(b);
+  if (bc === b.ref) return b.ref;
+  return bc === null ? `${b.ref} (no BC number yet)` : `${b.ref} (${bc})`;
+}
+
 /** Both readings of a confirmed image amount: "PM entered $640.00; model read $604.00". */
 export function confirmationNote(c: Readonly<AmountConfirmation>): string {
   return `${c.byRole} entered ${formatUsd(c.enteredCents)}; model read ${formatUsd(c.modelCents)}`;
@@ -71,7 +90,8 @@ export interface ContraState {
   sourceDispute: [string, boolean][];
   /** Absent in snapshots written before rejected extractions were kept. */
   rejected?: RejectedItem[];
-  seq: { notice: number; credit: number };
+  /** contraRef: Contra references handed out (CONTRA-0001 ...). Absent in older snapshots: 0. */
+  seq: { notice: number; credit: number; contraRef?: number };
 }
 
 export class Contra {
@@ -85,7 +105,7 @@ export class Contra {
   readonly rejected: RejectedItem[] = [];
   readonly #evidenceOk = new Map<string, boolean>();
   readonly #sourceDispute = new Map<string, boolean>();
-  #seq = { notice: 0, credit: 0 };
+  #seq = { notice: 0, credit: 0, contraRef: 0 };
 
   constructor(private readonly d: Deps) {}
 
@@ -118,7 +138,7 @@ export class Contra {
     for (const [k, v] of s2.evidenceOk) c.#evidenceOk.set(k, v);
     for (const [k, v] of s2.sourceDispute) c.#sourceDispute.set(k, v);
     c.rejected.push(...(s2.rejected ?? []));
-    c.#seq = { ...s2.seq };
+    c.#seq = { contraRef: 0, ...s2.seq };
     return c;
   }
 
@@ -169,7 +189,7 @@ export class Contra {
     const out: BackCharge[] = [];
 
     for (const x of extracted) {
-      const existing = this.backCharges.get(x.ref);
+      const existing = x.ref === null ? undefined : this.byBcNumber(x.ref);
       if (existing) {
         if (backChargeAmount(existing) !== x.amountCents && existing.state !== "held") {
           // Logged as read, also when read from an image; the views withhold an image reading (src/view.ts shownEvent).
@@ -178,12 +198,16 @@ export class Contra {
         continue;
       }
 
+      // No BC number in the email (usual for a first back-charge email: accounting assigns one later): Contra
+      // gives the item its own reference, and it proceeds like any other.
+      const ref = x.ref ?? this.#nextContraRef();
       const a = assessExtractedItem(email, x, this.d.erp, extracted.map((e) => e.ref));
-      this.#evidenceOk.set(x.ref, a.evidenceOk);
-      this.#sourceDispute.set(x.ref, a.disputeInSource);
+      this.#evidenceOk.set(ref, a.evidenceOk);
+      this.#sourceDispute.set(ref, a.disputeInSource);
 
       const bc: BackCharge = {
-        ref: x.ref,
+        ref,
+        bcNumber: x.ref,
         extracted: x,
         state: "extracted",
         subcontractId: null,
@@ -193,14 +217,14 @@ export class Contra {
         holdReasons: [],
         creditId: null,
       };
-      this.backCharges.set(x.ref, bc);
+      this.backCharges.set(ref, bc);
       // An amount read from an image is logged like any other (the log keeps the evidence, I6). Until a
       // person confirms it, the views leave the reading out (src/view.ts shownEvent), so the person types the
       // amount they see without being anchored on it; confirmImageAmount then logs both readings.
       this.d.log.append({
         actor: extractor,
         entity: "backcharge",
-        entityId: x.ref,
+        entityId: ref,
         action: `extracted ${formatUsd(x.amountCents)}`,
         from: null,
         to: "extracted",
@@ -210,18 +234,19 @@ export class Contra {
           ...(x.amountEvidence.at ? [`in ${describeAt(email, x.amountEvidence.at)}`] : []),
           ...(x.disputeEvidence ? [x.disputeEvidence.sentence] : []),
           ...a.backstop,
+          ...(x.ref === null ? [`no BC number in the email yet; Contra reference ${ref}`] : []),
         ],
       });
 
       if (raisedBy) {
-        this.d.log.append({ actor: { kind: "human", id: raisedBy.id, role: raisedBy.role }, entity: "backcharge", entityId: x.ref, action: `raised by ${raisedBy.id} (${ROLE_WORDS[raisedBy.role]}): the email came from their address`, from: null, to: null, evidence: [`From: ${email.from}`] });
+        this.d.log.append({ actor: { kind: "human", id: raisedBy.id, role: raisedBy.role }, entity: "backcharge", entityId: ref, action: `raised by ${raisedBy.id} (${ROLE_WORDS[raisedBy.role]}): the email came from their address`, from: null, to: null, evidence: [`From: ${email.from}`] });
       }
 
       if (a.holdReasons.length) {
         this.#hold(bc, a.holdReasons, a.holdEvidence);
       } else {
         const r = a.resolution!;
-        this.proposals.set(x.ref, r);
+        this.proposals.set(ref, r);
         if (r.kind === "linked") bc.linkExplanation = r.explanation;
         else transitionBackCharge(this.d.log, bc, "needs_review", SYSTEM, "resolver could not link", r.reasons);
       }
@@ -328,7 +353,7 @@ export class Contra {
       `To: ${sc.partyLegalName}`,
       `Job: ${job.id} ${job.name}`,
       ``,
-      ...include.map((b) => `- ${b.ref}: ${b.extracted.description} - ${formatUsd(backChargeAmount(b))}`),
+      ...include.map((b) => `- ${refLabel(b)}: ${b.extracted.description} - ${formatUsd(backChargeAmount(b))}`),
       `Total: ${formatUsd(total)}`,
       ``,
       `${clause.section}: "${clause.text}"`,
@@ -589,6 +614,12 @@ export class Contra {
 
   // ---- Read-only views ---------------------------------------------------------------------
 
+  /** The item that carries this accounting BC number (as its ref, or supplied later), if any. */
+  byBcNumber(bcNumber: string): BackCharge | undefined {
+    for (const b of this.backCharges.values()) if (bcNumberOf(b) === bcNumber) return b;
+    return undefined;
+  }
+
   /** Why an item is (or isn't) eligible right now. Read-only; changes nothing. */
   explainEligibility(ref: string): EligibilityResult {
     return this.#evaluate(this.#bc(ref), "final");
@@ -616,6 +647,14 @@ export class Contra {
       now: this.d.clock.now(),
       phase,
     });
+  }
+
+  /** The next unused Contra reference. Never reuses one, also after restoring a snapshot without the counter. */
+  #nextContraRef(): string {
+    let ref: string;
+    do ref = contraRef(++this.#seq.contraRef!);
+    while (this.backCharges.has(ref));
+    return ref;
   }
 
   #hold(b: BackCharge, reasons: HoldReason[], evidence: string[]): void {

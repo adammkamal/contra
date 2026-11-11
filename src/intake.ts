@@ -1,6 +1,6 @@
 import { resolve, type ResolverData, type Resolution } from "./resolver.ts";
 import { findUsdAmounts, formatUsd, unreadableUsd } from "./money.ts";
-import { attachmentPages, disputeSentencesFor, normalize, ownLines, verifyAmountEvidence, verifySpan } from "./span.ts";
+import { attachmentPages, disputeSentencesFor, disputeSentencesWithoutRef, normalize, ownLines, verifyAmountEvidence, verifySpan } from "./span.ts";
 import type { Email, ExtractedBackCharge, HoldReason } from "./types.ts";
 
 /**
@@ -37,10 +37,11 @@ const BC_NUMBER = /(?<![A-Za-z0-9])BC[ -]?(\d{3,6})(?!\d)/gi;
  * Back-charge numbers the email's own text mentions (subject, and body without quoted or forwarded
  * mail) that no extracted item accounts for, as "BC-1234", in order of first mention. Conflicting or
  * extra numbers ("BC-1234" in one line, "BC-1243" in another) mean a person must check which charge is
- * real. `extractedRefs` are the refs of every item extracted from this email.
+ * real. `extractedRefs` are the refs of every item extracted from this email (null for an item without a
+ * BC number, which accounts for none).
  */
-export function unaccountedRefs(email: Email, extractedRefs: readonly string[]): string[] {
-  const have = new Set(extractedRefs);
+export function unaccountedRefs(email: Email, extractedRefs: readonly (string | null)[]): string[] {
+  const have = new Set(extractedRefs.filter((r): r is string => r !== null));
   // Pages of attachments read as text are the email's own text too.
   const text = [normalize(email.subject), normalize(email.body, { excludeQuoted: true }), ...attachmentPages(email).map((p) => normalize(p.text))].join("\n");
   const out: string[] = [];
@@ -57,11 +58,12 @@ export function unaccountedRefs(email: Email, extractedRefs: readonly string[]):
  * or forwarded mail) and each page of an attachment read as text. A statement is a line, split at
  * sentence ends, that names the ref and has readable dollar amounts, none equal to the extracted amount.
  * Sections are only compared with each other, never with themselves, so an email without attachments
- * never has any.
+ * never has any. An item without a BC number has none either: no statement can be tied to it by number.
  * `withholdAmount`: the message leaves out x's own amount. The log stores the full message; the views show
  * this one while x's amount is the model's unconfirmed reading of an image (src/view.ts shownEvent).
  */
 export function conflictingStatements(email: Email, x: ExtractedBackCharge, opts: { withholdAmount?: boolean } = {}): string[] {
+  if (x.ref === null) return [];
   const own = x.amountEvidence.at;
   const sections = [
     ...(own ? [{ where: "email body", lines: ownLines(email.body, { excludeQuoted: true }) }] : []),
@@ -90,7 +92,10 @@ export interface IntakeAssessment {
   evidenceOk: boolean;
   /** Model-flagged dispute OR code backstop hit. Either one later holds the item in eligibility. */
   disputeInSource: boolean;
-  /** Code backstop sentences (ref + dispute word), for the audit log. */
+  /**
+   * Code backstop sentences, for the audit log: a sentence naming the item's BC number with a dispute word;
+   * for an item without a BC number, any sentence with a dispute word that names no BC number.
+   */
   backstop: string[];
   /** Non-empty: the item is held at ingest and goes to the PM queue. */
   holdReasons: HoldReason[];
@@ -103,14 +108,16 @@ export interface IntakeAssessment {
 /**
  * The per-item checks Contra applies at ingest: span checks, quoted-text, AI-directed-text and
  * unaccounted-reference holds, dispute flag plus code backstop, and the resolver link. Pure and deterministic.
- * `extractedRefs` are the refs of every item extracted from the same email (this one included).
+ * `extractedRefs` are the refs of every item extracted from the same email (this one included; null for
+ * an item without a BC number).
  * Contra.ingestBackChargeEmail and the benchmark (bench/lib.ts contraDecide) both call this, so the
  * benchmark scores the product's real rules.
  */
-export function assessExtractedItem(email: Email, x: ExtractedBackCharge, data: ResolverData, extractedRefs: readonly string[]): IntakeAssessment {
+export function assessExtractedItem(email: Email, x: ExtractedBackCharge, data: ResolverData, extractedRefs: readonly (string | null)[]): IntakeAssessment {
   const amountCheck = verifyAmountEvidence(email, x.amountEvidence, x.amountCents);
   const disputeCheck = x.disputeNoted && x.disputeEvidence ? verifySpan(email, x.disputeEvidence) : { ok: true as const };
-  const backstop = [disputeSentencesFor(email.body, x.ref), ...attachmentPages(email).map((p) => disputeSentencesFor(p.text, x.ref))].flat();
+  const backstopIn = (text: string) => (x.ref === null ? disputeSentencesWithoutRef(text) : disputeSentencesFor(text, x.ref));
+  const backstop = [backstopIn(email.body), ...attachmentPages(email).map((p) => backstopIn(p.text))].flat();
   const evidenceOk = amountCheck.ok && disputeCheck.ok;
   const disputeInSource = x.disputeNoted || backstop.length > 0;
   // The amount was read from a photo or a scanned page: it can't be verified word for word, so the item is
@@ -156,7 +163,8 @@ export function assessExtractedItem(email: Email, x: ExtractedBackCharge, data: 
   const unaccounted = evidenceOk || (imageAmount && disputeCheck.ok) ? unaccountedRefs(email, extractedRefs) : [];
   if (unaccounted.length) {
     holdReasons.push("unaccounted_reference");
-    holdEvidence.push(`email mentions ${unaccounted.join(", ")}, not among the extracted items (${extractedRefs.join(", ") || "none"})`);
+    const named = extractedRefs.filter((r): r is string => r !== null);
+    holdEvidence.push(`email mentions ${unaccounted.join(", ")}, not among the extracted items (${named.join(", ") || "none with a BC number"})`);
   }
 
   const resolution = holdReasons.length ? null : resolve(x, data);

@@ -48,7 +48,7 @@ const show = (o: Outcome) => (o.decision.kind === "link" ? `link ${o.decision.su
 // When validation refused items, each is a "not taken in" row asking a person to read the email (routed).
 const NOTHING = "nothing extracted";
 const nothingTaken = (refused: number) => (refused ? `nothing taken in (${refused} refused)` : NOTHING);
-const showItems = (d: readonly DecidedItem[], refused: number) => (d.length ? d.map(({ x, o }) => `${x.ref} ${show(o)}`).join("; ") : nothingTaken(refused));
+const showItems = (d: readonly DecidedItem[], refused: number) => (d.length ? d.map(({ x, o }) => `${x.ref ?? "(no BC number)"} ${show(o)}`).join("; ") : nothingTaken(refused));
 
 const rows: RunRow[] = [];
 for (const c of cases) {

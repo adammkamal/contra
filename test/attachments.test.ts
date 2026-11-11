@@ -422,7 +422,7 @@ test("attachments: a live email whose only item cites a page the PDF doesn't hav
       assert.deepEqual({ kind: row.kind, ref: row.ref, emailSubject: row.emailSubject, amount: row.amount, sourceSentence: row.sourceSentence, status: row.status, actions: row.actions }, expected);
       assert.match(row.emailFrom, /dana\.ortiz@apexbuilders\.example/);
       assert.deepEqual(row.attachments, ["attachment estimate.pdf: PDF, 2 pages, text read"]);
-      assert.deepEqual(s.pmQueue, [{ ref: "BC-7401", status: expected.status }]);
+      assert.deepEqual(s.pmQueue, [{ ref: "BC-7401", refLabel: "BC-7401", status: expected.status }]);
       assert.deepEqual(s.nextStep.action, null);
     };
     check();

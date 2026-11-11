@@ -1,5 +1,7 @@
 {
   "ref": "BC-4471",
+  "bcNumber": "BC-4471",
+  "refLabel": "BC-4471",
   "description": "Overtime for missed inspection",
   "amount": "$4,000.00",
   "photoAmount": null,

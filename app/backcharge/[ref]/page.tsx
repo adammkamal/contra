@@ -33,7 +33,7 @@ export default async function Detail({ params }: { params: Promise<{ ref: string
       </p>
       <div className="row">
         <h1>
-          {d.ref} <span className="meta">{d.description}</span>
+          {d.refLabel} <span className="meta">{d.description}</span>
         </h1>
         {unconfirmed ? (
           <div className="amt pending">Amount shown after the PM confirms it</div>

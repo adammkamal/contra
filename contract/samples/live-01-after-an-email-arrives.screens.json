@@ -14,6 +14,8 @@
     {
       "kind": "backCharge",
       "ref": "BC-7151",
+      "bcNumber": "BC-7151",
+      "refLabel": "BC-7151",
       "emailSubject": "Summit MOB - back-charge for stair core drywall",
       "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
       "vendorAsWritten": "Ridgeline Drywall",

@@ -14,6 +14,8 @@
     {
       "kind": "backCharge",
       "ref": "BC-7151",
+      "bcNumber": "BC-7151",
+      "refLabel": "BC-7151",
       "emailSubject": "Summit MOB - back-charge for stair core drywall",
       "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
       "vendorAsWritten": "Ridgeline Drywall",
@@ -41,6 +43,8 @@
     {
       "kind": "backCharge",
       "ref": "BC-7152",
+      "bcNumber": "BC-7152",
+      "refLabel": "BC-7152",
       "emailSubject": "Summit - two back-charges, estimate and ticket photo attached",
       "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
       "vendorAsWritten": "Ridgeline Interiors LLC",
@@ -72,6 +76,8 @@
     {
       "kind": "backCharge",
       "ref": "BC-7153",
+      "bcNumber": "BC-7153",
+      "refLabel": "BC-7153",
       "emailSubject": "Summit - two back-charges, estimate and ticket photo attached",
       "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
       "vendorAsWritten": "Ridgeline Interiors LLC",
@@ -101,6 +107,8 @@
     {
       "kind": "rejected",
       "ref": "BC-7154",
+      "bcNumber": "BC-7154",
+      "refLabel": "BC-7154",
       "emailSubject": "Summit - stair nosing estimate attached",
       "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
       "vendorAsWritten": "",
@@ -125,6 +133,7 @@
   "pmQueue": [
     {
       "ref": "BC-7154",
+      "refLabel": "BC-7154",
       "status": {
         "label": "Held: not taken in: the model said the amount is on page 3 of nosing-estimate.pdf, which has only 2 pages; a person must read the email",
         "tone": "danger"

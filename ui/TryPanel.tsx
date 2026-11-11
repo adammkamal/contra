@@ -66,7 +66,7 @@ export function TryPanel() {
             <div key={`${it.ref}-${i}`} className={`card ${OUTCOME_TONE[it.outcome]}`} data-testid={`try-item-${it.ref}`}>
               <div className="row">
                 <div>
-                  <strong>{it.ref}</strong> <span className="meta">· {it.description} · written as “{it.vendorAsWritten}” · job “{it.jobRef}”</span>
+                  <strong>{it.refLabel}</strong> <span className="meta">· {it.description} · written as “{it.vendorAsWritten}” · job “{it.jobRef}”</span>
                 </div>
                 <div className="amt">{it.amount}</div>
               </div>

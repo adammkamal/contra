@@ -1,7 +1,7 @@
 import { formatUsd, sum, ZERO, type Cents } from "./money.ts";
 import type { RampBill, RampCredit } from "./mocks/ramp.ts";
 import { resolve, type Resolution, type ResolverData } from "./resolver.ts";
-import { disputeSentencesFor, verifyAmountEvidence } from "./span.ts";
+import { disputeSentencesFor, disputeSentencesWithoutRef, verifyAmountEvidence } from "./span.ts";
 import type { Email, ExtractedBackCharge, Subcontract } from "./types.ts";
 
 /**
@@ -10,7 +10,8 @@ import type { Email, ExtractedBackCharge, Subcontract } from "./types.ts";
  */
 
 export interface ScanItem {
-  ref: string;
+  /** The BC number, or null when the email gave none: then no credit or bill can name it, and only an amount match is possible. */
+  ref: string | null;
   emailId: string;
   description: string;
   amountCents: Cents;
@@ -53,7 +54,9 @@ export function scanEmails(
         link,
         vendorId: sc?.paymentsVendorId ?? null,
         // Sub replies must be fed in too, or a sub-disputed item would be reported as missed money.
-        disputed: x.disputeNoted || disputeSentencesFor(email.body, x.ref).length > 0 || !!opts.disputedInReplies?.has(x.ref),
+        disputed:
+          x.disputeNoted ||
+          (x.ref === null ? disputeSentencesWithoutRef(email.body).length > 0 : disputeSentencesFor(email.body, x.ref).length > 0 || !!opts.disputedInReplies?.has(x.ref)),
         evidenceOk,
       });
     }
@@ -61,8 +64,8 @@ export function scanEmails(
   return out;
 }
 
-const mentions = (text: string | undefined, ref: string) =>
-  !!text && new RegExp(`(?<![\\d-])(?:BC-?)?${ref.replace(/^\D+/, "")}(?!\\d)`).test(text);
+const mentions = (text: string | undefined, ref: string | null) =>
+  !!text && ref !== null && new RegExp(`(?<![\\d-])(?:BC-?)?${ref.replace(/^\D+/, "")}(?!\\d)`).test(text);
 
 /**
  * Deducted = a credit or short-paid bill FOR THE SAME VENDOR that names the ref.
@@ -96,7 +99,7 @@ export function reconcile(items: readonly ScanItem[], ramp: { credits: readonly 
     if (candidates.length) {
       rows.push({ item, status: "possible_match", evidence: `same vendor and amount, no ref: ${candidates.map((c) => c.id).join(", ")}` });
     } else {
-      rows.push({ item, status: "not_deducted", evidence: `no credit or short-pay for ${item.vendorId} names ${item.ref} or equals ${formatUsd(item.amountCents)}` });
+      rows.push({ item, status: "not_deducted", evidence: `no credit or short-pay for ${item.vendorId} names ${item.ref ?? "it (it has no BC number)"} or equals ${formatUsd(item.amountCents)}` });
     }
   }
 

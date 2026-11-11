@@ -64,7 +64,7 @@ export default async function Inbox() {
             <div className="row">
               <div>
                 <strong>
-                  <Link href={`/backcharge/${r.ref}`}>{r.ref}</Link>
+                  <Link href={`/backcharge/${r.ref}`}>{r.refLabel}</Link>
                 </strong>
                 <span className="meta">
                   {" "}

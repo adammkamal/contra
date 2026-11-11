@@ -12,6 +12,7 @@
     "items": [
       {
         "ref": "BC-5521",
+        "refLabel": "BC-5521",
         "amount": "$1,840.00",
         "description": "Ceiling tile and grid repair, level 3 corridor",
         "vendorAsWritten": "Harbor Mechanical Co",

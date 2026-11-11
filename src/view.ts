@@ -6,7 +6,7 @@ import { matchJobs, resolve, type Resolution } from "./resolver.ts";
 import { attachmentPages, describeAt, describeAttachment, inEmailText, readFromImage } from "./span.ts";
 import { conflictingStatements } from "./intake.ts";
 import { EMAIL_INGESTED, ROLE_WORDS, type Actor, type BackCharge, type Credit, type Email, type EmailOrigin, type HoldReason, type Job, type Notice, type RejectedItem, type Subcontract } from "./types.ts";
-import { amountNotes, Contra } from "./workflow.ts";
+import { amountNotes, bcNumberOf, Contra, refLabel } from "./workflow.ts";
 import { backChargeAmount } from "./credits.ts";
 
 /**
@@ -129,6 +129,16 @@ export interface InboxRow {
    */
   kind: "backCharge" | "rejected";
   ref: string;
+  /**
+   * A backCharge row's accounting BC number, or null while it has none yet (its `ref` is then a Contra
+   * reference, CONTRA-0001). A rejected row: the BC number the model gave, or null.
+   */
+  bcNumber: string | null;
+  /**
+   * The reference to show: "BC-4467", "CONTRA-0001 (no BC number yet)", or "CONTRA-0001 (BC-4480)" once a
+   * later email supplied the number. "" for a rejected row without a BC number.
+   */
+  refLabel: string;
   emailSubject: string;
   /** Who sent the email the row came from. */
   emailFrom: string;
@@ -250,7 +260,8 @@ export interface Screens {
     actions: Action[];
     simulated: true;
   }[];
-  pmQueue: { ref: string; status: Status }[];
+  /** refLabel: as in the Inbox row. */
+  pmQueue: { ref: string; refLabel: string; status: Status }[];
   opener: { sampleData: true; notDeducted: string; possible: string; deducted: string; rows: { ref: string; status: string; amount: string; evidence: string }[] };
   audit: { seq: number; at: string; actor: string; what: string; evidence: string[] }[];
 }
@@ -293,6 +304,8 @@ export function buildScreens(app: App): Screens {
     return {
       kind: "backCharge" as const,
       ref: b.ref,
+      bcNumber: bcNumberOf(b),
+      refLabel: refLabel(b),
       emailSubject: email?.subject ?? "",
       emailFrom: email?.from ?? "",
       vendorAsWritten: b.extracted.vendorNameAsWritten,
@@ -312,6 +325,8 @@ export function buildScreens(app: App): Screens {
     inbox.push({
       kind: "rejected",
       ref: r.ref ?? "",
+      bcNumber: r.ref ?? null,
+      refLabel: r.ref ?? "",
       emailSubject: email?.subject ?? "",
       emailFrom: email?.from ?? "",
       vendorAsWritten: "",
@@ -396,7 +411,7 @@ export function buildScreens(app: App): Screens {
     notDeducted: formatUsd(recon.totals.not_deducted),
     possible: formatUsd(recon.totals.possible_match),
     deducted: formatUsd(recon.totals.deducted),
-    rows: recon.rows.map((r) => ({ ref: r.item.ref, status: r.status.replace("_", " "), amount: formatUsd(r.item.amountCents), evidence: r.evidence })),
+    rows: recon.rows.map((r) => ({ ref: r.item.ref ?? "no BC number", status: r.status.replace("_", " "), amount: formatUsd(r.item.amountCents), evidence: r.evidence })),
   };
 
   const audit = [...contra.audit.all()]
@@ -429,7 +444,10 @@ export function buildScreens(app: App): Screens {
     outbox,
     credits: creditRows,
     bills,
-    pmQueue: [...contra.pmQueue().map((b) => ({ ref: b.ref, status: backChargeStatus(b) })), ...contra.rejected.map((r) => ({ ref: r.ref ?? "", status: rejectedStatus(r) }))],
+    pmQueue: [
+      ...contra.pmQueue().map((b) => ({ ref: b.ref, refLabel: refLabel(b), status: backChargeStatus(b) })),
+      ...contra.rejected.map((r) => ({ ref: r.ref ?? "", refLabel: r.ref ?? "", status: rejectedStatus(r) })),
+    ],
     opener,
     audit,
   };
@@ -524,6 +542,9 @@ function liveNextStep(app: App): { text: string; action: Action | null } {
 
 export interface BackChargeDetail {
   ref: string;
+  /** As in the Inbox row: the accounting BC number or null ("no BC number yet"), and the reference to show. */
+  bcNumber: string | null;
+  refLabel: string;
   /** The model's description; while the amount is withheld (see amount), any dollar amount in it reads "[amount withheld]". */
   description: string;
   /** "" while the amount is a reading of an image that no person has confirmed, as in the Inbox row. */
@@ -565,6 +586,8 @@ export function backChargeDetail(app: App, ref: string): BackChargeDetail {
   const disputeSentence = dispute?.sentence || null;
   return {
     ref,
+    bcNumber: bcNumberOf(b),
+    refLabel: refLabel(b),
     description: withheld ? withoutAmounts(b.extracted.description) : b.extracted.description,
     amount: withheld ? "" : formatUsd(backChargeAmount(b)),
     photoAmount: photoAmount(b),

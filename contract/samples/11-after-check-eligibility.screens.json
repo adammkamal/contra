@@ -14,6 +14,8 @@
     {
       "kind": "backCharge",
       "ref": "BC-4467",
+      "bcNumber": "BC-4467",
+      "refLabel": "BC-4467",
       "emailSubject": "Summit - back-charges L2",
       "emailFrom": "dana.ortiz@apexbuilders.example",
       "vendorAsWritten": "Ridgeline Drywall",
@@ -36,6 +38,8 @@
     {
       "kind": "backCharge",
       "ref": "BC-4468",
+      "bcNumber": "BC-4468",
+      "refLabel": "BC-4468",
       "emailSubject": "Summit - back-charges L2",
       "emailFrom": "dana.ortiz@apexbuilders.example",
       "vendorAsWritten": "Ridgeline Drywall",
@@ -58,6 +62,8 @@
     {
       "kind": "backCharge",
       "ref": "BC-4470",
+      "bcNumber": "BC-4470",
+      "refLabel": "BC-4470",
       "emailSubject": "RE: Summit corridor patch",
       "emailFrom": "dana.ortiz@apexbuilders.example",
       "vendorAsWritten": "Ridgeline Drywall",
@@ -80,6 +86,8 @@
     {
       "kind": "backCharge",
       "ref": "BC-4471",
+      "bcNumber": "BC-4471",
+      "refLabel": "BC-4471",
       "emailSubject": "Summit MOB - missed inspection",
       "emailFrom": "dana.ortiz@apexbuilders.example",
       "vendorAsWritten": "Ridgeline Drywall",
@@ -122,6 +130,7 @@
   "pmQueue": [
     {
       "ref": "BC-4470",
+      "refLabel": "BC-4470",
       "status": {
         "label": "Held: dispute noted in the PM's email",
         "tone": "danger"
@@ -129,6 +138,7 @@
     },
     {
       "ref": "BC-4471",
+      "refLabel": "BC-4471",
       "status": {
         "label": "Held: disputed by the sub",
         "tone": "danger"

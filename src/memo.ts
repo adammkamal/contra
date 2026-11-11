@@ -67,6 +67,8 @@ export function renderCreditMemo(m: MemoInput): { filename: string; text: string
     ``,
     `Basis:`,
     ...noticeLines,
+    // An item the PM's email gave no BC number is listed under Contra's reference, said in words.
+    ...m.items.filter((b) => b.bcNumber === null).map((b) => `  ${b.ref}: no BC number yet; ${b.ref} is Contra's reference for it.`),
     `  No item on this memo was disputed in the source emails or by the subcontractor.`,
     `Approved by: ${m.credit.approvedBy} on ${day(m.approvedAt)}`,
     ``,

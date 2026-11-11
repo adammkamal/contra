@@ -23,7 +23,7 @@ export default async function PmQueue() {
         ) : (
           <div key={i} className={`card ${q.status.tone}`}>
             <strong>
-              <Link href={`/backcharge/${q.ref}`}>{q.ref}</Link>
+              <Link href={`/backcharge/${q.ref}`}>{q.refLabel}</Link>
             </strong>{" "}
             <StatusWord s={q.status} />
           </div>

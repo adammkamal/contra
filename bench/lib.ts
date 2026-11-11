@@ -107,7 +107,7 @@ export const REVIEW: Outcome = { decision: { kind: "review" }, wouldCredit: fals
  * `extractedRefs` is every accepted ref from the run, as ingest passes them. A run scored against a
  * single-item label has exactly one accepted item, so by default it is the only extracted ref from the email.
  */
-export function contraDecide(email: Email, x: ExtractedBackCharge, data: ResolverData, extractedRefs: readonly string[] = [x.ref]): Outcome {
+export function contraDecide(email: Email, x: ExtractedBackCharge, data: ResolverData, extractedRefs: readonly (string | null)[] = [x.ref]): Outcome {
   const a = assessExtractedItem(email, x, data, extractedRefs);
   if (a.holdReasons.length) return { decision: { kind: "hold", why: a.holdReasons.join(", ") }, wouldCredit: false };
   const r = a.resolution!;
