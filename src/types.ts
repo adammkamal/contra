@@ -140,6 +140,28 @@ export interface RejectedExtraction {
   ref?: string;
 }
 
+/**
+ * An email that yielded no back-charge, kept as an Inbox row so nothing a PM sends vanishes:
+ * - "no_back_charge": from an allowed sender, ingested, and the extractor found nothing in it (and refused
+ *   nothing). A person reads it and dismisses the row with a reason.
+ * - "not_processed": the model failed on it after every retry. The email isn't ingested (a later try may
+ *   still succeed, which closes the row); the row says why, in a fixed sentence per failure kind.
+ */
+export interface EmailNote {
+  kind: "no_back_charge" | "not_processed";
+  emailId: string;
+  messageId: string | null;
+  subject: string;
+  from: string;
+  receivedAt: Date;
+  /** not_processed: why, in words (never the model service's own message). */
+  reason?: string;
+  /** not_processed: how many model calls failed on it. */
+  attempts?: number;
+  /** Set when a PM dismissed the row: who, when and why. The row stays, as history. */
+  dismissed?: { by: string; at: Date; reason: string };
+}
+
 /** A rejected extraction as ingest keeps it, with the email it came from. */
 export interface RejectedItem extends RejectedExtraction {
   emailId: string;

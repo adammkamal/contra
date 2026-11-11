@@ -185,6 +185,16 @@ write("live-05-after-a-possible-duplicate-arrives.screens.json", buildScreens(li
 cmd.sameCharge(live, "BC-7160", PM);
 write("live-06-after-the-pm-confirms-the-same-charge.screens.json", buildScreens(live));
 write("live-detail-CONTRA-0001.json", backChargeDetail(live, "CONTRA-0001"));
+
+// Nothing vanishes (made up): an email from an allowed sender with no back-charge in it is a row (kind
+// "noBackCharge") the PM dismisses with a reason; an email the model failed on after every retry is a
+// "couldn't process" row (kind "notProcessed").
+const statusEmail = { ...noNumEmail, id: "gmail-18c2f0a1b2c3d4fa", subject: "Harbor Mechanical - payment status", body: "Hi Accounting,\n\nWe still owe Harbor $4,900 under their approved pay app. When does it go out?\n\nDana", messageId: "<sample-live-6@apexbuilders.example>" };
+cmd.ingestInboxEmail(live, statusEmail, [], SAMPLE_EXTRACTIONS);
+cmd.recordUnprocessedEmail(live, { id: "gmail-18c2f0a1b2c3d4fb", messageId: "<sample-live-7@apexbuilders.example>", subject: "Summit - punch list charges", from: noNumEmail.from, receivedAt: new Date("2026-11-07T16:30:00Z") }, "the model service didn't answer in time", 3);
+write("live-07-after-emails-with-no-back-charge.screens.json", buildScreens(live));
+cmd.dismissEmail(live, statusEmail.id, "a payment question, not a back-charge", PM);
+write("live-08-after-the-pm-dismisses-one.screens.json", buildScreens(live));
 live.close();
 
 // Signing in: the real HTTP responses from a server on a fixed clock, with two made-up accounts (a live PM
@@ -234,4 +244,4 @@ await authApi.close();
 authStore.close();
 
 rmSync(tmp, { recursive: true, force: true });
-console.log(`Wrote ${i + 1} screen states + 3 details + 1 memo + ${trySamples.length} try samples + 7 live-workspace screens + 2 live details + 7 sign-in samples to contract/samples/`);
+console.log(`Wrote ${i + 1} screen states + 3 details + 1 memo + ${trySamples.length} try samples + 9 live-workspace screens + 2 live details + 7 sign-in samples to contract/samples/`);

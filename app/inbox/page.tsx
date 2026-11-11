@@ -34,6 +34,22 @@ export default async function Inbox() {
       )}
       {s.inbox.length === 0 && <p>{ws === "live" ? "No back-charge emails from the live inbox yet." : "No emails ingested yet. Use “Ingest PM emails” in the top bar."}</p>}
       {s.inbox.map((r, idx) => {
+        if (r.kind === "noBackCharge" || r.kind === "notProcessed") {
+          // The email's own row: nothing was found in it, or the model couldn't process it. No amount, no detail link.
+          return (
+            <div key={`email-${r.emailId}`} className="card rejected" data-testid={`email-row-${r.emailId}`}>
+              <div>
+                <span className="rejected-tag">{r.kind === "noBackCharge" ? "No back-charge found" : "Couldn't process"}</span>
+                <StatusWord s={r.status} />
+              </div>
+              <div className="meta">Email: {r.emailSubject}</div>
+              <div className="meta">From: {r.emailFrom}</div>
+              {r.actions.map((a, i) => (
+                <ActionButton key={i} action={a} next={s.nextStep.action} />
+              ))}
+            </div>
+          );
+        }
         if (r.kind === "rejected") {
           const n = s.inbox.slice(0, idx).filter((x) => x.kind === "rejected").length; // 0, 1, ... among the rejected rows
           // Something the model returned that validation refused: not a back-charge. No amount, no buttons, no detail link.

@@ -9,6 +9,7 @@ const LABELS: Record<Action["command"], string> = {
   confirmLink: "Confirm link",
   chooseSubcontract: "Confirm",
   confirmImageAmount: "Confirm",
+  dismissEmail: "Dismiss",
   sameCharge: "Same charge (merge)",
   differentCharge: "Different charge",
   draftNotice: "Draft notice",
@@ -49,6 +50,8 @@ function idOf(a: Action): string | undefined {
     case "turnOnCredits":
     case "payBill":
       return a.billId;
+    case "dismissEmail":
+      return a.emailId;
     default:
       return undefined;
   }
@@ -71,7 +74,7 @@ export function ActionButton({ action, next, prefix = "" }: { action: Action; ne
     start(async () => {
       setError(undefined);
       const input =
-        action.command === "chooseSubcontract" ? { choice } : action.command === "confirmImageAmount" ? { amount, choice } : action.command === "rejectCredit" ? { reason } : {};
+        action.command === "chooseSubcontract" ? { choice } : action.command === "confirmImageAmount" ? { amount, choice } : action.command === "rejectCredit" || action.command === "dismissEmail" ? { reason } : {};
       setError((await runAction(action, input)).error);
     });
   const needsChoice = (action.command === "chooseSubcontract" || action.command === "confirmImageAmount") && !choice;
@@ -110,6 +113,9 @@ export function ActionButton({ action, next, prefix = "" }: { action: Action; ne
         </>
       )}
       {action.command === "rejectCredit" && <input aria-label="Reason for rejecting" placeholder="Reason" value={reason} onChange={(e) => setReason(e.target.value)} />}
+      {action.command === "dismissEmail" && (
+        <input aria-label="Reason for dismissing" placeholder="Why dismiss it (e.g. not a back-charge)" data-testid={`${testId}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} />
+      )}
       <button type="button" className={same(action, next) ? "btn next" : "btn"} data-testid={testId} disabled={pending || needsChoice || needsAmount} onClick={go}>
         {pending ? `${LABELS[action.command]}…` : LABELS[action.command]}
       </button>

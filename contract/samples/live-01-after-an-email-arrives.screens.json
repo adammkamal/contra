@@ -13,6 +13,7 @@
   "inbox": [
     {
       "kind": "backCharge",
+      "emailId": "gmail-18c2f0a1b2c3d4e5",
       "ref": "BC-7151",
       "bcNumber": "BC-7151",
       "refLabel": "BC-7151",

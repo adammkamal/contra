@@ -20,6 +20,7 @@ import type {
   BackCharge,
   Credit,
   Email,
+  EmailNote,
   ExtractedBackCharge,
   ExtractedResponse,
   HoldReason,
@@ -109,6 +110,8 @@ export interface ContraState {
   rejected?: RejectedItem[];
   /** Pairs of refs the PM said are different charges (never asked again). Absent in older snapshots. */
   distinct?: [string, string][];
+  /** Emails that yielded no back-charge (see EmailNote). Absent in older snapshots. */
+  emailNotes?: EmailNote[];
   /** contraRef: Contra references handed out (CONTRA-0001 ...). Absent in older snapshots: 0. */
   seq: { notice: number; credit: number; contraRef?: number };
 }
@@ -124,6 +127,8 @@ export class Contra {
   readonly rejected: RejectedItem[] = [];
   /** Pairs of refs the PM said are different charges: never held as possible duplicates of each other again. */
   readonly distinct: [string, string][] = [];
+  /** Emails that yielded no back-charge, or that the model couldn't process: each an Inbox row, never dropped. */
+  readonly emailNotes: EmailNote[] = [];
   readonly #evidenceOk = new Map<string, boolean>();
   readonly #sourceDispute = new Map<string, boolean>();
   #seq = { notice: 0, credit: 0, contraRef: 0 };
@@ -144,6 +149,7 @@ export class Contra {
       sourceDispute: [...this.#sourceDispute.entries()],
       rejected: [...this.rejected],
       distinct: [...this.distinct],
+      emailNotes: [...this.emailNotes],
       seq: { ...this.#seq },
     });
   }
@@ -161,6 +167,7 @@ export class Contra {
     for (const [k, v] of s2.sourceDispute) c.#sourceDispute.set(k, v);
     c.rejected.push(...(s2.rejected ?? []));
     c.distinct.push(...(s2.distinct ?? []));
+    c.emailNotes.push(...(s2.emailNotes ?? []));
     c.#seq = { contraRef: 0, ...s2.seq };
     return c;
   }
@@ -197,6 +204,17 @@ export class Contra {
     // Live mail: when Gmail received it (the host sets receivedAt from Gmail's internalDate).
     const received = origin === "gmail" ? [`received ${email.receivedAt.toISOString()}`] : [];
     this.d.log.append({ actor: SYSTEM, entity: "email", entityId: email.id, action: EMAIL_INGESTED[origin], from: null, to: null, evidence: [email.subject, ...received, ...attachments] });
+    // The model failed on this message before; it has now been processed, so that row closes.
+    const failed = email.messageId ? this.emailNotes.findIndex((n) => n.kind === "not_processed" && !n.dismissed && n.messageId === email.messageId) : -1;
+    if (failed >= 0) {
+      const n = this.emailNotes.splice(failed, 1)[0]!;
+      this.d.log.append({ actor: SYSTEM, entity: "email", entityId: n.emailId, action: "processed on a later try; the couldn't-process row is closed", from: null, to: null, evidence: [email.subject] });
+    }
+    // Nothing found and nothing refused: still a row, so a PM sees the email was read and found empty.
+    if (extracted.length === 0 && rejected.length === 0) {
+      this.emailNotes.push({ kind: "no_back_charge", emailId: email.id, messageId: email.messageId ?? null, subject: email.subject, from: email.from, receivedAt: email.receivedAt });
+      this.d.log.append({ actor: extractor, entity: "email", entityId: email.id, action: "no back-charge found; held for a person to read and dismiss", from: null, to: null, evidence: [email.subject, `From: ${email.from}`] });
+    }
     for (const r of rejected) {
       this.rejected.push({ ...r, emailId: email.id });
       this.d.log.append({
@@ -305,6 +323,33 @@ export class Contra {
     transitionBackCharge(this.d.log, bc, "linked", pm, "link confirmed", bc.linkExplanation);
     // With its subcontract known, it may turn out to be a charge Contra already has.
     this.#holdIfDuplicate(bc);
+  }
+
+  // ---- Emails without a back-charge --------------------------------------------------------
+
+  /**
+   * The model failed on an email after every retry: a "couldn't process" row with the reason in words. The
+   * email is not ingested, so a later try may still process it (and closes this row). Recorded again for the
+   * same message, the row is updated, never doubled.
+   */
+  recordUnprocessed(email: Pick<Email, "id" | "messageId" | "subject" | "from" | "receivedAt">, reason: string, attempts: number): void {
+    if (email.messageId && this.hasMessage(email.messageId)) return;
+    const open = this.emailNotes.find((n) => n.kind === "not_processed" && !n.dismissed && (n.emailId === email.id || (!!email.messageId && n.messageId === email.messageId)));
+    const total = (open?.attempts ?? 0) + attempts;
+    if (open) Object.assign(open, { reason, attempts: total });
+    else this.emailNotes.push({ kind: "not_processed", emailId: email.id, messageId: email.messageId ?? null, subject: email.subject, from: email.from, receivedAt: email.receivedAt, reason, attempts: total });
+    this.d.log.append({ actor: SYSTEM, entity: "email", entityId: email.id, action: `couldn't process: ${reason}; held for a person to read`, from: null, to: null, evidence: [email.subject, `From: ${email.from}`, `${total} failed model call(s)`] });
+  }
+
+  /** A PM dismisses an email's row (no back-charge found, or couldn't process) with a reason. The row stays, marked dismissed. */
+  dismissEmailNote(emailId: string, human: Actor, reason: string): void {
+    requireRole(human, "pm", `dismissing the row for email ${emailId}`);
+    const why = reason.trim();
+    if (!why) throw new Error("dismissing needs a reason");
+    const n = this.emailNotes.find((x) => x.emailId === emailId && !x.dismissed);
+    if (!n) throw new Error(`no open row for email ${emailId}`);
+    n.dismissed = { by: `${human.id} (${ROLE_WORDS[human.role]})`, at: this.d.clock.now(), reason: why.slice(0, 500) };
+    this.d.log.append({ actor: human, entity: "email", entityId: emailId, action: `dismissed (${n.kind === "no_back_charge" ? "no back-charge found" : "couldn't process"})`, from: null, to: null, evidence: [n.dismissed.reason] });
   }
 
   // ---- Possible duplicates -----------------------------------------------------------------

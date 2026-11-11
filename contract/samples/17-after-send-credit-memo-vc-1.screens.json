@@ -10,6 +10,7 @@
   "inbox": [
     {
       "kind": "backCharge",
+      "emailId": "E-1",
       "ref": "BC-4467",
       "bcNumber": "BC-4467",
       "refLabel": "BC-4467",
@@ -35,6 +36,7 @@
     },
     {
       "kind": "backCharge",
+      "emailId": "E-1",
       "ref": "BC-4468",
       "bcNumber": "BC-4468",
       "refLabel": "BC-4468",
@@ -60,6 +62,7 @@
     },
     {
       "kind": "backCharge",
+      "emailId": "E-2",
       "ref": "BC-4470",
       "bcNumber": "BC-4470",
       "refLabel": "BC-4470",
@@ -85,6 +88,7 @@
     },
     {
       "kind": "backCharge",
+      "emailId": "E-3",
       "ref": "BC-4471",
       "bcNumber": "BC-4471",
       "refLabel": "BC-4471",
@@ -177,6 +181,7 @@
   ],
   "pmQueue": [
     {
+      "kind": "backCharge",
       "ref": "BC-4470",
       "refLabel": "BC-4470",
       "status": {
@@ -185,6 +190,7 @@
       }
     },
     {
+      "kind": "backCharge",
       "ref": "BC-4471",
       "refLabel": "BC-4471",
       "status": {

@@ -173,11 +173,11 @@ shown as `<session id>`), `auth-me-live-pm.json`, `auth-me-demo-only.json`, `aut
 | `emailSource` | `"eml"`, `"builtin"`, `"gmail"`, `"mixed"` or `null` (before ingest). Where the Inbox's PM emails were read from. Show it in the Inbox beside the extraction note: **"Emails: .eml files"** for `"eml"`, **"Emails: built-in sample"** for `"builtin"`, **"Emails: Gmail inbox"** for `"gmail"`, **"Emails: more than one source"** for `"mixed"`. |
 | `nextStep` | `{ text, action }` for the presenter bar. Highlight `action`'s button. In `demo`, `action` is `null` only at "Demo complete". In `live`, it is also `null` while waiting for mail ("Waiting for back-charge emails from the live inbox") while the PM must choose a subcontract in an Inbox row, and while the PM must confirm an amount read from an image in an Inbox row; show the text without a button. |
 | `opener` | The missed back-charges screen. Always show **"Sample data"**. Totals are already formatted; rows carry `ref`, `status`, `amount` and `evidence`. |
-| `inbox[]` | `kind`, `ref`, `bcNumber`, `refLabel` (see [Back-charges without a BC number](#back-charges-without-a-bc-number)), `emailSubject`, `emailFrom`, `vendorAsWritten`, `amount`, `sourceSentence` (show beside the amount), `sourceLocation` (where that sentence is: `"email body"`, `"attachment estimate.pdf, page 2"`, or `"attachment IMG_2041.jpg"` for a photo; show it with the sentence), `photoAmount` (`{ pmEntered, modelRead }`, both formatted like every amount, once a person confirmed an amount read from an image; else `null`; see [Amounts read from an image](#amounts-read-from-an-image)), `attachments[]` (what became of each of the email's attachments, in words; show them all, skipped ones included, as written), `linkExplanation[]`, `status`, `actions[]`. `kind` is `"backCharge"` (an extracted back-charge, with a detail screen) or `"rejected"` (see [Items not taken in](#items-not-taken-in)). For a `"backCharge"` row, `amount` and `sourceSentence` are `""` only while its amount is an unconfirmed reading of an image. |
+| `inbox[]` | `kind`, `emailId` (the email the row came from), `ref`, `bcNumber`, `refLabel` (see [Back-charges without a BC number](#back-charges-without-a-bc-number)), `emailSubject`, `emailFrom`, `vendorAsWritten`, `amount`, `sourceSentence` (show beside the amount), `sourceLocation` (where that sentence is: `"email body"`, `"attachment estimate.pdf, page 2"`, or `"attachment IMG_2041.jpg"` for a photo; show it with the sentence), `photoAmount` (`{ pmEntered, modelRead }`, both formatted like every amount, once a person confirmed an amount read from an image; else `null`; see [Amounts read from an image](#amounts-read-from-an-image)), `attachments[]` (what became of each of the email's attachments, in words; show them all, skipped ones included, as written), `linkExplanation[]`, `status`, `actions[]`. `kind` is `"backCharge"` (an extracted back-charge, with a detail screen), `"rejected"` (see [Items not taken in](#items-not-taken-in)), or `"noBackCharge"` / `"notProcessed"` (see [Emails without a back-charge](#emails-without-a-back-charge)). For a `"backCharge"` row, `amount` and `sourceSentence` are `""` only while its amount is an unconfirmed reading of an image. |
 | `outbox[]` | Notices: `id`, `total`, `refs`, `body` (shown as written, preformatted), `status`, `actions[]`. |
 | `credits[]` | `id`, `amount`, `job`, `refs`, `amountNotes[]` (one line per item whose amount a person confirmed from an image, with both readings, e.g. `"BC-7403: amount confirmed by dana.ortiz (PM) from attachment IMG_2041.jpg (PM entered $640.00; model read $604.00)"`, and one per item whose source email calls its amount an estimate, e.g. `"CONTRA-0001: the amount is an estimate (the email says \"approximately\")"`; show them beside the amount, above the Approve button, as written; usually empty), `status`, `actions[]`, `hasMemo` (when true, offer "View memo"), `memo`: the memo's delivery to the AP inbox as a `Status` (e.g. "Memo not sent", "Memo sent to …", "Memo not sent: … You can send it again."), or `null` when there is no memo yet. Show `memo.label` as written. |
 | `bills[]` | Always show **"Simulated Ramp"**. `vendor`, `job`, `amount`, `creditsOn`, `status`, `paid`, plus `check`: `status`, `actions[]` (sentences), `warnings[]`, `wouldPay`. Also has `actions[]` (buttons). |
-| `pmQueue[]` | `ref`, `refLabel` (show it in place of `ref`) and `status` for items a person must look at, including items not taken in (their `ref` can be `""`). |
+| `pmQueue[]` | `kind` (as in `inbox[]`; only `"backCharge"` has a detail screen), `ref`, `refLabel` (show it in place of `ref`) and `status` for items a person must look at, including items not taken in (their `ref` can be `""`) and emails not yet dismissed. |
 | `audit[]` | Newest first: `seq`, `at`, `actor` (already worded: `"lee.chen (Controller)"`, or in the demo `"lee.chen (Controller), presented by <username>"`), `what`, `evidence[]`. |
 
 `Status` is `{ label, tone }`. **The label carries the meaning; show it as text.** `tone` (`ok`, `warn`,
@@ -194,6 +194,7 @@ Render each `actions[]` entry as a button, and when clicked send exactly that ob
 | `ingestPmEmails` | none | Ingest PM emails |
 | `confirmLink` | `ref` | Confirm link |
 | `chooseSubcontract` | `ref`, `options[]` | A picker plus Confirm. Send `input.choice` as one of `options`. |
+| `dismissEmail` | `emailId` | A reason field plus Dismiss, on an email's own row (no back-charge found, or couldn't process). Send `input.reason`; it must not be empty. A PM's step. Test id: `dismissEmail-{emailId}`. |
 | `sameCharge` | `ref`, `duplicateOf` | Same charge (merge). Only on an item held just as a possible duplicate (see [Possible duplicates](#possible-duplicates)). A PM's step. |
 | `differentCharge` | `ref`, `duplicateOf` | Different charge. On an item held as a possible duplicate (also with other hold reasons, which stay). A PM's step. |
 | `confirmImageAmount` | `ref`, `options[]` | Only on an item held just because its amount was read from a photo or scanned page. An amount field ("Type the amount you see in the image"), a picker of `options` (often one) and Confirm. Send `input.amount` (what the person typed, e.g. `"$640.00"` or `"640.00"`) and `input.choice`. The typed amount may differ from the model's reading (a misread photo): it becomes the item's amount, both are recorded, and the credit shows both in `amountNotes`. It is refused (409, the item stays held) when it isn't more than $0.00, or when the email's text (body or a PDF page) gives the back-charge a different amount; the message says which. Don't prefill the amount field: the server sends nothing to prefill it with (see [Amounts read from an image](#amounts-read-from-an-image)). Contra doesn't keep the image: the person checks it in the original email (`sourceLocation` names the file). |
@@ -427,6 +428,25 @@ in the wrong form, ...), it is never a back-charge, but it is an Inbox row with 
   `sourceSentence` and `sourceLocation` are `""`: the model's unchecked text is never shown as if it were checked.
 - No `actions` and no detail screen: don't link it to `backChargeDetail` (its `ref` may be another row's,
   or empty). A person reads the original email. It is also in `pmQueue[]` and in the audit log.
+
+## Emails without a back-charge
+
+Nothing a PM sends vanishes, even when nothing in it becomes a back-charge. Each such email is its own
+Inbox row (and in `pmQueue[]` until dismissed), persisted:
+
+- `kind: "noBackCharge"`: an email from an allowed sender in which the extractor found no back-charge and
+  refused nothing. `status.label` is `No back-charge found in this email; a person should read it, then
+  dismiss it with a reason`.
+- `kind: "notProcessed"`: an email the model failed on after every retry. `status.label` is `Couldn't
+  process: <reason>; a person must read the email`, the reason one fixed sentence per failure kind. If a later
+  try succeeds (after a restart), the email is taken in and this row goes away.
+- Both: `emailId`, `emailSubject`, `emailFrom` and `attachments[]` say which email; `ref` and `refLabel` are
+  `""`, `bcNumber` `null`, no amount, no sentence, no detail screen. `actions` is `[dismissEmail]` until a PM
+  dismisses it; then the row stays, with `status.label` `Dismissed by <who>: <reason>` and no actions.
+- In `live`, `nextStep` says `PM reads the email "<subject>" (...) and dismisses it with a reason (in its Inbox
+  row)` with `action: null` once nothing else is waiting.
+
+Samples: `live-07-after-emails-with-no-back-charge.screens.json` and `live-08-after-the-pm-dismisses-one.screens.json`.
 
 ## Detail screen: `BackChargeDetail`
 

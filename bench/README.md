@@ -47,8 +47,9 @@ set), so the comparison isolates matching. Columns, per system and per run:
   it, and validation refused no item from the email. In the product nothing reaches the Inbox, so nobody
   sees it: a missed run is never matching (even when the label says review) and never counted as routed
   to human. With at least one refused item it is routed to human instead (still never matching): the
-  refused row sends a person to the email. Only refused items count: a row saying the email holds no
-  back-charge, if the product ever shows one, would not send anyone to look, so it would not count. A
+  refused row sends a person to the email. Only refused items count: the product's row saying the email
+  holds no back-charge ("No back-charge found", which a PM dismisses) doesn't send anyone to look for one,
+  so it doesn't count. A
   `"none"` label with nothing extracted is correct, not missed.
 
 The first runs kept in `results/` are not re-scored under this rule. At those commits the product dropped

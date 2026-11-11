@@ -15,9 +15,9 @@ export default async function PmQueue() {
       {pmQueue.length === 0 && <p>Nothing waiting on the PM.</p>}
       {pmQueue.map((q, i) =>
         // An item not taken in is not a back-charge: no detail screen (its ref may be empty or another row's).
-        q.status.label.startsWith("Held: not taken in:") ? (
-          <div key={i} className="card rejected" data-testid={`pm-queue-rejected-${i}`}>
-            <span className="rejected-tag">Not taken in</span>
+        q.kind !== "backCharge" ? (
+          <div key={i} className="card rejected" data-testid={`pm-queue-${q.kind}-${i}`}>
+            <span className="rejected-tag">{q.kind === "rejected" ? "Not taken in" : q.kind === "noBackCharge" ? "No back-charge found" : "Couldn't process"}</span>
             <StatusWord s={q.status} />
           </div>
         ) : (

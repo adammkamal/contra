@@ -172,8 +172,8 @@ export interface Score {
  *   - refused > 0: routed to a person (the refused row sends them to the email), never matching;
  *   - otherwise missed: nothing reaches the Inbox, so no person sees it: never matching (even when the label
  *     says review) and never routed to a person.
- *   Only refused items count. A row saying the email held no back-charge would not send anyone to find one,
- *   so if the product ever shows such a row, it must not count here.
+ *   Only refused items count. The product's row saying the email held no back-charge ("No back-charge
+ *   found", kind noBackCharge) doesn't send anyone to find one, so it doesn't count here.
  *
  * Label "none" (no back-charge): correct only if no item is accepted. An accepted item that would be
  * credited is a wrong credit; any other accepted outcome is routed to a person and not correct.

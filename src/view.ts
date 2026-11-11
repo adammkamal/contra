@@ -5,7 +5,7 @@ import { formatUsd, scanUsdAmounts } from "./money.ts";
 import { matchJobs, resolve, type Resolution } from "./resolver.ts";
 import { attachmentPages, describeAt, describeAttachment, inEmailText, readFromImage } from "./span.ts";
 import { conflictingStatements } from "./intake.ts";
-import { EMAIL_INGESTED, ROLE_WORDS, type Actor, type BackCharge, type Credit, type Email, type EmailOrigin, type HoldReason, type Job, type Notice, type RejectedItem, type Subcontract } from "./types.ts";
+import { EMAIL_INGESTED, ROLE_WORDS, type Actor, type BackCharge, type Credit, type Email, type EmailNote, type EmailOrigin, type HoldReason, type Job, type Notice, type RejectedItem, type Subcontract } from "./types.ts";
 import { amountNotes, bcNumberOf, Contra, estimateOf, refLabel } from "./workflow.ts";
 import { backChargeAmount } from "./credits.ts";
 
@@ -25,6 +25,7 @@ export type Action =
   | { command: "confirmLink"; ref: string }
   | { command: "chooseSubcontract"; ref: string; options: string[] }
   | { command: "confirmImageAmount"; ref: string; options: string[] }
+  | { command: "dismissEmail"; emailId: string }
   | { command: "sameCharge"; ref: string; duplicateOf: string }
   | { command: "differentCharge"; ref: string; duplicateOf: string }
   | { command: "draftNotice"; subcontractId: string }
@@ -129,6 +130,16 @@ export function rejectedStatus(r: Readonly<RejectedItem>): Status {
   return { label: `Held: not taken in: ${r.words}; a person must read the email`, tone: "danger" };
 }
 
+/**
+ * The status of an email's own row: no back-charge found, or couldn't process; or dismissed, with who and
+ * why. A person reads the email; the PM dismisses the row with a reason.
+ */
+export function emailNoteStatus(n: Readonly<EmailNote>): Status {
+  if (n.dismissed) return { label: `Dismissed by ${n.dismissed.by}: ${n.dismissed.reason}`, tone: "idle" };
+  if (n.kind === "no_back_charge") return { label: "No back-charge found in this email; a person should read it, then dismiss it with a reason", tone: "warn" };
+  return { label: `Couldn't process: ${n.reason ?? "the model failed"}; a person must read the email`, tone: "danger" };
+}
+
 export interface InboxRow {
   /**
    * "backCharge": an extracted back-charge (backChargeDetail(app, ref) has its detail screen).
@@ -136,8 +147,13 @@ export interface InboxRow {
    * `status.label`; `ref` is its BC number if it had a readable one, else ""; `vendorAsWritten`, `amount`,
    * `sourceSentence` and `sourceLocation` are "" (the model's unchecked text is never shown as if checked);
    * no detail screen and no actions.
+   * "noBackCharge": an email from an allowed sender in which nothing was found; "notProcessed": an email the
+   * model failed on after every retry. Both are the email's own row: `ref` and `refLabel` are "", `bcNumber`
+   * null, no amount or sentence, no detail screen; `dismissEmail` until a PM dismisses it.
    */
-  kind: "backCharge" | "rejected";
+  kind: "backCharge" | "rejected" | "noBackCharge" | "notProcessed";
+  /** The email the row came from. */
+  emailId: string;
   ref: string;
   /**
    * A backCharge row's accounting BC number, or null while it has none yet (its `ref` is then a Contra
@@ -277,8 +293,8 @@ export interface Screens {
     actions: Action[];
     simulated: true;
   }[];
-  /** refLabel: as in the Inbox row. */
-  pmQueue: { ref: string; refLabel: string; status: Status }[];
+  /** kind and refLabel: as in the Inbox row. Only a "backCharge" entry has a detail screen. */
+  pmQueue: { kind: InboxRow["kind"]; ref: string; refLabel: string; status: Status }[];
   opener: { sampleData: true; notDeducted: string; possible: string; deducted: string; rows: { ref: string; status: string; amount: string; evidence: string }[] };
   audit: { seq: number; at: string; actor: string; what: string; evidence: string[] }[];
 }
@@ -325,6 +341,7 @@ export function buildScreens(app: App): Screens {
     const withheld = readingWithheld(b, email);
     return {
       kind: "backCharge" as const,
+      emailId: b.extracted.amountEvidence.emailId,
       ref: b.ref,
       bcNumber: bcNumberOf(b),
       refLabel: refLabel(b),
@@ -347,6 +364,7 @@ export function buildScreens(app: App): Screens {
     const email = contra.emails.get(r.emailId);
     inbox.push({
       kind: "rejected",
+      emailId: r.emailId,
       ref: r.ref ?? "",
       bcNumber: r.ref ?? null,
       refLabel: r.ref ?? "",
@@ -362,6 +380,29 @@ export function buildScreens(app: App): Screens {
       linkExplanation: [],
       status: rejectedStatus(r),
       actions: [],
+    });
+  }
+  // Nor an email that yielded no back-charge: its own row, until a PM reads it and dismisses it with a reason.
+  for (const n of contra.emailNotes) {
+    const email = contra.emails.get(n.emailId);
+    inbox.push({
+      kind: n.kind === "no_back_charge" ? "noBackCharge" : "notProcessed",
+      emailId: n.emailId,
+      ref: "",
+      bcNumber: null,
+      refLabel: "",
+      emailSubject: n.subject,
+      emailFrom: n.from,
+      vendorAsWritten: "",
+      amount: "",
+      estimate: null,
+      sourceSentence: "",
+      sourceLocation: "",
+      photoAmount: null,
+      attachments: email?.attachments?.map(describeAttachment) ?? [],
+      linkExplanation: [],
+      status: emailNoteStatus(n),
+      actions: n.dismissed ? [] : [{ command: "dismissEmail", emailId: n.emailId }],
     });
   }
 
@@ -469,8 +510,9 @@ export function buildScreens(app: App): Screens {
     credits: creditRows,
     bills,
     pmQueue: [
-      ...contra.pmQueue().map((b) => ({ ref: b.ref, refLabel: refLabel(b), status: backChargeStatus(b) })),
-      ...contra.rejected.map((r) => ({ ref: r.ref ?? "", refLabel: r.ref ?? "", status: rejectedStatus(r) })),
+      ...contra.pmQueue().map((b) => ({ kind: "backCharge" as const, ref: b.ref, refLabel: refLabel(b), status: backChargeStatus(b) })),
+      ...contra.rejected.map((r) => ({ kind: "rejected" as const, ref: r.ref ?? "", refLabel: r.ref ?? "", status: rejectedStatus(r) })),
+      ...contra.emailNotes.filter((n) => !n.dismissed).map((n) => ({ kind: n.kind === "no_back_charge" ? ("noBackCharge" as const) : ("notProcessed" as const), ref: "", refLabel: "", status: emailNoteStatus(n) })),
     ],
     opener,
     audit,
@@ -563,6 +605,8 @@ function liveNextStep(app: App): { text: string; action: Action | null } {
   if (eligible) return { text: `Propose the vendor credit for ${eligible.subcontractId}`, action: { command: "proposeCredit", subcontractId: eligible.subcontractId! } };
   const unsent = app.ctx.memoSender ? credits.find((c) => Contra.memoSendable(c) && !c.memoDelivery) : undefined;
   if (unsent) return { text: `Send the credit memo for ${unsent.id} to the AP inbox`, action: { command: "sendCreditMemo", creditId: unsent.id } };
+  const note = contra.emailNotes.find((n) => !n.dismissed);
+  if (note) return { text: `PM reads the email "${note.subject}" (${note.kind === "no_back_charge" ? "no back-charge found" : "couldn't process"}) and dismisses it with a reason (in its Inbox row)`, action: null };
   return { text: "Waiting for back-charge emails from the live inbox", action: null };
 }
 
