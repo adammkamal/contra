@@ -376,7 +376,7 @@ action, as with a BC number.
 ## Items not taken in
 
 Nothing a PM sends vanishes. When the model returns something for an email that validation refuses (a
-page or attachment that doesn't exist, an amount that can't be read exactly, a missing BC number, an answer
+page or attachment that doesn't exist, an amount that can't be read exactly, a back-charge number that isn't one or that the email doesn't contain, an answer
 in the wrong form, ...), it is never a back-charge, but it is an Inbox row with `kind: "rejected"`:
 
 - `status.label` is `Held: not taken in: <the reason in plain words>; a person must read the email`, for example

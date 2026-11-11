@@ -452,7 +452,7 @@ test("attachments: every kind of rejection, and a whole answer refused, is a hel
     const held = buildScreens(app).inbox.filter((r) => r.kind === "rejected").map((r) => [r.ref, r.emailSubject, r.status.label]);
     const h = (w: string) => `Held: not taken in: ${w}; a person must read the email`;
     assert.deepEqual(held, [
-      ["", "Summit - three items", h("the model didn't give a back-charge number in the form BC-1234")],
+      ["", "Summit - three items", h("the model gave a back-charge number that isn't in the form BC-1234")],
       ["BC-7404", "Summit - three items", h(`the amount can't be read exactly ("$1,250.5")`)],
       ["BC-7405", "Summit - three items", h("the model said the amount is in attachment 4, but the email has no attachment 4")],
       ["", "Summit - unreadable", h("the model's answer for this email wasn't in the expected form, so nothing in it was taken in")],
