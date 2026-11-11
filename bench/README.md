@@ -26,8 +26,9 @@ without a label for every case, it exits listing the unlabeled cases.
   `"review"` if a careful person would not auto-link), `disputed`, `amountCents`, `labeledBy` (your name).
   The run prints **NOT VALID FOR THE DEMO** while any label for a current case isn't human-written.
 
-Scoring is per run. A run with exactly one accepted item is scored on that item. A run with 0 accepted
-items, or more than 1, counts as "review" for both systems (the item count is shown). A failed call is
+Scoring is per run. A run with exactly one accepted item is scored on that item. A run with more than 1
+accepted item counts as "review" for both systems (the item count is shown). A run with 0 accepted items
+is **missed** when the label names a back-charge (shown as "nothing extracted"). A failed call is
 reported and not scored. A case is **stable** if each system's outcome is the same in every run; the run
 lists the unstable cases.
 
@@ -40,6 +41,10 @@ set), so the comparison isolates matching. Columns, per system and per run:
 - **wrong links**, **wrong credits** (would credit something a careful human wouldn't: wrong party,
   disputed, or wrong amount) and **routed to human**. Report wrong credits together with the
   routed-to-human count: "0 wrong credits" means nothing if everything was routed to a human.
+- **missed** — the label names a back-charge (a subcontract or `"review"`) and nothing was extracted for
+  it. In the product nothing reaches the Inbox, so nobody sees it: a missed run is never matching (even
+  when the label says review) and never counted as routed to human. A `"none"` label with nothing
+  extracted is correct, not missed.
 
 ## Held-out set
 
@@ -47,6 +52,17 @@ set), so the comparison isolates matching. Columns, per system and per run:
 `labels/`. It is recorded and scored only with `--set heldout`, and its numbers are never merged into the
 main benchmark's: recordings go to `fixtures/bench-extractions/heldout/<caseId>/`, results to
 `bench/heldout/results.json`.
+
+## Fresh set
+
+`bench/fresh/` holds a third set (`cases/`, fh-01 ...), written by someone outside the team, with its own
+protected, human-written `labels/`. Run it with `--set fresh`. Recordings go to
+`fixtures/bench-extractions/fresh/<caseId>/` and results to `bench/fresh/results.json`, never merged with
+the other sets' numbers. Its labels can also use the items form (several charges per email, charges
+without a BC number); see `bench/fresh/LABEL-FORMAT.md`. Labels in the single-item form are scored exactly
+as in the other sets.
+
+## Labels: "none"
 
 A label's `link` may also be `"none"` (the email holds no back-charge), with `amountCents: null`. Such a run
 is correct only if no item is accepted. An accepted item that would be credited counts as a wrong credit;

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { chosenWorkspace, getDetail } from "../../../ui/api.ts";
-import { Chain, differenceNote, Files, findConfirmation, findSentence, ImageReading, Marked, Quote, redact, StatusWord, Trace } from "../../../ui/Bits.tsx";
+import { Chain, Files, findSentence, ImageReading, Marked, photoAmountNote, Quote, StatusWord, Trace } from "../../../ui/Bits.tsx";
 
 export const dynamic = "force-dynamic";
 
@@ -31,11 +31,9 @@ export default async function Detail({ params }: { params: Promise<{ ref: string
   const pageText = d.email?.attachmentText.find((t) => t.where === d.sourceLocation);
   const range = d.email ? findSentence(inBody ? d.email.body : (pageText?.text ?? ""), d.sourceSentence) : null;
   const fromImage = !inBody && !pageText;
-  // A reading of an image is hidden until the PM confirms the amount, then shown labelled as unchecked.
-  const confirmation = fromImage ? findConfirmation(d.history, d.sourceSentence) : null;
-  const unconfirmed = fromImage && !confirmation;
-  const hidden = unconfirmed ? [d.sourceSentence] : [];
-  const diff = confirmation ? differenceNote(confirmation) : null;
+  // The server sends amount "" and sourceSentence "" until the PM confirms an amount read from an image.
+  const unconfirmed = d.amount === "";
+  const diff = d.photoAmount ? photoAmountNote(d.photoAmount) : null;
   return (
     <>
       {BACK}
@@ -72,7 +70,7 @@ export default async function Detail({ params }: { params: Promise<{ ref: string
             <p className="hidden-reading" data-testid="hidden-reading">
               The model read an amount from an image. It is shown after the PM types the amount they see and confirms it.
             </p>
-          ) : fromImage ? (
+          ) : d.photoAmount ? (
             <ImageReading testId="image-reading">{d.sourceSentence}</ImageReading>
           ) : (
             <Quote>{d.sourceSentence}</Quote>
@@ -123,7 +121,7 @@ export default async function Detail({ params }: { params: Promise<{ ref: string
             <h2>Eligibility: {d.eligibility.status}</h2>
             {d.eligibility.holdReasons.length > 0 ? <p>Held: {d.eligibility.holdReasons.join("; ")}</p> : null}
             {d.eligibility.waitingFor.length > 0 ? <p>Waiting for: {d.eligibility.waitingFor.join("; ")}</p> : null}
-            <Trace lines={d.eligibility.trace.map((t) => redact(t, hidden))} />
+            <Trace lines={d.eligibility.trace} />
           </section>
 
           {d.clause ? (
@@ -161,11 +159,11 @@ export default async function Detail({ params }: { params: Promise<{ ref: string
             <tr key={h.seq}>
               <td className="nowrap meta">{h.at}</td>
               <td className="strong">{h.actor}</td>
-              <td>{redact(h.what, hidden)}</td>
+              <td>{h.what}</td>
               <td>
                 <ul className="evidence-list">
                   {h.evidence.map((x, i) => (
-                    <li key={i}>{redact(x, hidden)}</li>
+                    <li key={i}>{x}</li>
                   ))}
                 </ul>
               </td>

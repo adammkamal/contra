@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Screens } from "../../src/view.ts";
 import { ActionButton } from "../../ui/ActionButton.tsx";
 import { currentScreens } from "../../ui/api.ts";
-import { Chain, differenceNote, Files, findConfirmation, ImageReading, isFromImage, Quote, StatusWord } from "../../ui/Bits.tsx";
+import { Chain, Files, ImageReading, photoAmountNote, Quote, StatusWord } from "../../ui/Bits.tsx";
 
 export const dynamic = "force-dynamic";
 
@@ -57,10 +57,9 @@ export default async function Inbox() {
               </article>
             );
           }
-          const image = isFromImage(r);
-          const confirmation = image ? findConfirmation(s.audit, r.sourceSentence) : null;
-          const unconfirmed = image && !confirmation; // the model's reading stays hidden until the PM types the amount
-          const diff = confirmation ? differenceNote(confirmation) : null;
+          // The server sends amount "" and sourceSentence "" until the PM confirms an amount read from an image.
+          const unconfirmed = r.amount === "";
+          const diff = r.photoAmount ? photoAmountNote(r.photoAmount) : null;
           return (
             <article key={r.ref} className="item" data-testid={`inbox-row-${r.ref}`}>
               <div className="item-head">
@@ -92,7 +91,7 @@ export default async function Inbox() {
                     <div className="hidden-reading" data-testid={`hidden-reading-${r.ref}`}>
                       The model read an amount from a photo or scanned page. Open it in the original email and type the amount you see; the model’s reading is shown after you confirm.
                     </div>
-                  ) : image ? (
+                  ) : r.photoAmount ? (
                     <ImageReading testId={`image-reading-${r.ref}`}>{r.sourceSentence}</ImageReading>
                   ) : (
                     <Quote>{r.sourceSentence}</Quote>

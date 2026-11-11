@@ -1,0 +1,12 @@
+{
+  "id": "fh-04",
+  "description": "independent held-out case",
+  "email": {
+    "id": "fh-04",
+    "from": "dana.ortiz@apexbuilders.example",
+    "to": "contra.demo+backcharges@example.com",
+    "subject": "Summit – two separate charges",
+    "receivedAt": "2026-10-26T14:00:00.000Z",
+    "body": "Hi Accounting,\n\nI have two back-charges from yesterday at Summit Medical Office.\n\nRidgeline Drywall left debris in the stairwell that cost us $360 to remove. Harbor Mechanical also damaged a sprinkler access panel during duct installation; replacing it cost $725.\n\nPlease record these as two separate charges against the respective subcontractors.\n\nThanks,\nDana"
+  }
+}

@@ -5,6 +5,7 @@ data/
 *.db-shm
 bench/results.json
 bench/heldout/results.json
+bench/fresh/results.json
 .env
 .env.*
 !.env.example

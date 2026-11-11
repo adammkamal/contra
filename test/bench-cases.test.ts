@@ -40,6 +40,30 @@ for (const f of files) {
   });
 }
 
+const freshDir = join(import.meta.dirname, "..", "bench", "fresh", "cases");
+const freshFiles = readdirSync(freshDir).filter((f) => f.endsWith(".json")).sort();
+
+test("fresh cases: exactly fh-01 ... fh-08, written outside the team", () => {
+  assert.deepEqual(freshFiles, Array.from({ length: 8 }, (_, i) => `fh-0${i + 1}.json`));
+});
+
+for (const f of freshFiles) {
+  const raw = JSON.parse(readFileSync(join(freshDir, f), "utf8")) as Record<string, unknown>;
+  const id = f.replace(/\.json$/, "");
+
+  test(`fresh case ${id}: id, the fixed description, a complete email and no answer fields`, () => {
+    assert.deepEqual(Object.keys(raw).sort(), ["description", "email", "id"]);
+    assert.equal(raw.id, id);
+    assert.equal(raw.description, "independent held-out case");
+    const email = raw.email as Record<string, unknown>;
+    assert.deepEqual(Object.keys(email).sort(), [...EMAIL_FIELDS].sort());
+    for (const k of EMAIL_FIELDS) assert.ok(typeof email[k] === "string" && (email[k] as string).trim().length > 0, `email.${k}`);
+    assert.equal(email.id, id);
+    assert.ok(!Number.isNaN(new Date(email.receivedAt as string).getTime()), "receivedAt parses");
+    assert.deepEqual(keysDeep(raw).filter((k) => FORBIDDEN.has(k)), []);
+  });
+}
+
 const heldoutDir = join(import.meta.dirname, "..", "bench", "heldout", "cases");
 for (const f of readdirSync(heldoutDir).filter((f) => f.endsWith(".json")).sort()) {
   const raw = JSON.parse(readFileSync(join(heldoutDir, f), "utf8")) as Record<string, unknown>;

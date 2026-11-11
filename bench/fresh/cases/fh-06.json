@@ -1,0 +1,12 @@
+{
+  "id": "fh-06",
+  "description": "independent held-out case",
+  "email": {
+    "id": "fh-06",
+    "from": "dana.ortiz@apexbuilders.example",
+    "to": "contra.demo+backcharges@example.com",
+    "subject": "Summit – Harbor Mechanical damage claim",
+    "receivedAt": "2026-10-26T14:00:00.000Z",
+    "body": "Hi,\n\nThe replacement of damaged ceiling tiles near Harbor Mechanical's work area at Summit came to $2,150.00.\n\nI notified Harbor that we intend to back-charge them, but they are disputing responsibility and say another contractor caused the damage. I'm waiting on their photos before we decide.\n\nPlease keep this on hold for now and don't deduct it from their payment.\n\nThanks,\nDana"
+  }
+}

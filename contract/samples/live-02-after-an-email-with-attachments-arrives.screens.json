@@ -20,6 +20,7 @@
       "amount": "$900.00",
       "sourceSentence": "BC-7151: patch the stair core drywall damaged during framing, Summit, $900.00.",
       "sourceLocation": "email body",
+      "photoAmount": null,
       "attachments": [],
       "linkExplanation": [
         "job: \"Summit\" -> SUM-01 Summit Medical Office",
@@ -46,6 +47,7 @@
       "amount": "$1,250.00",
       "sourceSentence": "BC-7152: corridor wall repair, L3, $1,250.00 per our painter's quote.",
       "sourceLocation": "attachment estimate.pdf, page 2",
+      "photoAmount": null,
       "attachments": [
         "attachment estimate.pdf: PDF, 2 pages, text read",
         "attachment IMG_2041.jpg: photo, read by the model as an image (not verifiable word for word)",
@@ -73,9 +75,10 @@
       "emailSubject": "Summit - two back-charges, estimate and ticket photo attached",
       "emailFrom": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
       "vendorAsWritten": "Ridgeline Interiors LLC",
-      "amount": "$640.00",
-      "sourceSentence": "BC-7153 FLOOR PROTECTION $640.00",
+      "amount": "",
+      "sourceSentence": "",
       "sourceLocation": "attachment IMG_2041.jpg",
+      "photoAmount": null,
       "attachments": [
         "attachment estimate.pdf: PDF, 2 pages, text read",
         "attachment IMG_2041.jpg: photo, read by the model as an image (not verifiable word for word)",
@@ -161,9 +164,8 @@
       "seq": 5,
       "at": "2026-11-07 15:00 UTC",
       "actor": "Sample extractions (hand-written)",
-      "what": "backcharge BC-7153: extracted $640.00 (new → extracted)",
+      "what": "backcharge BC-7153: extracted (amount read from an image: withheld until a person confirms the amount from the image) (new → extracted)",
       "evidence": [
-        "BC-7153 FLOOR PROTECTION $640.00",
         "in attachment IMG_2041.jpg"
       ]
     },

@@ -1,12 +1,10 @@
 import { currentScreens } from "../../ui/api.ts";
-import { hiddenReadings, redact } from "../../ui/Bits.tsx";
 
 export const dynamic = "force-dynamic";
 
 export default async function Audit() {
   const c = await currentScreens();
   if (!c) return null;
-  const hidden = hiddenReadings(c.s); // a photo's reading is hidden until the PM confirms the amount
   return (
     <>
       <div className="page-head">
@@ -30,11 +28,11 @@ export default async function Audit() {
               <td className="meta">{e.seq}</td>
               <td className="nowrap meta">{e.at}</td>
               <td className="strong">{e.actor}</td>
-              <td>{redact(e.what, hidden)}</td>
+              <td>{e.what}</td>
               <td>
                 <ul className="evidence-list">
                   {e.evidence.map((x, i) => (
-                    <li key={i}>{redact(x, hidden)}</li>
+                    <li key={i}>{x}</li>
                   ))}
                 </ul>
               </td>

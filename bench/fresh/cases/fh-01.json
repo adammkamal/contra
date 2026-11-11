@@ -1,0 +1,12 @@
+{
+  "id": "fh-01",
+  "description": "independent held-out case",
+  "email": {
+    "id": "fh-01",
+    "from": "dana.ortiz@apexbuilders.example",
+    "to": "contra.demo+backcharges@example.com",
+    "subject": "Summit MOB – Level 3 cleanup charge",
+    "receivedAt": "2026-10-26T14:00:00.000Z",
+    "body": "Hi Accounting,\n\nRidgeline Drywall left drywall scraps and compound buckets throughout the Level 3 hallway at Summit Medical Office. We had our laborers clean it up before inspection.\n\nPlease back-charge Ridgeline Drywall $475.00 for the cleanup.\n\nThanks,\nDana\nProject Manager"
+  }
+}

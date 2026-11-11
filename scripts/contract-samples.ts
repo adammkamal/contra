@@ -103,9 +103,10 @@ write("live-01-after-an-email-arrives.screens.json", buildScreens(live));
 
 // An email with attachments (made up, extraction hand-written): an estimate PDF read as text, whose page 2
 // states BC-7152 (it verifies and links); a photo of a ticket for BC-7153 (held: amount only in an image,
-// with the confirmImageAmount button); and a HEIC photo, skipped with its reason.
+// with the confirmImageAmount button; the ticket says $640.00, the model misread it as $604.00, which no
+// screen shows until the PM confirms); and a HEIC photo, skipped with its reason.
 const pdfSentence = "BC-7152: corridor wall repair, L3, $1,250.00 per our painter's quote.";
-const photoSentence = "BC-7153 FLOOR PROTECTION $640.00";
+const photoSentence = "BC-7153 FLOOR PROTECTION $604.00";
 const attEmail = {
   id: "gmail-18c2f0a1b2c3d4f6",
   from: "Dana Ortiz <dana.ortiz@apexbuilders.example>",
@@ -126,7 +127,7 @@ cmd.ingestInboxEmail(
   attEmail,
   [
     { ref: "BC-7152", description: "Corridor wall repair, L3", amountCents: cents(125_000), amountEvidence: { emailId: attEmail.id, sentence: pdfSentence, at: { attachment: 1, page: 2 } }, vendorNameAsWritten: "Ridgeline Interiors LLC", jobRef: "Summit", disputeNoted: false },
-    { ref: "BC-7153", description: "Floor protection", amountCents: cents(64_000), amountEvidence: { emailId: attEmail.id, sentence: photoSentence, at: { attachment: 2, page: 1 } }, vendorNameAsWritten: "Ridgeline Interiors LLC", jobRef: "Summit", disputeNoted: false },
+    { ref: "BC-7153", description: "Floor protection", amountCents: cents(60_400), amountEvidence: { emailId: attEmail.id, sentence: photoSentence, at: { attachment: 2, page: 1 } }, vendorNameAsWritten: "Ridgeline Interiors LLC", jobRef: "Summit", disputeNoted: false },
   ],
   SAMPLE_EXTRACTIONS,
 );
@@ -151,7 +152,11 @@ const refused = parseBackCharges(
 );
 cmd.ingestInboxEmail(live, rejEmail, refused.items, SAMPLE_EXTRACTIONS, "gmail", refused.rejected);
 write("live-03-after-an-item-is-not-taken-in.screens.json", buildScreens(live));
+
+// The PM types the amount the photo of BC-7153 shows ($640.00): the row now has both readings in photoAmount.
+cmd.confirmImageAmount(live, "BC-7153", "$640.00", "SC-SUM-0912");
+write("live-04-after-a-photo-amount-is-confirmed.screens.json", buildScreens(live));
 live.close();
 
 rmSync(tmp, { recursive: true, force: true });
-console.log(`Wrote ${i + 1} screen states + 3 details + 1 memo + ${trySamples.length} try samples + 4 live-workspace screens + 1 live detail to contract/samples/`);
+console.log(`Wrote ${i + 1} screen states + 3 details + 1 memo + ${trySamples.length} try samples + 5 live-workspace screens + 1 live detail to contract/samples/`);

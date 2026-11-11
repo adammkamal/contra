@@ -12,7 +12,7 @@ export default async function Outbox() {
     <>
       <div className="page-head">
         <h1>Outbox</h1>
-        <p className="sub">Notices to the subcontractor. Nothing is sent until the controller approves.</p>
+        <p className="sub">Notices to the subcontractor. Nothing is sent until the PM approves.</p>
       </div>
       {s.outbox.length === 0 ? <p className="empty">No notices yet.</p> : null}
       {s.outbox.map((n) => (
