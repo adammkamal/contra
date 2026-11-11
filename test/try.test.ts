@@ -10,7 +10,9 @@ import { App } from "../src/app.ts";
 import { runAction } from "../src/commands.ts";
 import { normalize } from "../src/span.ts";
 import { buildScreens, HOLD_WORDS } from "../src/view.ts";
-import { testAuth } from "./auth-fakes.ts";
+import { sessionFetch, signIn, testAuth } from "./auth-fakes.ts";
+
+const http = sessionFetch();
 
 // Every email here is made up for these tests. No live model calls: the fetcher is fake.
 
@@ -195,6 +197,7 @@ test("try: read-only: audit log's last seq and buildScreens are byte-identical b
 async function withApi(tryOpts: TryApiOptions | undefined, fn: (base: string, app: () => App) => Promise<void>) {
   const api = createApiServer({ auth: testAuth(), dbPath: join(mkdtempSync(join(tmpdir(), "contra-try-")), "d.db"), start: START, emlDir: null, ...(tryOpts ? { try: tryOpts } : {}) });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
+  http.use(await signIn(`http://127.0.0.1:${(api.server.address() as AddressInfo).port}`, api.authStore));
   try {
     await fn(`http://127.0.0.1:${(api.server.address() as AddressInfo).port}`, api.app);
   } finally {
@@ -202,7 +205,7 @@ async function withApi(tryOpts: TryApiOptions | undefined, fn: (base: string, ap
   }
 }
 const postTry = async (base: string, body: unknown) => {
-  const r = await fetch(`${base}/api/try`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const r = await http.fetch(`${base}/api/try`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   return { status: r.status, body: (await r.json()) as any };
 };
 const settled = { settings: () => OK, callOptions: { fetcher: fetcherFor({ items: [item()] }), ...fast } };
@@ -369,7 +372,7 @@ test("API /api/try: an unexpected error inside tryEmail is a generic 500, not 40
 
 test("API /api/try: a request over 256 KB gets a 413 response (not a dropped connection), and the server keeps working", async () => {
   await withApi(settled, async (base) => {
-    const big = await fetch(`${base}/api/try`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ subject: "s", body: "b".repeat(TRY_LIMITS.requestBytes) }) });
+    const big = await http.fetch(`${base}/api/try`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ subject: "s", body: "b".repeat(TRY_LIMITS.requestBytes) }) });
     assert.equal(big.status, 413);
     assert.match(((await big.json()) as { error: string }).error, /body too large/);
     assert.equal((await postTry(base, HARBOR)).status, 200);
@@ -417,6 +420,7 @@ test("privacy: /api/try never logs, persists or echoes the email text, subject o
   const errorBodies: string[] = [];
   const api = createApiServer({ auth: testAuth(), dbPath: join(dir, "d.db"), start: START, emlDir: null, try: { settings: () => OK, callOptions } });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
+  http.use(await signIn(`http://127.0.0.1:${(api.server.address() as AddressInfo).port}`, api.authStore));
   const base = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
   let output = "";
   try {

@@ -10,7 +10,9 @@ import { App } from "../src/app.ts";
 import { advanceDays } from "../src/commands.ts";
 import type { Screens } from "../src/view.ts";
 import { CONFIG, fakeExtract, fakeGmail, rfc822 } from "./gmail-fakes.ts";
-import { testAuth } from "./auth-fakes.ts";
+import { sessionFetch, signIn, testAuth } from "./auth-fakes.ts";
+
+const http = sessionFetch();
 
 // The live workspace's clock is the real clock (injected here) plus an offset that only "advance a
 // week" changes. The demo keeps its simulated clock. Every email here is made up; no network.
@@ -59,10 +61,11 @@ test("advance a week moves the live workspace 7 days ahead of real time and leav
   const poller = new InboxPoller({ client: new GmailClient(CONFIG, g.transport, real.ms), extract: fakeExtract("Ridgeline Drywall", "Summit").extract, now: real.ms });
   const api = createApiServer({ auth: testAuth(), dbPath: tmpDb("demo.db"), liveDbPath: tmpDb("live.db"), realClock: real.clock, start: START, emlDir: null, inbox: { poller, intervalMs: 60_000 } });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
+  http.use(await signIn(`http://127.0.0.1:${(api.server.address() as AddressInfo).port}`, api.authStore));
   const base = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
-  const screens = async (ws: string) => (await (await fetch(`${base}/api/screens?workspace=${ws}`)).json()) as Screens;
+  const screens = async (ws: string) => (await (await http.fetch(`${base}/api/screens?workspace=${ws}`)).json()) as Screens;
   const act = async (ws: string, action: unknown) =>
-    assert.equal((await fetch(`${base}/api/action?workspace=${ws}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action }) })).status, 200);
+    assert.equal((await http.fetch(`${base}/api/action?workspace=${ws}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action }) })).status, 200);
   try {
     // The demo's own simulated clock moves a week too, so this checks it isn't shared.
     for (let i = 0; i < 40; i++) {

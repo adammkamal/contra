@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { createApiServer, type AuthOptions } from "../server/api.ts";
 import { AuthStore, parseUserAddArgs, SESSION_COOKIE } from "../server/auth.ts";
-import { TEST_COST, TEST_PASSWORD, testAuth } from "./auth-fakes.ts";
+import { signIn, TEST_COST, TEST_PASSWORD, testAuth } from "./auth-fakes.ts";
 
 // Accounts and sessions (server/auth.ts). Made-up names and passwords only.
 
@@ -191,4 +191,68 @@ test("user:add: the password is read from the prompt (here a pipe), never printe
   assert.match(parseUserAddArgs(["pat.pm", "boss"]) as string, /role must be one of: pm, controller, ap/);
   assert.match(parseUserAddArgs(["pat.pm", "pm", "--password=x"]) as string, /unknown option/);
   assert.ok(!(parseUserAddArgs(["pat.pm", "pm", "--password=x"]) as string).includes("--password=x"));
+});
+
+test("no session: 401 on every route except POST /api/login and GET /api/health; nothing runs and nothing changes", async () => {
+  const auth = testAuth();
+  let trySettingsRead = 0;
+  const dir = tmp();
+  const api = createApiServer({
+    auth,
+    dbPath: join(dir, "d.db"),
+    liveDbPath: join(dir, "live.db"),
+    realClock: { now: () => START },
+    start: START,
+    emlDir: null,
+    try: { settings: () => (trySettingsRead++, { ok: false as const, message: "no key in this test" }) },
+  });
+  await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
+  try {
+    const cookie = await signIn(base, auth);
+    const json = { "content-type": "application/json" };
+    // Some state, so a reset or action that slipped through would show.
+    assert.equal((await fetch(`${base}/api/action`, { method: "POST", headers: { ...json, cookie }, body: JSON.stringify({ action: { command: "ingestPmEmails" } }) })).status, 200);
+    const before = await (await fetch(`${base}/api/screens`, { headers: { cookie } })).text();
+    const auditBefore = api.app().ctx.contra.audit.all().length;
+
+    const routes: [string, string, unknown?][] = [
+      ["GET", "/api/screens"],
+      ["GET", "/api/screens?workspace=live"],
+      ["GET", "/api/events"],
+      ["GET", "/api/me"],
+      ["GET", "/api/backcharge/BC-4467"],
+      ["GET", "/api/credit/VC-1/memo"],
+      ["GET", "/api/no-such-route"],
+      ["POST", "/api/action", { action: { command: "confirmLink", ref: "BC-4467" } }],
+      ["POST", "/api/action?workspace=live", { action: { command: "advanceDays", days: 7 } }],
+      ["POST", "/api/reset", {}],
+      ["POST", "/api/reset?workspace=live", {}],
+      ["POST", "/api/try", { subject: "s", body: "BC-1: $1.00" }],
+      ["POST", "/api/logout", {}],
+    ];
+    for (const badCookie of [undefined, `${SESSION_COOKIE}=forged-or-expired`, `${SESSION_COOKIE}=`]) {
+      for (const [method, path, body] of routes) {
+        const r = await fetch(`${base}${path}`, { method, headers: { ...(method === "POST" ? json : {}), ...(badCookie ? { cookie: badCookie } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+        assert.equal(r.status, 401, `${method} ${path} ${badCookie ?? "no cookie"}`);
+        assert.deepEqual(await r.json(), { ok: false, error: "sign in first" });
+      }
+    }
+    assert.equal(trySettingsRead, 0, "an unsigned /api/try never reaches the model settings, let alone the model");
+    assert.equal(await (await fetch(`${base}/api/screens`, { headers: { cookie } })).text(), before);
+    assert.equal(api.app().ctx.contra.audit.all().length, auditBefore);
+
+    // Health: without a session only "up"; with one, the workspaces and the inbox.
+    const anon = await fetch(`${base}/api/health`);
+    assert.equal(anon.status, 200);
+    assert.deepEqual(await anon.json(), { ok: true });
+    const h = (await (await fetch(`${base}/api/health`, { headers: { cookie } })).json()) as any;
+    assert.deepEqual(h.workspaces, ["demo", "live"]);
+    assert.equal(h.inbox.mode, "sample");
+    // A signed-in /api/try reaches its own checks (here: no key, 503), keeping its caps.
+    assert.equal((await fetch(`${base}/api/try`, { method: "POST", headers: { ...json, cookie }, body: JSON.stringify({ subject: "s", body: "BC-1: $1.00" }) })).status, 503);
+    assert.equal(trySettingsRead, 1);
+  } finally {
+    await api.close();
+  }
 });

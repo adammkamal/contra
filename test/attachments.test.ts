@@ -20,7 +20,9 @@ import { backChargeDetail, buildScreens, HOLD_WORDS, type InboxRow, type Screens
 import { eml, png, scannedPdf, textPdf, type Part } from "./attachment-fakes.ts";
 import { CONFIG, fakeGmail, gmailAuthPass } from "./gmail-fakes.ts";
 import { LLM, PM, setup } from "./helpers.ts";
-import { testAuth } from "./auth-fakes.ts";
+import { sessionFetch, signIn, testAuth } from "./auth-fakes.ts";
+
+const http = sessionFetch();
 
 // Made-up emails for these tests. Ridgeline Interiors LLC on Summit is SC-SUM-0912 in the demo seed, so an
 // unheld item links on its own and a held one shows the hold.
@@ -566,10 +568,11 @@ test("attachments: before a PM confirms an image amount, no API response carries
   const dir = mkdtempSync(join(tmpdir(), "contra-"));
   const api = createApiServer({ auth: testAuth(), dbPath: join(dir, "d.db"), liveDbPath: join(dir, "live.db"), start: LIVE_START, realClock: { now: () => LIVE_START }, emlDir: null });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
+  http.use(await signIn(`http://127.0.0.1:${(api.server.address() as AddressInfo).port}`, api.authStore));
   const base = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
   // The model's readings below, in any form a response could carry them.
   const MODEL_READING = /604\.00|\$604\b|60400|617\.00|\$617\b|61700/;
-  const sse = await fetch(`${base}/api/events`);
+  const sse = await http.fetch(`${base}/api/events`);
   const reader = sse.body!.getReader();
   let events = "";
   const pump = (async () => {
@@ -581,7 +584,7 @@ test("attachments: before a PM confirms an image amount, no API response carries
   })().catch(() => {});
   const responses: string[] = [];
   const call = async (path: string, body?: unknown) => {
-    const r = await fetch(`${base}${path}`, body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const r = await http.fetch(`${base}${path}`, body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     const text = await r.text();
     responses.push(`${path} -> ${r.status}: ${text}`);
     return { status: r.status, body: JSON.parse(text) as any };

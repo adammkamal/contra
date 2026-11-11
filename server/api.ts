@@ -241,6 +241,8 @@ export function createApiServer(opts: ApiOptions): {
   app: () => App;
   /** The live workspace's App, or null when there is none. */
   live: () => App | null;
+  /** The account store this server signs people in against. */
+  authStore: AuthStore;
   pollNow: () => Promise<void>;
   close: () => Promise<void>;
 } {
@@ -423,19 +425,22 @@ export function createApiServer(opts: ApiOptions): {
         const s = auth.store.createSession(user.username, authNow(), ttl);
         return send(res, 200, meBody({ user, expiresAt: s.expiresAt }, workspacesFor(user)), { "set-cookie": sessionCookie(s.id, Math.floor(ttl / 1000), !!auth.secureCookies) });
       }
-      if (req.method === "POST" && path === "/api/logout") {
-        const id = sessionIdFrom(req.headers.cookie);
-        if (!id || !auth.store.session(id, authNow())) return send(res, 401, { ok: false, error: "sign in first" });
-        auth.store.endSession(id);
-        return send(res, 200, { ok: true }, { "set-cookie": sessionCookie("", 0, !!auth.secureCookies) });
-      }
-      if (req.method === "GET" && path === "/api/me") {
+      // Health without a session is only "up": no workspaces, no inbox address, no counts.
+      if (req.method === "GET" && path === "/api/health") {
         const s = sessionOf(req);
-        if (!s) return send(res, 401, { ok: false, error: "sign in first" });
-        return send(res, 200, meBody(s, workspacesFor(s.user)));
+        if (!s) return send(res, 200, { ok: true });
+        return send(res, 200, { ok: true, workspaces: [...apps.keys()], inbox: inboxStatus() });
       }
 
-      if (req.method === "GET" && path === "/api/health") return send(res, 200, { ok: true, workspaces: [...apps.keys()], inbox: inboxStatus() });
+      // Every other route needs a session (an unknown route too: 401 says nothing about which routes exist).
+      const session = sessionOf(req);
+      if (!session) return send(res, 401, { ok: false, error: "sign in first" });
+
+      if (req.method === "GET" && path === "/api/me") return send(res, 200, meBody(session, workspacesFor(session.user)));
+      if (req.method === "POST" && path === "/api/logout") {
+        auth.store.endSession(sessionIdFrom(req.headers.cookie));
+        return send(res, 200, { ok: true }, { "set-cookie": sessionCookie("", 0, !!auth.secureCookies) });
+      }
       if (req.method === "GET" && path === "/api/events") {
         res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
         res.write("retry: 3000\n\n");
@@ -509,6 +514,7 @@ export function createApiServer(opts: ApiOptions): {
     server,
     app: () => appFor("demo"),
     live: () => apps.get("live") ?? null,
+    authStore: auth.store,
     pollNow,
     close: () =>
       new Promise<void>((resolve) => {

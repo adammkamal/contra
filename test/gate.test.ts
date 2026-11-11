@@ -8,7 +8,9 @@ import { test } from "node:test";
 import { createApiServer, isJsonContentType, type TryApiOptions } from "../server/api.ts";
 import { MODEL_ERROR_MESSAGES, type TryInput } from "../server/try.ts";
 import type { App } from "../src/app.ts";
-import { testAuth } from "./auth-fakes.ts";
+import { sessionFetch, signIn, testAuth } from "./auth-fakes.ts";
+
+const http = sessionFetch();
 
 // Every POST must be JSON, and a disallowed Origin is refused on every method, before anything runs.
 // Emails here are made up for these tests; the model fetcher is fake.
@@ -34,6 +36,7 @@ async function withApi(fn: (port: number, app: () => App) => Promise<void>, tryO
     try: tryOpts ?? { settings: () => ({ ok: true, settings: { apiKey: "sk-test", model: "claude-test" } }), callOptions: { fetcher: countingFetcher, maxRetries: 0 } },
   });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
+  http.use(await signIn(`http://127.0.0.1:${(api.server.address() as AddressInfo).port}`, api.authStore));
   try {
     await fn((api.server.address() as AddressInfo).port, api.app);
   } finally {
@@ -44,7 +47,7 @@ async function withApi(fn: (port: number, app: () => App) => Promise<void>, tryO
 /** Raw request, so Origin and Content-Type are sent exactly as given (or not at all). */
 function call(port: number, method: string, path: string, headers: Record<string, string>, body?: string): Promise<{ status: number; headers: IncomingHttpHeaders; body: string }> {
   return new Promise((resolve, reject) => {
-    const req = request({ host: "127.0.0.1", port, method, path, headers }, (res) => {
+    const req = request({ host: "127.0.0.1", port, method, path, headers: { ...headers, ...(http.cookie ? { cookie: http.cookie } : {}) } }, (res) => {
       let text = "";
       res.setEncoding("utf8");
       res.on("data", (c: string) => (text += c));
