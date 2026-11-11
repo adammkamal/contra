@@ -1,4 +1,4 @@
-import { TryPanel } from "../../ui/TryPanel.tsx";
+import { TryPanel } from "../../../ui/TryPanel.tsx";
 
 export const dynamic = "force-dynamic";
 

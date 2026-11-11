@@ -1,8 +1,8 @@
 import Link from "next/link";
-import type { Screens } from "../../src/view.ts";
-import { ActionButton } from "../../ui/ActionButton.tsx";
-import { currentScreens } from "../../ui/api.ts";
-import { Chain, Files, ImageReading, photoAmountNote, Quote, StatusWord } from "../../ui/Bits.tsx";
+import type { Screens } from "../../../src/view.ts";
+import { ActionButton } from "../../../ui/ActionButton.tsx";
+import { currentScreens } from "../../../ui/api.ts";
+import { Chain, Files, ImageReading, photoAmountNote, Quote, StatusWord } from "../../../ui/Bits.tsx";
 
 export const dynamic = "force-dynamic";
 

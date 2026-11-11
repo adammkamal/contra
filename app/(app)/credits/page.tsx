@@ -1,6 +1,6 @@
-import { ActionButton } from "../../ui/ActionButton.tsx";
-import { currentScreens, getMemo } from "../../ui/api.ts";
-import { SimRamp, StatusWord } from "../../ui/Bits.tsx";
+import { ActionButton } from "../../../ui/ActionButton.tsx";
+import { currentScreens, getMemo } from "../../../ui/api.ts";
+import { SimRamp, StatusWord } from "../../../ui/Bits.tsx";
 
 export const dynamic = "force-dynamic";
 
