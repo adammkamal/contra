@@ -2,7 +2,8 @@ import type { AuditEvent } from "./audit.ts";
 import type { App, Workspace } from "./app.ts";
 import { DEMO_BILL, DEMO_SC } from "./commands.ts";
 import { formatUsd } from "./money.ts";
-import { EMAIL_INGESTED, type Actor, type BackCharge, type Credit, type EmailOrigin, type HoldReason, type Notice } from "./types.ts";
+import { matchJobs, type Resolution } from "./resolver.ts";
+import { EMAIL_INGESTED, type Actor, type BackCharge, type Credit, type EmailOrigin, type HoldReason, type Job, type Notice, type Subcontract } from "./types.ts";
 import { Contra } from "./workflow.ts";
 
 /**
@@ -148,6 +149,18 @@ export interface Screens {
 
 const when = (d: Date) => d.toISOString().slice(0, 16).replace("T", " ") + " UTC";
 
+/**
+ * The picker for a needs_review item never crosses jobs. When the job resolved: the resolver's hints on
+ * that job, or else every subcontract on that job. Every subcontract only when no single job resolved.
+ */
+export function subcontractOptions(jobRef: string, proposal: Resolution | undefined, jobs: readonly Job[], subcontracts: readonly Subcontract[]): string[] {
+  const matched = matchJobs(jobRef, jobs);
+  if (matched.length !== 1) return subcontracts.map((s) => s.id);
+  const onJob = subcontracts.filter((s) => s.jobId === matched[0]!.id).map((s) => s.id);
+  const hinted = proposal?.kind === "review" ? proposal.hints.map((h) => h.split(" ")[0]!).filter((id) => onJob.includes(id)) : [];
+  return hinted.length ? hinted : onJob;
+}
+
 export function buildScreens(app: App): Screens {
   const { contra, ramp, erp, clock } = app.ctx;
   const bcs = [...contra.backCharges.values()];
@@ -160,8 +173,7 @@ export function buildScreens(app: App): Screens {
     const actions: Action[] = [];
     if (b.state === "extracted" && proposal?.kind === "linked") actions.push({ command: "confirmLink", ref: b.ref });
     if (b.state === "needs_review") {
-      const options = proposal?.kind === "review" ? proposal.hints.map((h) => h.split(" ")[0]!) : [];
-      actions.push({ command: "chooseSubcontract", ref: b.ref, options: options.length ? options : erp.subcontracts.map((s) => s.id) });
+      actions.push({ command: "chooseSubcontract", ref: b.ref, options: subcontractOptions(b.extracted.jobRef, proposal, erp.jobs, erp.subcontracts) });
     }
     return {
       ref: b.ref,

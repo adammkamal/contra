@@ -106,3 +106,29 @@ test("buttons only appear when the action is legal", () => {
   assert.deepEqual(s.outbox[0]!.actions, [{ command: "sendNotice", noticeId: id }]);
   app.close();
 });
+
+test("chooseSubcontract never crosses jobs: an item on SUM-01 is never offered SC-LAK-0301", async () => {
+  const { demoSeed } = await import("../src/seed.ts");
+  const { extractions } = demoSeed(START) as any;
+  const app = newApp();
+  // An unknown vendor on Summit (no hints from the resolver), and the same vendor with a job no one has.
+  const first = extractions["E-1"][0];
+  const ex = {
+    ...extractions,
+    "E-1": [{ ...first, vendorNameAsWritten: "Acme Tile Works" }, { ...extractions["E-1"][1], jobRef: "Nowhere Plaza", vendorNameAsWritten: "Acme Tile Works" }],
+  };
+  cmd.ingestPmEmails(app, { extractions: ex, extractor: { kind: "system", id: "test" } });
+  const pickerFor = (ref: string) => {
+    const a = buildScreens(app).inbox.find((r) => r.ref === ref)!.actions.find((x) => x.command === "chooseSubcontract");
+    assert.ok(a, `${ref} offers a picker`);
+    return (a as Extract<Action, { command: "chooseSubcontract" }>).options;
+  };
+  const onSummit = pickerFor(first.ref);
+  assert.ok(!onSummit.includes("SC-LAK-0301"), `SUM-01 item offered ${onSummit.join(", ")}`);
+  assert.deepEqual([...onSummit].sort(), ["SC-SUM-0700", "SC-SUM-0820", "SC-SUM-0912"]);
+  // No job resolved: every subcontract, Lakeview included.
+  const noJob = pickerFor(extractions["E-1"][1].ref);
+  assert.deepEqual([...noJob].sort(), app.ctx.erp.subcontracts.map((s) => s.id).sort());
+  await assert.rejects(cmd.runAction(app, { command: "chooseSubcontract", ref: first.ref, options: [...onSummit, "SC-LAK-0301"] }, { choice: "SC-LAK-0301" }));
+  app.close();
+});
