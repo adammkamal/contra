@@ -34,8 +34,9 @@ const BACKCHARGE: Record<BackChargeState, Rule<BackChargeState>[]> = {
   applied: [],
 };
 
+// The PM owns the sub relationship and the notice; the controller approves money (src/roles.ts).
 const NOTICE: Record<NoticeState, Rule<NoticeState>[]> = {
-  drafted: [{ to: "approved", needsHuman: true }],
+  drafted: [{ to: "approved", needsHuman: true, role: "pm" }],
   approved: [{ to: "sent", needsHuman: false }],
   sent: [],
 };

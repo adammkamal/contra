@@ -63,8 +63,8 @@ domain-level version, `test/demo.test.ts`, already passes.
    back-charges, each amount beside its verbatim source sentence. All 4 resolve to `SC-SUM-0912`
    through the alias "Ridgeline Drywall", and the UI shows why ("alias → party → job"). The PM confirms.
 2. Contra quotes §14.3. BC-4470 is **held: dispute noted in source**. Contra drafts one notice for
-   BC-4467, 4468 and 4471, **$15,500.00** in total. The controller approves it, and only then is it sent
-   (to the in-app outbox).
+   BC-4467, 4468 and 4471, **$15,500.00** in total. The PM approves it (the PM owns the sub relationship
+   and the notice; the controller approves money), and only then is it sent (to the in-app outbox).
 3. Ridgeline's reply ".eml" says "Fine, except 4471." Contra marks 4467 and 4468 accepted, holds
    **BC-4471: disputed by sub**, and routes it to the PM queue.
 4. The clock advances a week (the 5-working-day window from Sat Nov 7 closes Fri Nov 13; five calendar

@@ -7,7 +7,7 @@ import { App } from "../src/app.ts";
 import * as cmd from "../src/commands.ts";
 import { cents, formatUsd } from "../src/money.ts";
 import { NotPermitted } from "../src/roles.ts";
-import { IllegalTransition } from "../src/state.ts";
+import { IllegalTransition, transitionNotice } from "../src/state.ts";
 import type { Human, Role } from "../src/types.ts";
 import { buildScreens, nextStep } from "../src/view.ts";
 import { AP, CONTROLLER, LLM, PM, setup, throughNotice } from "./helpers.ts";
@@ -84,6 +84,23 @@ test("separation of duties: the person who raised a charge (a human on its audit
   assert.ok(mine.length > 0, "E-1 has an item on the credit");
   assert.throws(() => contra.approveCredit(credit.id, raiser), new RegExp(`separation of duties: jo\\.raise raised ${mine[0]}`));
   assert.equal(credit.state, "proposed");
+});
+
+test("roles (core): only a PM approves a notice; a direct Contra call by a controller or AP is refused in words and nothing changes", () => {
+  const { contra, seed, log } = setup();
+  for (const e of seed.emails) contra.ingestBackChargeEmail(e, seed.extractions[e.id]!, LLM);
+  for (const ref of ["BC-4467", "BC-4468", "BC-4470", "BC-4471"]) contra.confirmLink(ref, PM);
+  const n = contra.draftNotice("SC-SUM-0912")!;
+  const before = log.all().length;
+  assert.throws(() => contra.approveNotice(n.id, CONTROLLER), (e: Error) => e instanceof NotPermitted && e.message === "approving notice N-1 needs the PM role; lee.chen is a Controller");
+  assert.throws(() => contra.approveNotice(n.id, AP), /approving notice N-1 needs the PM role; sam\.ap is an AP/);
+  // The state table refuses it on its own too, for any path that reaches the transition.
+  assert.throws(() => transitionNotice(log, n, "approved", CONTROLLER, "x", []), (e: Error) => e instanceof NotPermitted && /needs the PM role/.test(e.message));
+  assert.equal(n.state, "drafted");
+  assert.equal(n.approvedBy, null);
+  assert.equal(log.all().length, before);
+  contra.approveNotice(n.id, PM);
+  assert.equal(n.state, "approved");
 });
 
 test("roles: only AP turns credits on for a bill, and the audit records who", () => {

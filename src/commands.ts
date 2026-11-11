@@ -5,7 +5,7 @@ import { isOffered } from "./view.ts";
 
 export class NotOffered extends Error {}
 import { cents, parseUsd } from "./money.ts";
-import { NotPermitted, requireRole } from "./roles.ts";
+import { NotPermitted } from "./roles.ts";
 import { demoReply } from "./seed.ts";
 import type { Actor, Email, EmailOrigin, ExtractedBackCharge, ExtractedResponse, Human, RejectedExtraction } from "./types.ts";
 
@@ -154,10 +154,9 @@ export function draftNotice(app: App, subcontractId = DEMO_SC) {
   return app.run(({ contra }) => contra.draftNotice(subcontractId)?.id ?? null);
 }
 
-/** Only a PM approves a notice (src/roles.ts). In the demo the scripted approver is the PM, Dana Ortiz. */
+/** Only a PM approves a notice (Contra.approveNotice). In the demo the scripted approver is the PM, Dana Ortiz. */
 export function approveNotice(app: App, noticeId: string, by?: Human) {
   const actor = actorFor(app, PM, by);
-  requireRole(actor, "pm", `approving notice ${noticeId}`);
   app.run(({ contra }) => contra.approveNotice(noticeId, actor));
 }
 

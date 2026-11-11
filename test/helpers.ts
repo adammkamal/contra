@@ -26,7 +26,7 @@ export function throughNotice(ctx: ReturnType<typeof setup>) {
   for (const e of seed.emails) contra.ingestBackChargeEmail(e, seed.extractions[e.id]!, LLM);
   for (const ref of ["BC-4467", "BC-4468", "BC-4470", "BC-4471"]) contra.confirmLink(ref, PM);
   const notice = contra.draftNotice("SC-SUM-0912")!;
-  contra.approveNotice(notice.id, CONTROLLER);
+  contra.approveNotice(notice.id, PM);
   contra.sendNotice(notice.id);
   return notice;
 }

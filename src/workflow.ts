@@ -337,8 +337,10 @@ export class Contra {
     return n;
   }
 
+  /** Only a PM approves a notice (also in the state table). */
   approveNotice(id: string, human: Actor): void {
     const n = this.#notice(id);
+    requireRole(human, "pm", `approving notice ${id}`);
     transitionNotice(this.d.log, n, "approved", human, "notice approved", [n.body]);
     n.approvedBy = human.id;
   }
