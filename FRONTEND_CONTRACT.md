@@ -20,7 +20,8 @@ const app = (globalThis as any).__contra ??= new App("data/demo.db");
 // PM emails from fixtures/emails/*.eml (null when the folder is missing: built-in sample). Async: load once.
 const pmEmails = (globalThis as any).__contraEmails ??= await loadPmEmails();
 buildScreens(app);                    // read
-await runAction(app, action, { choice, reason }, { pmEmails }); // change state (one function for every button); always a Promise
+// by: the signed-in person, from your own session check: { kind: "human", id: username, role: "pm" | "controller" | "ap" }.
+await runAction(app, action, { choice, reason }, { pmEmails, by }); // change state (one function for every button); always a Promise
 backChargeDetail(app, "BC-4470");     // detail screen
 app.ctx.contra.creditMemo("VC-1");    // { filename, text }
 // Live inbox (optional): a second App on its own database, never the demo's. See "Workspaces".
@@ -31,6 +32,10 @@ const live = (globalThis as any).__contraLive ??= new App("data/live.db", { work
 `try { await runAction(...) } catch (e) { ... }`: a refused action (not offered, a rule, a bad choice) is a
 rejected Promise, never a synchronous throw, so a `try`/`catch` without `await` catches nothing and the
 refusal becomes an unhandled rejection. Re-read `buildScreens(app)` after the await, not before.
+
+In process there is no API in front of the core, so the host does what the API does (see
+[Signing in](#signing-in)): check the session, keep accounts without `--live` out of the live workspace,
+and pass `by`. The live workspace refuses a step without `by`.
 
 **B. HTTP JSON API (any stack: Vite, plain React, another language).** Run `npm run api`.
 It listens on `http://127.0.0.1:4100` (set `CONTRA_PORT` to change). CORS headers are sent only to the
@@ -44,6 +49,10 @@ runs: add your frontend's origin before calling the API from a browser. Requests
 `POST /api/reset` with an empty `{}` body. Anything else, or no Content-Type, is refused with 415 before the
 body is read.
 
+**Every route needs a session except `POST /api/login` and `GET /api/health`** (see
+[Signing in](#signing-in)). Without one, every other route, including unknown ones and the SSE stream,
+answers 401 `"sign in first"` before anything runs.
+
 The first five routes take an optional `?workspace=demo|live` (default `demo`; see [Workspaces](#workspaces)).
 
 | Method and path | Returns |
@@ -53,28 +62,100 @@ The first five routes take an optional `?workspace=demo|live` (default `demo`; s
 | `POST /api/reset` | `{ "ok": true, "screens": Screens }` (that workspace starts over; the other is untouched) |
 | `GET /api/backcharge/:ref` | `BackChargeDetail` |
 | `GET /api/credit/:id/memo` | `{ "filename": string, "text": string }` |
-| `GET /api/health` | `{ "ok": true, "workspaces": ["demo"] or ["demo", "live"], "inbox": InboxStatus }` (see [Live inbox and memos](#live-inbox-and-memos)). No secrets. |
+| `GET /api/health` | No session needed. Signed out: `{ "ok": true }` and nothing else. Signed in: `{ "ok": true, "workspaces": <the ones this account may open>, "inbox": InboxStatus or null }`; `inbox` is `null` for an account without `--live` (see [Live inbox and memos](#live-inbox-and-memos)). No secrets. |
 | `GET /api/events` | Server-Sent Events: `screens-changed` and `heartbeat` (see [Real-time updates](#real-time-updates)). |
 | `POST /api/try` with body `{ "subject", "body", "from"?, "to"? }` | `TryResult` (see [Try any email](#try-any-email)). Never changes demo state. |
+| `POST /api/login` with body `{ "username", "password" }` | No session needed. The same body as `GET /api/me`, plus the session cookie (see [Signing in](#signing-in)). |
+| `GET /api/me` | `{ "ok": true, "user": { "username", "role": "pm" \| "controller" \| "ap", "live": boolean }, "expiresAt": ISO time, "workspaces": ["demo"] or ["demo", "live"] }` |
+| `POST /api/logout` with body `{}` | `{ "ok": true }`; ends the session on the server and clears the cookie. |
 
 Errors are `{ "ok": false, "error": "<message to show the user>" }`:
 - **400:** the action isn't one the API knows, or its fields are wrong, or `workspace` isn't `demo` or `live`.
-- **403:** the request's `Origin` isn't in `CONTRA_ALLOWED_ORIGINS`. Checked first, on every method;
-  nothing ran.
+- **401:** no session (never signed in, signed out, expired, or an unknown cookie): `"sign in first"`. From
+  `POST /api/login`: `"wrong username or password"` (the same words for an unknown username). See
+  [Handling 401](#handling-401).
+- **403:** the request's `Origin` isn't in `CONTRA_ALLOWED_ORIGINS` (checked first, on every method); or
+  `?workspace=live` from an account created without `--live`; or `sendCreditMemo` from an account without
+  `--live` (it emails the AP inbox for real). Nothing ran.
 - **404:** unknown back-charge, credit or route, or `?workspace=live` on a server without a live inbox.
 - **409:** a rule refused it. This includes any action the screens aren't currently offering (a stale
-  screen, a double-click or a hand-made request), which comes back as "… is not available right now".
-  Nothing changed; refresh the screens.
+  screen, a double-click or a hand-made request), which comes back as "… is not available right now", and,
+  in the live workspace, a step your role may not take or a credit you may not approve (see
+  [Who may do what](#who-may-do-what)). Nothing changed; refresh the screens.
 - **413:** the request body is too large (`POST /api/try`: over 256 KB; other routes: over 64 KB).
 - **415:** a POST without `Content-Type: application/json`. Nothing ran.
-- **429** (`POST /api/try` only): another email is being checked, the hourly limit for your address is
-  reached, or the daily demo cap is reached. The message says which.
+- **429:** `POST /api/try`: another email is being checked, the hourly limit for your address is reached,
+  or the daily demo cap is reached. `POST /api/login`: too many failed sign-ins for this username or from
+  your address; even the right password is refused for 15 minutes. The message says which.
 - **500:** an unexpected server error. The message is always "internal error".
 - **503** (`POST /api/try` only): no API key is configured, the model call failed, or the route isn't
   enabled. A failed model call gets one fixed sentence per failure kind (key refused, rate-limited, timed
   out, unreachable, service error, unreadable answer); the model service's own message is never shown.
 
 Show the message; don't retry.
+
+## Signing in
+
+There is no sign-up. Accounts are made on the server's machine with
+`npm run user:add -- <username> <pm|controller|ap> [--live]`, which asks for the password (stored as a
+salted scrypt hash in `data/auth.db`). `--live` lets the account open the live workspace (real Gmail, real
+memo emails); without it the account sees only the scripted demo.
+
+**Flow.**
+1. On start-up, call `GET /api/me`. 200: signed in; use `user` and `workspaces`. 401: show the sign-in page.
+2. The sign-in page sends `POST /api/login` with `{ "username", "password" }` as JSON. 200 sets the
+   session cookie and returns the `/api/me` body. 401 `"wrong username or password"`: show it, keep the
+   username, clear the password. 429: show the message (it says how long to wait).
+3. "Sign out" sends `POST /api/logout` with `{}`, then shows the sign-in page.
+
+**The session cookie** is `contra_session`: `HttpOnly; SameSite=Lax; Path=/; Max-Age=43200`, plus
+`Secure` when the server runs with `CONTRA_SECURE_COOKIES=1` (set it whenever the API is served over
+HTTPS). A session lasts 12 hours from sign-in and isn't extended by use; sign-out ends it on the server, so
+an old copy of the cookie is useless. The session id is never in a response body, and the frontend must
+never put it in a URL, `localStorage`, a log or client-side JavaScript.
+
+**How the cookie travels.**
+- **Next.js server (the repo's UI, `ui/api.ts`).** The browser talks only to Next; Next calls the API.
+  The login server action posts to `/api/login`, reads the API's `Set-Cookie`, and sets the same value as
+  its own HttpOnly, SameSite=Lax cookie (Secure in production) with the same Max-Age. Every later API call
+  from the Next server sends `cookie: contra_session=<value>` (from `cookies()`), including
+  `GET /api/events` when Next proxies it. Logout calls `/api/logout` with it, then deletes its own cookie.
+- **A browser calling the API directly** (another stack): send `credentials: "include"` on every `fetch`
+  and open the stream with `new EventSource(url, { withCredentials: true })`. The API answers allowed
+  origins with `Access-Control-Allow-Credentials: true` (never with `*`). Because the cookie is
+  SameSite=Lax, the page and the API must be on the same site: `localhost:3000` and `127.0.0.1:4100` are
+  different sites, so use one host name for both.
+
+### Handling 401
+
+Any route can answer 401 `"sign in first"` once the session has expired or been ended, including the
+SSE stream (its connection is refused; `EventSource` reports an error and keeps retrying, so close it).
+On a 401 from anything but `/api/login`: close the stream, drop cached screens, show the sign-in page with
+"Your session has ended; sign in again", and after sign-in return to the screen the person was on and
+re-read it. Don't re-send the request that got the 401: nothing ran, and the screen it came from may be
+stale. `GET /api/health` never answers 401; signed out it says only `{ "ok": true }`.
+
+### Who may do what
+
+Screens and buttons are the same for every account. The server decides who may take a step and says
+why when it refuses (409); show the message. Don't hide or disable buttons by role yourself.
+
+| | Demo workspace | Live workspace |
+|---|---|---|
+| Who can open it | Any signed-in account | Only accounts created with `--live` (else 403) |
+| Who each step is recorded under | The scripted actor (Dana Ortiz PM, Lee Chen Controller, Sam AP), with `presented by <username>`: any account can present every step | The signed-in account and its role |
+| `approveNotice` | Presented as Dana Ortiz (PM) | A PM |
+| `approveCredit`, `rejectCredit` | Presented as Lee Chen (Controller) | A controller, and for `approveCredit` not one who raised or linked any of the credit's back-charges (separation of duties) |
+| `turnOnCredits` | Presented as Sam (AP) | AP |
+| `sendCreditMemo` | `--live` accounts only (403 otherwise): it emails the AP inbox for real | `--live` accounts (all who can open it) |
+
+Live refusals read, for example, `"approving credit VC-1 needs the Controller role; pat.pm is a PM"`,
+`"approving notice N-1 needs the PM role; cy.ctl is a Controller"` or
+`"separation of duties: cy.ctl linked BC-7501, so cy.ctl can't approve credit VC-1; another controller must"`.
+
+Samples: `contract/samples/auth-login.json` (request and response, with `Set-Cookie`; the session id is
+shown as `<session id>`), `auth-me-live-pm.json`, `auth-me-demo-only.json`, `auth-health-signed-out.json`,
+`auth-health-demo-only.json`, `auth-logout.json` and `auth-errors.json` (401, 429 and 403 bodies).
 
 ## What `Screens` contains
 
@@ -91,7 +172,7 @@ Show the message; don't retry.
 | `credits[]` | `id`, `amount`, `job`, `refs`, `amountNotes[]` (one line per item whose amount a person confirmed from an image, with both readings, e.g. `"BC-7403: amount confirmed by dana.ortiz (PM) from attachment IMG_2041.jpg (PM entered $640.00; model read $604.00)"`; show them beside the amount, above the Approve button, as written; usually empty), `status`, `actions[]`, `hasMemo` (when true, offer "View memo"), `memo`: the memo's delivery to the AP inbox as a `Status` (e.g. "Memo not sent", "Memo sent to …", "Memo not sent: … You can send it again."), or `null` when there is no memo yet. Show `memo.label` as written. |
 | `bills[]` | Always show **"Simulated Ramp"**. `vendor`, `job`, `amount`, `creditsOn`, `status`, `paid`, plus `check`: `status`, `actions[]` (sentences), `warnings[]`, `wouldPay`. Also has `actions[]` (buttons). |
 | `pmQueue[]` | `ref` and `status` for items a person must look at, including items not taken in (their `ref` can be `""`). |
-| `audit[]` | Newest first: `seq`, `at`, `actor` (already worded), `what`, `evidence[]`. |
+| `audit[]` | Newest first: `seq`, `at`, `actor` (already worded: `"lee.chen (Controller)"`, or in the demo `"lee.chen (Controller), presented by <username>"`), `what`, `evidence[]`. |
 
 `Status` is `{ label, tone }`. **The label carries the meaning; show it as text.** `tone` (`ok`, `warn`,
 `danger`, `info` or `idle`) is decoration only, never the only signal.
@@ -109,18 +190,18 @@ Render each `actions[]` entry as a button, and when clicked send exactly that ob
 | `chooseSubcontract` | `ref`, `options[]` | A picker plus Confirm. Send `input.choice` as one of `options`. |
 | `confirmImageAmount` | `ref`, `options[]` | Only on an item held just because its amount was read from a photo or scanned page. An amount field ("Type the amount you see in the image"), a picker of `options` (often one) and Confirm. Send `input.amount` (what the person typed, e.g. `"$640.00"` or `"640.00"`) and `input.choice`. The typed amount may differ from the model's reading (a misread photo): it becomes the item's amount, both are recorded, and the credit shows both in `amountNotes`. It is refused (409, the item stays held) when it isn't more than $0.00, or when the email's text (body or a PDF page) gives the back-charge a different amount; the message says which. Don't prefill the amount field: the server sends nothing to prefill it with (see [Amounts read from an image](#amounts-read-from-an-image)). Contra doesn't keep the image: the person checks it in the original email (`sourceLocation` names the file). |
 | `draftNotice` | `subcontractId` | Draft notice |
-| `approveNotice` | `noticeId` | Approve notice |
+| `approveNotice` | `noticeId` | Approve notice (a PM's step; see [Who may do what](#who-may-do-what)) |
 | `sendNotice` | `noticeId` | Send notice |
 | `ingestSubReply` | `noticeId` | Ingest sub's reply |
 | `advanceDays` | `days` | Advance a week (days = 7) |
 | `evaluateAll` | none | Check eligibility |
 | `proposeCredit` | `subcontractId` | Propose credit |
-| `approveCredit` | `creditId` | Approve credit |
+| `approveCredit` | `creditId` | Approve credit (a controller who didn't raise or link its items) |
 | `rejectCredit` | `creditId` | A reason field plus Reject. Send `input.reason`; it must not be empty. |
 | `billArrives` | none | Bill arrives |
-| `turnOnCredits` | `billId` | Turn on credits |
+| `turnOnCredits` | `billId` | Turn on credits (AP) |
 | `payBill` | `billId` | Pay (simulated) |
-| `sendCreditMemo` | `creditId` | Send credit memo. Appears only when the server has a memo sender (live mode, `CONTRA_INBOX=gmail`), for a credit with a recorded approval whose memo isn't sent, or whose last send failed (the retry). The response comes back after the send is recorded (a few seconds); disable the button meanwhile. In process, `await runAction(...)` settles only then. |
+| `sendCreditMemo` | `creditId` | Send credit memo. Appears only when the server has a memo sender (live mode, `CONTRA_INBOX=gmail`), for a credit with a recorded approval whose memo isn't sent, or whose last send failed (the retry). It emails the AP inbox for real, so an account without `--live` gets 403. The response comes back after the send is recorded (a few seconds); disable the button meanwhile. In process, `await runAction(...)` settles only then. |
 
 **Test ids** (the browser test selects on these): `data-testid="{command}-{id}"`, where id is the
 action's `ref`, `noticeId`, `creditId`, `billId` or `subcontractId`. Use just `{command}` when the
@@ -132,6 +213,8 @@ A button only appears when its action is legal right now. Don't add buttons the 
 ## Real-time updates
 
 `GET /api/events` is a Server-Sent Events stream (use `EventSource`; the same Origin allow-list applies).
+It needs a session like every other route (cross-origin: `withCredentials: true`). The live workspace's
+events reach only streams opened by `--live` accounts.
 - `event: screens-changed`, `data: {"reason": "action" | "reset" | "inbox", "workspace": "demo" | "live"}`:
   after every successful action, every reset, and every inbox poll that ingested something (always
   `"live"`). One stream carries both workspaces: re-read `GET /api/screens?workspace=<workspace>` only
@@ -156,6 +239,11 @@ Live mail is written only to `live`; the core refuses it in `demo`. So the scrip
 ($15,500.00), credit ($11,500.00) and payment ($36,500.00) can't be changed through the inbox, even by an
 email about the demo's own subcontract.
 
+Who can open which: any signed-in account opens the demo; only an account created with `--live` opens
+`live` (any other gets 403 on every `?workspace=live` route, whether or not the server has a live
+workspace). `GET /api/me` lists the workspaces the account may open; show the workspace switch only when
+it lists both.
+
 Addressing a workspace:
 - **HTTP:** add `?workspace=live` to `GET /api/screens`, `POST /api/action`, `POST /api/reset`,
   `GET /api/backcharge/:ref` and `GET /api/credit/:id/memo`. No parameter (or `workspace=demo`) is the demo.
@@ -179,9 +267,10 @@ Addressing a workspace:
 With `CONTRA_INBOX=gmail`, the server polls the demo Gmail inbox and ingests only mail delivered to the PM
 intake address (`<local>+backcharges@<domain>`), into the `live` workspace (`emailSource` `"gmail"`).
 Credit memos are sent to a stand-in AP inbox (`<local>+ramp-ap@<domain>`), not to Ramp, from either
-workspace's credit rows (and from `live`'s `nextStep`).
+workspace's credit rows (and from `live`'s `nextStep`), by `--live` accounts only.
 
-`GET /api/health` → `inbox`:
+`GET /api/health` → `inbox` (signed in with a `--live` account; `null` for any other account, and absent
+when signed out):
 
 | Field | Meaning |
 |---|---|

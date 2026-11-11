@@ -1,0 +1,16 @@
+{
+  "status": 200,
+  "body": {
+    "ok": true,
+    "user": {
+      "username": "pat.pm",
+      "role": "pm",
+      "live": true
+    },
+    "expiresAt": "2026-11-08T03:00:00.000Z",
+    "workspaces": [
+      "demo",
+      "live"
+    ]
+  }
+}

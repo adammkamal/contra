@@ -1,0 +1,10 @@
+{
+  "status": 200,
+  "body": {
+    "ok": true,
+    "workspaces": [
+      "demo"
+    ],
+    "inbox": null
+  }
+}

@@ -9,12 +9,15 @@ import { fileURLToPath } from "node:url";
 import { DEFAULT_EML_DIR, loadPmEmails } from "../ingest/eml.ts";
 import { App } from "../src/app.ts";
 import * as cmd from "../src/commands.ts";
-import { SAMPLE_EXTRACTIONS } from "../src/actors.ts";
+import { PM, SAMPLE_EXTRACTIONS } from "../src/actors.ts";
 import type { MemoSender } from "../src/memo.ts";
 import { parseBackCharges } from "../src/extract/validate.ts";
 import { cents } from "../src/money.ts";
 import { backChargeDetail, buildScreens, nextStep } from "../src/view.ts";
 import { tryEmail, type TryInput } from "../server/try.ts";
+import { createApiServer } from "../server/api.ts";
+import { AuthStore } from "../server/auth.ts";
+import type { AddressInfo } from "node:net";
 
 const out = join(dirname(fileURLToPath(import.meta.url)), "..", "contract", "samples");
 rmSync(out, { recursive: true, force: true });
@@ -154,9 +157,56 @@ cmd.ingestInboxEmail(live, rejEmail, refused.items, SAMPLE_EXTRACTIONS, "gmail",
 write("live-03-after-an-item-is-not-taken-in.screens.json", buildScreens(live));
 
 // The PM types the amount the photo of BC-7153 shows ($640.00): the row now has both readings in photoAmount.
-cmd.confirmImageAmount(live, "BC-7153", "$640.00", "SC-SUM-0912");
+// In live every step is recorded under the signed-in person; here the sample PM, Dana Ortiz.
+cmd.confirmImageAmount(live, "BC-7153", "$640.00", "SC-SUM-0912", PM);
 write("live-04-after-a-photo-amount-is-confirmed.screens.json", buildScreens(live));
 live.close();
 
+// Signing in: the real HTTP responses from a server on a fixed clock, with two made-up accounts (a live PM
+// and a demo-only controller) in an in-memory account store. The session id in Set-Cookie is replaced by
+// <session id>: it is random, and it is never in a response body.
+const authNow = Date.parse("2026-11-07T15:00:00Z");
+const authStore = new AuthStore(":memory:");
+const SAMPLE_PASSWORD = "sample password, not a real one";
+await authStore.addUser("pat.pm", "pm", SAMPLE_PASSWORD, { live: true });
+await authStore.addUser("dee.demo", "controller", SAMPLE_PASSWORD);
+const authApi = createApiServer({
+  auth: { store: authStore, now: () => authNow, loginLimits: { perIp: 100, perUser: 1 } },
+  dbPath: join(tmp, "auth-demo.db"),
+  liveDbPath: join(tmp, "auth-live.db"),
+  realClock: { now: () => new Date(authNow) },
+  start: new Date(authNow),
+  emlDir: null,
+});
+await new Promise<void>((r) => authApi.server.listen(0, "127.0.0.1", r));
+const authBase = `http://127.0.0.1:${(authApi.server.address() as AddressInfo).port}`;
+const call = async (method: string, path: string, opts: { cookie?: string; body?: unknown } = {}) => {
+  const r = await fetch(`${authBase}${path}`, {
+    method,
+    headers: { ...(method === "POST" ? { "content-type": "application/json" } : {}), ...(opts.cookie ? { cookie: opts.cookie } : {}) },
+    ...(opts.body === undefined ? {} : { body: JSON.stringify(opts.body) }),
+  });
+  const setCookie = r.headers.get("set-cookie");
+  return { status: r.status, ...(setCookie ? { setCookie: setCookie.replace(/=[^;]+;/, "=<session id>;") } : {}), body: (await r.json()) as unknown, cookie: setCookie?.split(";")[0] };
+};
+const shown = ({ cookie: _c, ...rest }: Awaited<ReturnType<typeof call>>) => rest;
+const login = (username: string) => ({ username, password: SAMPLE_PASSWORD });
+const pmLogin = await call("POST", "/api/login", { body: login("pat.pm") });
+const demoLogin = await call("POST", "/api/login", { body: login("dee.demo") });
+write("auth-login.json", { request: { method: "POST", path: "/api/login", body: { username: "pat.pm", password: "<the password>" } }, response: shown(pmLogin) });
+write("auth-me-live-pm.json", shown(await call("GET", "/api/me", { cookie: pmLogin.cookie! })));
+write("auth-me-demo-only.json", shown(await call("GET", "/api/me", { cookie: demoLogin.cookie! })));
+write("auth-health-signed-out.json", shown(await call("GET", "/api/health")));
+write("auth-health-demo-only.json", shown(await call("GET", "/api/health", { cookie: demoLogin.cookie! })));
+write("auth-errors.json", {
+  "401 no session": shown(await call("GET", "/api/screens")),
+  "401 wrong password": shown(await call("POST", "/api/login", { body: { username: "pat.pm", password: "not the password" } })),
+  "429 too many failed sign-ins": shown(await call("POST", "/api/login", { body: login("pat.pm") })),
+  "403 live workspace without --live": shown(await call("GET", "/api/screens?workspace=live", { cookie: demoLogin.cookie! })),
+});
+write("auth-logout.json", shown(await call("POST", "/api/logout", { cookie: demoLogin.cookie!, body: {} })));
+await authApi.close();
+authStore.close();
+
 rmSync(tmp, { recursive: true, force: true });
-console.log(`Wrote ${i + 1} screen states + 3 details + 1 memo + ${trySamples.length} try samples + 5 live-workspace screens + 1 live detail to contract/samples/`);
+console.log(`Wrote ${i + 1} screen states + 3 details + 1 memo + ${trySamples.length} try samples + 5 live-workspace screens + 1 live detail + 7 sign-in samples to contract/samples/`);

@@ -1,0 +1,27 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/login",
+    "body": {
+      "username": "pat.pm",
+      "password": "<the password>"
+    }
+  },
+  "response": {
+    "status": 200,
+    "setCookie": "contra_session=<session id>; Path=/; HttpOnly; SameSite=Lax; Max-Age=43200",
+    "body": {
+      "ok": true,
+      "user": {
+        "username": "pat.pm",
+        "role": "pm",
+        "live": true
+      },
+      "expiresAt": "2026-11-08T03:00:00.000Z",
+      "workspaces": [
+        "demo",
+        "live"
+      ]
+    }
+  }
+}
