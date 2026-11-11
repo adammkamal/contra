@@ -16,7 +16,7 @@ export default defineConfig({
   reporter: [["list"]],
   // Playwright's bundled Chromium by default. Set PW_CHANNEL=chrome (PowerShell: $env:PW_CHANNEL = "chrome")
   // to use the installed Google Chrome instead, where Windows blocks the bundled one.
-  use: { baseURL: UI, ...devices["Desktop Chrome"], ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}), viewport: { width: 1400, height: 900 } },
+  use: { baseURL: UI, ...devices["Desktop Chrome"], ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}), viewport: { width: Number(process.env.E2E_WIDTH ?? 1400), height: 900 } },
   webServer: [
     {
       command: "npx tsx e2e/api-harness.ts",
