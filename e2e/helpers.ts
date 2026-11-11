@@ -2,7 +2,7 @@ import { expect, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
-export const SHOTS = join("e2e", "screenshots");
+export const SHOTS = join("e2e", "screenshots", ...(process.env.E2E_WIDTH ? [`w${process.env.E2E_WIDTH}`] : []));
 mkdirSync(SHOTS, { recursive: true });
 
 export async function shot(page: Page, name: string): Promise<string> {

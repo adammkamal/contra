@@ -34,7 +34,7 @@ export function LiveUpdates({ base, workspace }: { base: string; workspace: "dem
   }, [base, workspace, router]);
   return (
     <span className="live-dot" data-testid="live-updates" data-connected={connected === true ? "yes" : "no"}>
-      {connected === false ? "Updates paused (reconnecting)" : connected ? "Updates on" : ""}
+      {connected === false ? "Updates paused (reconnecting)" : connected ? "Live updates on" : "Connecting"}
     </span>
   );
 }
