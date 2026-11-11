@@ -45,3 +45,15 @@ export function sessionFetch() {
     },
   };
 }
+
+/** The role a step needs (src/roles.ts): controller decides credits, AP turns credits on, a PM the rest. */
+export const roleFor = (command: string): Role => (command === "approveCredit" || command === "rejectCredit" ? "controller" : command === "turnOnCredits" ? "ap" : "pm");
+
+/** Signs in one live account per role ("tester" is the PM). Returns each one's Cookie header. */
+export async function signInRoles(base: string, store: AuthStore): Promise<Record<Role, string>> {
+  return {
+    pm: await signIn(base, store),
+    controller: await signIn(base, store, { username: "ctl.tester", role: "controller" }),
+    ap: await signIn(base, store, { username: "ap.tester", role: "ap" }),
+  };
+}

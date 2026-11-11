@@ -173,3 +173,16 @@ test("roles (demo): any signed-in presenter runs the scripted demo; steps keep t
     app.close();
   }
 });
+
+test("roles (live): a step without a signed-in person is refused and changes nothing", async () => {
+  const app = liveWithMail();
+  try {
+    const a = nextStep(app).action!;
+    assert.equal(a.command, "confirmLink");
+    await assert.rejects(cmd.runAction(app, a), (e: Error) => e instanceof NotPermitted && /live workspace records who takes each step: sign in first/.test(e.message));
+    assert.throws(() => cmd.approveCredit(app, "VC-1"), NotPermitted);
+    assert.equal(app.ctx.contra.backCharges.get("BC-4467")!.state, "extracted");
+  } finally {
+    app.close();
+  }
+});

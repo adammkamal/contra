@@ -5,7 +5,7 @@ import { isOffered } from "./view.ts";
 
 export class NotOffered extends Error {}
 import { cents, parseUsd } from "./money.ts";
-import { requireRole } from "./roles.ts";
+import { NotPermitted, requireRole } from "./roles.ts";
 import { demoReply } from "./seed.ts";
 import type { Actor, Email, EmailOrigin, ExtractedBackCharge, ExtractedResponse, Human, RejectedExtraction } from "./types.ts";
 
@@ -26,11 +26,12 @@ export class WrongWorkspace extends Error {}
  * Who a person's step is recorded under. `by` is the signed-in person, injected by the host (the API's
  * session). Demo: the step keeps its scripted actor (Dana Ortiz PM, Lee Chen Controller, Sam AP), with
  * `presentedBy` the person who clicked, so the scripted demo reads the same whoever presents it. Live: the
- * person themselves, with their own role. Without a person (in-process scripts and tests): the scripted actor.
+ * person themselves, with their own role; there is no live step without one. Without a person, the demo
+ * uses the scripted actor (in-process scripts and tests).
  */
 export function actorFor(app: App, scripted: Human, by: Human | undefined): Human {
-  if (!by) return scripted;
-  if (app.ctx.workspace === "demo") return { ...scripted, presentedBy: by.id };
+  if (app.ctx.workspace === "demo") return by ? { ...scripted, presentedBy: by.id } : scripted;
+  if (!by) throw new NotPermitted("the live workspace records who takes each step: sign in first");
   return { kind: "human", id: by.id, role: by.role };
 }
 

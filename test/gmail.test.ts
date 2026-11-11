@@ -11,7 +11,7 @@ import { App } from "../src/app.ts";
 import { billArrives, ingestInboxEmail, ingestPmEmails, runAction, WrongWorkspace } from "../src/commands.ts";
 import { buildScreens } from "../src/view.ts";
 import { CONFIG, fakeExtract, fakeGmail, gmailAuthPass, rfc822, sseClient, until, type FakeMessage } from "./gmail-fakes.ts";
-import { sessionFetch, signIn, testAuth } from "./auth-fakes.ts";
+import { roleFor, sessionFetch, signIn, signInRoles, testAuth } from "./auth-fakes.ts";
 
 const http = sessionFetch();
 
@@ -265,7 +265,9 @@ test("isolation: a live email for Ridgeline on Summit lands in the live workspac
   const base = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
   type S = ReturnType<typeof buildScreens>;
   const screens = async (ws = "demo") => (await (await http.fetch(`${base}/api/screens?workspace=${ws}`)).json()) as S;
+  const roles = await signInRoles(base, api.authStore);
   const act = async (ws: string, action: unknown) => {
+    http.use(roles[roleFor((action as { command: string }).command)]); // the live workflow needs a PM, a controller and AP
     const r = await http.fetch(`${base}/api/action?workspace=${ws}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action }) });
     assert.equal(r.status, 200, `${ws}: ${JSON.stringify(action)} -> ${r.status} ${await r.clone().text()}`);
   };
