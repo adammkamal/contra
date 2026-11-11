@@ -1,0 +1,33 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T10:20:05.837Z",
+  "items": [
+    {
+      "ref": "BC-5014",
+      "description": "Replace damaged window sills and repair wall finish, L1 west",
+      "amountCents": 300000,
+      "amountEvidence": {
+        "emailId": "bc-14",
+        "sentence": "BC-5014: replace damaged window sills and repair wall finish, L1 west, $3,000.00."
+      },
+      "vendorNameAsWritten": "UNKNOWN",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": "BC-5014",
+        "description": "Replace damaged window sills and repair wall finish, L1 west",
+        "amountText": "$3,000.00",
+        "amountSentence": "BC-5014: replace damaged window sills and repair wall finish, L1 west, $3,000.00.",
+        "vendorNameAsWritten": "UNKNOWN",
+        "jobRef": "Summit",
+        "disputeNoted": false
+      }
+    ]
+  }
+}

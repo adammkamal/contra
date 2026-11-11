@@ -4,11 +4,13 @@ import { creditAmountFor } from "./credits.ts";
 import { evaluateEligibility, type EligibilityResult } from "./eligibility.ts";
 import { renderCreditMemo } from "./memo.ts";
 import { formatUsd, sub as subCents, sum, type Cents } from "./money.ts";
-import { resolve, type Resolution } from "./resolver.ts";
-import { disputeSentencesFor, normalize, verifyAmountEvidence, verifySpan } from "./span.ts";
-import { transitionBackCharge, transitionCredit, transitionNotice } from "./state.ts";
+import { assessExtractedItem } from "./intake.ts";
+import { ambiguousWith, type Resolution } from "./resolver.ts";
+import { disputeSentencesFor, normalize, verifySpan } from "./span.ts";
+import { IllegalTransition, transitionBackCharge, transitionCredit, transitionMemo, transitionNotice } from "./state.ts";
 import type { MockERP } from "./mocks/erp.ts";
 import { planApplication, type PaymentsPlatform, type PlannedApplication } from "./mocks/ramp.ts";
+import { EMAIL_INGESTED, type EmailOrigin } from "./types.ts";
 import type {
   Actor,
   BackCharge,
@@ -101,9 +103,23 @@ export class Contra {
 
   // ---- Step 1: ingest PM emails ------------------------------------------------------------
 
-  ingestBackChargeEmail(email: Email, extracted: ExtractedBackCharge[], extractor: Actor): BackCharge[] {
+  /** True when an email with this Message-ID has already been ingested. Read-only. */
+  hasMessage(messageId: string): boolean {
+    for (const e of this.emails.values()) if (e.messageId === messageId) return true;
+    return false;
+  }
+
+  /**
+   * Ingests one email and its extracted back-charges. Idempotent by Message-ID: an email whose
+   * messageId was already ingested changes nothing (no back-charge, notice or audit entry) and returns [].
+   */
+  ingestBackChargeEmail(email: Email, extracted: ExtractedBackCharge[], extractor: Actor, origin: EmailOrigin = "builtin"): BackCharge[] {
+    if (email.messageId && this.hasMessage(email.messageId)) return [];
     this.emails.set(email.id, email);
-    this.d.log.append({ actor: SYSTEM, entity: "email", entityId: email.id, action: "ingested", from: null, to: null, evidence: [email.subject] });
+    const attachments = email.attachmentCount ? [`${email.attachmentCount} attachment(s), not read`] : [];
+    // Live mail: when Gmail received it (the host sets receivedAt from Gmail's internalDate).
+    const received = origin === "gmail" ? [`received ${email.receivedAt.toISOString()}`] : [];
+    this.d.log.append({ actor: SYSTEM, entity: "email", entityId: email.id, action: EMAIL_INGESTED[origin], from: null, to: null, evidence: [email.subject, ...received, ...attachments] });
     const out: BackCharge[] = [];
 
     for (const x of extracted) {
@@ -115,11 +131,9 @@ export class Contra {
         continue;
       }
 
-      const amountCheck = verifyAmountEvidence(email, x.amountEvidence, x.amountCents);
-      const disputeCheck = x.disputeNoted && x.disputeEvidence ? verifySpan(email, x.disputeEvidence) : { ok: true as const };
-      const backstop = disputeSentencesFor(email.body, x.ref);
-      this.#evidenceOk.set(x.ref, amountCheck.ok && disputeCheck.ok);
-      this.#sourceDispute.set(x.ref, x.disputeNoted || backstop.length > 0);
+      const a = assessExtractedItem(email, x, this.d.erp, extracted.map((e) => e.ref));
+      this.#evidenceOk.set(x.ref, a.evidenceOk);
+      this.#sourceDispute.set(x.ref, a.disputeInSource);
 
       const bc: BackCharge = {
         ref: x.ref,
@@ -140,14 +154,13 @@ export class Contra {
         action: `extracted ${formatUsd(x.amountCents)}`,
         from: null,
         to: "extracted",
-        evidence: [x.amountEvidence.sentence, ...(x.disputeEvidence ? [x.disputeEvidence.sentence] : []), ...backstop],
+        evidence: [x.amountEvidence.sentence, ...(x.disputeEvidence ? [x.disputeEvidence.sentence] : []), ...a.backstop],
       });
 
-      if (!amountCheck.ok || !disputeCheck.ok) {
-        const why = [!amountCheck.ok ? amountCheck.reason : "", !disputeCheck.ok ? disputeCheck.reason : ""].filter(Boolean);
-        this.#hold(bc, ["unverified_evidence"], why);
+      if (a.holdReasons.length) {
+        this.#hold(bc, a.holdReasons, a.holdEvidence);
       } else {
-        const r = resolve(x, this.d.erp);
+        const r = a.resolution!;
         this.proposals.set(x.ref, r);
         if (r.kind === "linked") bc.linkExplanation = r.explanation;
         else transitionBackCharge(this.d.log, bc, "needs_review", SYSTEM, "resolver could not link", r.reasons);
@@ -166,8 +179,16 @@ export class Contra {
     if (!sc) throw new Error(`${ref}: no subcontract to link to`);
 
     if (proposal?.kind !== "linked" || proposal.subcontractId !== sc.id) {
-      this.d.erp.addAlias({ alias: bc.extracted.vendorNameAsWritten, partyLegalName: sc.partyLegalName, source: "pm_confirmed", confirmedBy: pm.id });
-      this.d.log.append({ actor: pm, entity: "alias", entityId: bc.extracted.vendorNameAsWritten, action: `alias -> ${sc.partyLegalName}`, from: null, to: null, evidence: [ref] });
+      const name = bc.extracted.vendorNameAsWritten;
+      // Aliases apply on every job, so check every party in the ERP, not only this job's.
+      const parties = [...new Set(this.d.erp.subcontracts.map((s) => s.partyLegalName))];
+      const other = ambiguousWith(name, sc.partyLegalName, parties);
+      if (other) {
+        this.d.log.append({ actor: pm, entity: "alias", entityId: name, action: `alias not learned: "${name}" is ambiguous with ${other}`, from: null, to: null, evidence: [ref] });
+      } else {
+        this.d.erp.addAlias({ alias: name, partyLegalName: sc.partyLegalName, source: "pm_confirmed", confirmedBy: pm.id });
+        this.d.log.append({ actor: pm, entity: "alias", entityId: name, action: `alias -> ${sc.partyLegalName}`, from: null, to: null, evidence: [ref] });
+      }
       bc.linkExplanation = [`PM ${pm.id} linked "${bc.extracted.vendorNameAsWritten}" to ${sc.id} ${sc.partyLegalName}`];
     }
     bc.subcontractId = sc.id;
@@ -341,6 +362,32 @@ export class Contra {
     const approval = this.d.log.forEntity("credit", id).find((e) => e.to === "approved");
     if (!approval) throw new Error(`credit ${id} has no recorded approval`);
     return renderCreditMemo({ credit, subcontract: sc, job, vendorName: sc.partyLegalName, items, notices, approvedAt: approval.at });
+  }
+
+  // ---- Credit memo delivery ----------------------------------------------------------------
+
+  /** A memo can be sent for a credit with a recorded approval (approved, synced or applied). */
+  static memoSendable(c: Readonly<Credit>): boolean {
+    return (c.state === "approved" || c.state === "synced" || c.state === "applied") && (!c.memoDelivery || c.memoDelivery.state === "failed");
+  }
+
+  /** Marks the memo queued for `to` (first send, or a retry after failed) and returns the memo to send. */
+  queueMemo(id: string, to: string, human: Actor): { filename: string; text: string } {
+    const c = this.#credit(id);
+    if (!Contra.memoSendable(c)) throw new IllegalTransition(`credit ${id}: memo can't be sent now (${c.state}, memo ${c.memoDelivery?.state ?? "not sent"})`);
+    const memo = this.creditMemo(id);
+    const attempts = (c.memoDelivery?.attempts ?? 0) + 1;
+    transitionMemo(this.d.log, c, "queued", human, `memo queued for ${to}${attempts > 1 ? ` (attempt ${attempts})` : ""}`, [memo.filename], { to, attempts, error: null });
+    return memo;
+  }
+
+  memoSent(id: string, messageId: string): void {
+    const c = this.#credit(id);
+    transitionMemo(this.d.log, c, "sent", SYSTEM, `memo sent to ${c.memoDelivery?.to ?? "?"}`, [messageId], { messageId });
+  }
+
+  memoFailed(id: string, why: string): void {
+    transitionMemo(this.d.log, this.#credit(id), "failed", SYSTEM, "memo failed", [why], { error: why });
   }
 
   // ---- Step 5: bill and payment ------------------------------------------------------------

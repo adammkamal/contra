@@ -1,0 +1,12 @@
+{
+  "id": "ho-04",
+  "description": "'Ridgeline Glass & Glazing', Summit MOB in the subject; debris removal with the amount written as 'USD 1,200'",
+  "email": {
+    "id": "ho-04",
+    "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    "to": "Ridgeline Glass & Glazing <pm@ridgelineglass.example>",
+    "subject": "BC-6104 - Summit MOB",
+    "receivedAt": "2026-10-13T16:30:00.000Z",
+    "body": "Hi,\n\nRidgeline Glass & Glazing left glass crates and broken setting blocks at the north entrance after the storefront install. We had it removed.\n\nBC-6104: debris removal, north entrance, USD 1,200.\n\nThanks,\nDana Ortiz\nProject Manager, Apex Builders"
+  }
+}

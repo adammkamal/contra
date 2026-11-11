@@ -83,6 +83,10 @@ Audit log: every transition in steps 1–5 appears with the actor, the time and 
 
 ## 4. Documented Ramp behavior that MockRamp models (re-checked against Ramp's support docs, Nov 7)
 
+**Ramp's answer (Nov 8):** no sandbox access, no introductions and no product answers during the
+hackathon. Work from public docs and mock data, and explain the real integration in the submission.
+That explanation is INTEGRATION.md.
+
 - **No API endpoint for creating credits.** The API's vendor-credit endpoint is read-only. Credits are
   made in the dashboard (from a paid bill or from the vendor profile) or through AP-inbox forwarding,
   which creates drafts that a person finishes one at a time. MockRamp has `createCredit` only because the

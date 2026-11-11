@@ -1,0 +1,33 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T10:18:59.021Z",
+  "items": [
+    {
+      "ref": "BC-5005",
+      "description": "Duct rework, L3 corridor - duct run hung below coordinated elevation, clashed with ceiling grid; dropped and rehung",
+      "amountCents": 187550,
+      "amountEvidence": {
+        "emailId": "bc-05",
+        "sentence": "BC-5005: duct rework, L3 corridor, $1,875.50."
+      },
+      "vendorNameAsWritten": "Harbor Mechanical",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": "BC-5005",
+        "description": "Duct rework, L3 corridor - duct run hung below coordinated elevation, clashed with ceiling grid; dropped and rehung",
+        "amountText": "$1,875.50",
+        "amountSentence": "BC-5005: duct rework, L3 corridor, $1,875.50.",
+        "vendorNameAsWritten": "Harbor Mechanical",
+        "jobRef": "Summit",
+        "disputeNoted": false
+      }
+    ]
+  }
+}

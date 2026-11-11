@@ -1,0 +1,116 @@
+{
+  "ref": "BC-4467",
+  "description": "Replace ceiling grid damaged by drywall lift, L2",
+  "amount": "$6,800.00",
+  "status": {
+    "label": "Deducted (credit VC-1)",
+    "tone": "ok"
+  },
+  "vendorAsWritten": "Ridgeline Drywall",
+  "jobRef": "Summit",
+  "email": {
+    "id": "E-1",
+    "subject": "Summit - back-charges L2",
+    "from": "dana.ortiz@apexbuilders.example",
+    "body": "Marco,\n\nYour crew's drywall lift damaged the ceiling grid on Level 2 at Summit. BC-4467: replace damaged\nceiling grid, L2, $6,800.00 per the Apex Ceilings invoice.\n\nAfter three written warnings we hauled your debris ourselves. BC-4468: debris haul-off, $4,700.00.\n\nDana Ortiz, PM"
+  },
+  "sourceSentence": "BC-4467: replace damaged ceiling grid, L2, $6,800.00 per the Apex Ceilings invoice.",
+  "disputeSentence": null,
+  "link": {
+    "subcontractId": "SC-SUM-0912",
+    "explanation": [
+      "job: \"Summit\" -> SUM-01 Summit Medical Office",
+      "alias: \"Ridgeline Drywall\" -> Ridgeline Interiors LLC (seed)",
+      "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
+    ]
+  },
+  "clause": {
+    "section": "§14.3 Back-Charges",
+    "text": "Contractor shall give Subcontractor written notice of any back-charge. Subcontractor shall have five (5) working days from receipt to dispute in writing. Undisputed back-charges may be deducted from any payment due Subcontractor.",
+    "responseWindow": "5 working days",
+    "deductionAllowed": true,
+    "noticeRequired": true
+  },
+  "eligibility": {
+    "status": "eligible",
+    "holdReasons": [],
+    "waitingFor": [],
+    "trace": [
+      "PASS linked to a subcontract",
+      "PASS all evidence verbatim in source",
+      "PASS no dispute noted in source",
+      "PASS subcontract has a back-charge clause",
+      "PASS §14.3 Back-Charges allows deduction from payments",
+      "PASS subcontract party mapped to a payments vendor",
+      "PASS §14.3 Back-Charges notice sent for BC-4467",
+      "PASS not disputed by sub",
+      "PASS response window closed (2026-11-13 15:00 UTC)"
+    ]
+  },
+  "history": [
+    {
+      "seq": 2,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Sample extractions (hand-written)",
+      "what": "extracted $6,800.00 (new → extracted)",
+      "evidence": [
+        "BC-4467: replace damaged ceiling grid, L2, $6,800.00 per the Apex Ceilings invoice."
+      ]
+    },
+    {
+      "seq": 8,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "dana.ortiz (PM)",
+      "what": "link confirmed (extracted → linked)",
+      "evidence": [
+        "job: \"Summit\" -> SUM-01 Summit Medical Office",
+        "alias: \"Ridgeline Drywall\" -> Ridgeline Interiors LLC (seed)",
+        "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
+      ]
+    },
+    {
+      "seq": 16,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Contra",
+      "what": "included in notice (linked → noticed)",
+      "evidence": [
+        "N-1"
+      ]
+    },
+    {
+      "seq": 21,
+      "at": "2026-11-14 15:00 UTC",
+      "actor": "Contra",
+      "what": "eligible (noticed → eligible)",
+      "evidence": [
+        "PASS linked to a subcontract",
+        "PASS all evidence verbatim in source",
+        "PASS no dispute noted in source",
+        "PASS subcontract has a back-charge clause",
+        "PASS §14.3 Back-Charges allows deduction from payments",
+        "PASS subcontract party mapped to a payments vendor",
+        "PASS §14.3 Back-Charges notice sent for BC-4467",
+        "PASS not disputed by sub",
+        "PASS response window closed (2026-11-13 15:00 UTC)"
+      ]
+    },
+    {
+      "seq": 26,
+      "at": "2026-11-14 15:00 UTC",
+      "actor": "Contra",
+      "what": "on credit VC-1 (eligible → credited)",
+      "evidence": [
+        "VC-1"
+      ]
+    },
+    {
+      "seq": 30,
+      "at": "2026-11-14 15:00 UTC",
+      "actor": "Contra",
+      "what": "deducted on B-SUM-48K (credited → applied)",
+      "evidence": [
+        "B-SUM-48K"
+      ]
+    }
+  ]
+}

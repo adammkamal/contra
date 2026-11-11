@@ -50,7 +50,17 @@ export interface Email {
   subject: string;
   receivedAt: Date;
   body: string;
+  /** The RFC 5322 Message-ID (or, when a message has none, a stable stand-in). Ingest skips one it has already seen. */
+  messageId?: string;
+  /** Attachments the message carried. They are not read yet; the count is recorded so a person knows. */
+  attachmentCount?: number;
 }
+
+/** Where an ingested PM email came from: an .eml file read by ingest/eml.ts, the built-in sample in seed.ts, or the live Gmail inbox. */
+export type EmailOrigin = "eml" | "builtin" | "gmail";
+
+/** Audit action for an ingested PM email, by origin. "ingested" alone (older logs too) means built-in. */
+export const EMAIL_INGESTED: Record<EmailOrigin, string> = { builtin: "ingested", eml: "ingested from .eml file", gmail: "ingested from Gmail" };
 
 /** A sentence quoted from a specific email. Must pass the span check before use. */
 export interface Evidence {
@@ -97,7 +107,10 @@ export type HoldReason =
   | "no_payments_vendor"
   | "unverified_evidence"
   | "conflicting_amounts"
-  | "unresolved_link";
+  | "unresolved_link"
+  | "only_in_quoted_text"
+  | "suspicious_instructions"
+  | "unaccounted_reference";
 
 export interface BackCharge {
   ref: string;
@@ -135,4 +148,24 @@ export interface Credit {
   backChargeRefs: string[];
   state: CreditState;
   approvedBy: string | null;
+  /** Delivery of this credit's memo to the AP inbox. Absent until someone asks to send it. */
+  memoDelivery?: MemoDelivery;
+}
+
+/**
+ * queued: about to be handed to the sender (if it stays queued, the process stopped mid-send and the
+ * memo may or may not have gone out: a person must check before anything is sent again).
+ * sent: the sender accepted it. failed: the sender refused it; only a failed memo may be retried.
+ */
+export type MemoState = "queued" | "sent" | "failed";
+
+export interface MemoDelivery {
+  state: MemoState;
+  /** Where it was sent (the sender's destination). */
+  to: string;
+  attempts: number;
+  /** The sender's id for the sent message. */
+  messageId: string | null;
+  /** Why the last attempt failed, in words. */
+  error: string | null;
 }

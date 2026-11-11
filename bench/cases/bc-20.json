@@ -1,0 +1,12 @@
+{
+  "id": "bc-20",
+  "description": "'Harbor Mechanical' on Lakeview; crane standby",
+  "email": {
+    "id": "bc-20",
+    "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    "to": "Harbor Mechanical <ap@harbormech.example>",
+    "subject": "Lakeview - BC-5020 crane standby",
+    "receivedAt": "2026-10-28T15:45:00.000Z",
+    "body": "Hi,\n\nHarbor Mechanical's rooftop unit delivery at Lakeview showed up three hours late on Thursday, and the crane sat on standby the whole time.\n\nBC-5020: crane standby, $2,500.00.\n\nThanks,\nDana Ortiz\nProject Manager, Apex Builders"
+  }
+}

@@ -5,4 +5,4 @@ if (!existsSync(".git")) { console.error("Run `git init` first."); process.exit(
 const dest = join(".git", "hooks", "pre-commit");
 copyFileSync(join("scripts", "protect.sh"), dest);
 try { chmodSync(dest, 0o755); } catch { /* Windows: Git Bash runs it regardless */ }
-console.log("Installed .git/hooks/pre-commit (protects INVARIANTS.md, demo/invariant tests, bench/labels).");
+console.log("Installed .git/hooks/pre-commit (protects INVARIANTS.md, demo/invariant tests, bench/labels, bench/heldout/labels).");

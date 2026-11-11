@@ -1,0 +1,33 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T10:19:44.186Z",
+  "items": [
+    {
+      "ref": "BC-5011",
+      "description": "Corridor patch, L2 east corridor, after the crew's touch-up left visible seams",
+      "amountCents": 275000,
+      "amountEvidence": {
+        "emailId": "bc-11",
+        "sentence": "BC-5011: corridor patch, L2 east corridor, $2,750."
+      },
+      "vendorNameAsWritten": "Ridgeline Drywall",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": "BC-5011",
+        "description": "Corridor patch, L2 east corridor, after the crew's touch-up left visible seams",
+        "amountText": "$2,750",
+        "amountSentence": "BC-5011: corridor patch, L2 east corridor, $2,750.",
+        "vendorNameAsWritten": "Ridgeline Drywall",
+        "jobRef": "Summit",
+        "disputeNoted": false
+      }
+    ]
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T10:20:47.251Z",
+  "items": [
+    {
+      "ref": "BC-5019",
+      "description": "Cleanup L4",
+      "amountCents": 130000,
+      "amountEvidence": {
+        "emailId": "bc-19",
+        "sentence": "BC-5019 | Cleanup L4 | $1,300.00"
+      },
+      "vendorNameAsWritten": "Ridgeline Drywall",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": "BC-5019",
+        "description": "Cleanup L4",
+        "amountText": "$1,300.00",
+        "amountSentence": "BC-5019 | Cleanup L4 | $1,300.00",
+        "vendorNameAsWritten": "Ridgeline Drywall",
+        "jobRef": "Summit",
+        "disputeNoted": false
+      }
+    ]
+  }
+}

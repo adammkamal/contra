@@ -2,6 +2,17 @@ import { windowCloses } from "./clock.ts";
 import { formatUsd, sum } from "./money.ts";
 import type { BackCharge, Credit, Job, Notice, Subcontract } from "./types.ts";
 
+/**
+ * Delivers a credit memo (e.g. by email to an AP inbox). Injected into App like the Clock; src/ holds
+ * no network code, so the implementation lives outside it (server/gmail.ts). send() resolves when the
+ * memo was accepted for delivery and rejects with an Error whose message is safe to show and to audit.
+ */
+export interface MemoSender {
+  /** Where memos go, as shown on screen and in the audit log (an email address). */
+  readonly destination: string;
+  send(memo: { creditId: string; filename: string; text: string }): Promise<{ messageId: string }>;
+}
+
 export interface MemoInput {
   credit: Readonly<Credit>;
   subcontract: Readonly<Subcontract>;

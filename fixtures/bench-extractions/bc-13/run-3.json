@@ -1,0 +1,33 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T10:20:04.119Z",
+  "items": [
+    {
+      "ref": "BC-5013",
+      "description": "Duct repair on L2 after the Ridgeline crew cut into a supply duct while installing backing; Harbor Mechanical did the repair",
+      "amountCents": 160000,
+      "amountEvidence": {
+        "emailId": "bc-13",
+        "sentence": "BC-5013: duct repair, L2, per Harbor Mechanical's repair invoice, $1,600.00."
+      },
+      "vendorNameAsWritten": "Ridgeline Drywall",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": "BC-5013",
+        "description": "Duct repair on L2 after the Ridgeline crew cut into a supply duct while installing backing; Harbor Mechanical did the repair",
+        "amountText": "$1,600.00",
+        "amountSentence": "BC-5013: duct repair, L2, per Harbor Mechanical's repair invoice, $1,600.00.",
+        "vendorNameAsWritten": "Ridgeline Drywall",
+        "jobRef": "Summit",
+        "disputeNoted": false
+      }
+    ]
+  }
+}

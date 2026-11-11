@@ -1,0 +1,12 @@
+{
+  "id": "bc-08",
+  "description": "'Ridgeline Drywall', no job mentioned; patching",
+  "email": {
+    "id": "bc-08",
+    "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    "to": "Ridgeline Drywall <office@ridgelinedrywall.example>",
+    "subject": "Back-charge BC-5008 - wall patching",
+    "receivedAt": "2026-10-12T14:45:00.000Z",
+    "body": "Hi,\n\nRidgeline Drywall's crew gouged several finished walls moving lifts through the 2nd floor last week. We had them patched and repainted.\n\nBC-5008: wall patching, 2nd floor, $780.00.\n\nThanks,\nDana Ortiz\nProject Manager, Apex Builders"
+  }
+}

@@ -1,5 +1,5 @@
 import type { AuditLog } from "./audit.ts";
-import type { Actor, BackCharge, BackChargeState, Credit, CreditState, Notice, NoticeState } from "./types.ts";
+import type { Actor, BackCharge, BackChargeState, Credit, CreditState, MemoDelivery, MemoState, Notice, NoticeState } from "./types.ts";
 
 type Rule<S extends string> = { to: S; needsHuman: boolean };
 
@@ -49,6 +49,22 @@ const CREDIT: Record<CreditState, Rule<CreditState>[]> = {
   applied: [],
 };
 
+/**
+ * A credit memo's delivery. "none" is a credit with no delivery yet. Retry is only from failed: a memo
+ * left queued (the process stopped between handing it to the sender and recording the result) may
+ * already have gone out, so it is never re-sent automatically.
+ */
+type MemoFrom = MemoState | "none";
+const MEMO: Record<MemoFrom, Rule<MemoState>[]> = {
+  none: [{ to: "queued", needsHuman: true }],
+  queued: [
+    { to: "sent", needsHuman: false },
+    { to: "failed", needsHuman: false },
+  ],
+  failed: [{ to: "queued", needsHuman: true }],
+  sent: [],
+};
+
 export class IllegalTransition extends Error {}
 
 function check<S extends string>(table: Record<S, Rule<S>[]>, kind: string, id: string, from: S, to: S, actor: Actor) {
@@ -82,4 +98,21 @@ export function transitionCredit(log: AuditLog, c: Credit, to: CreditState, acto
   check(CREDIT, "Credit", c.id, c.state, to, actor);
   log.append({ actor, entity: "credit", entityId: c.id, action, from: c.state, to, evidence });
   c.state = to;
+}
+
+/** Moves a credit's memo delivery to `to`, audited under entity "memo" with the credit's id. `update` sets the other fields. */
+export function transitionMemo(
+  log: AuditLog,
+  c: Credit,
+  to: MemoState,
+  actor: Actor,
+  action: string,
+  evidence: string[],
+  update: Partial<Omit<MemoDelivery, "state">> & { to?: string },
+): void {
+  const from: MemoFrom = c.memoDelivery?.state ?? "none";
+  check(MEMO, "Memo", c.id, from, to, actor);
+  log.append({ actor, entity: "memo", entityId: c.id, action, from: from === "none" ? null : from, to, evidence });
+  const prev = c.memoDelivery ?? { state: to, to: "", attempts: 0, messageId: null, error: null };
+  c.memoDelivery = { ...prev, ...update, state: to };
 }

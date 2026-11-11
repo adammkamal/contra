@@ -5,7 +5,7 @@ before changing code. AGENTS.md has the file layout and how the UI calls the cor
 inline on purpose, so subagents get them even if file imports are not expanded.
 
 ## Never
-- Edit INVARIANTS.md, test/invariants.test.ts, test/demo.test.ts or bench/labels/. If one looks wrong, stop and say so.
+- Edit INVARIANTS.md, test/invariants.test.ts, test/demo.test.ts, bench/labels/ or bench/heldout/labels/. If one looks wrong, stop and say so.
 - Do arithmetic on dollars, use floats for money, `parseFloat` or `toFixed` on amounts. Use `Cents` from src/money.ts.
 - Call a model anywhere in src/ except src/extract/. Eligibility, matching and money are deterministic code.
 - Change state except through `transition*()` (src/state.ts) and, from UI or scripts, `app.run(...)` via src/commands.ts.
@@ -15,13 +15,15 @@ inline on purpose, so subagents get them even if file imports are not expanded.
 - Put real (non-sample) emails or financial data in git. They go in private/ (gitignored).
 
 ## UI
-- Screens render only `buildScreens(app)` (src/view.ts) plus `contra.explainEligibility` / `contra.creditMemo`.
-- Every button calls exactly one function in src/commands.ts through a server action.
+- The frontend contract is FRONTEND_CONTRACT.md. Screens render only `buildScreens(app)`, `backChargeDetail(app, ref)`
+  and `contra.creditMemo(id)` (or the same data from the JSON API in server/api.ts).
+- Every button sends the Action it was given to `runAction` (src/commands.ts), in-process or via POST /api/action.
+- When `extractionSource` is "sample", the Inbox says the extractions are hand-written, not model output.
 - Every Ramp screen shows a "Simulated Ramp" badge. The opener shows "Sample data".
 - The status word carries the meaning; color only decorates.
 
 ## Done means
-- `npm run check` passes (typecheck + all tests). `npm run bench` runs.
+- `npm run check` passes (typecheck + all tests). `npm run bench` runs on the recordings from `npm run bench:record` (it needs a label for every case).
 - New rule => a test that fails when the rule is removed. Break it once yourself to confirm.
 - AI changes => `npm run extract:live` passes 5/5 before fixtures are re-recorded.
 - Report the actual commands you ran and their results. Never claim a check you did not run.

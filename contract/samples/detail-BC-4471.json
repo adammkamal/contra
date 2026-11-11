@@ -1,0 +1,91 @@
+{
+  "ref": "BC-4471",
+  "description": "Overtime for missed inspection",
+  "amount": "$4,000.00",
+  "status": {
+    "label": "Held: disputed by the sub",
+    "tone": "danger"
+  },
+  "vendorAsWritten": "Ridgeline Drywall",
+  "jobRef": "Summit MOB",
+  "email": {
+    "id": "E-3",
+    "subject": "Summit MOB - missed inspection",
+    "from": "dana.ortiz@apexbuilders.example",
+    "body": "Ridgeline Drywall - your crew wasn't ready for the drywall inspection, so we paid the framing crew overtime to hold the schedule. BC-4471: overtime for missed inspection, $4,000.00. Please acknowledge.\n\nDana"
+  },
+  "sourceSentence": "BC-4471: overtime for missed inspection, $4,000.00.",
+  "disputeSentence": null,
+  "link": {
+    "subcontractId": "SC-SUM-0912",
+    "explanation": [
+      "job: \"Summit MOB\" -> SUM-01 Summit Medical Office",
+      "alias: \"Ridgeline Drywall\" -> Ridgeline Interiors LLC (seed)",
+      "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
+    ]
+  },
+  "clause": {
+    "section": "§14.3 Back-Charges",
+    "text": "Contractor shall give Subcontractor written notice of any back-charge. Subcontractor shall have five (5) working days from receipt to dispute in writing. Undisputed back-charges may be deducted from any payment due Subcontractor.",
+    "responseWindow": "5 working days",
+    "deductionAllowed": true,
+    "noticeRequired": true
+  },
+  "eligibility": {
+    "status": "held",
+    "holdReasons": [
+      "disputed by the sub"
+    ],
+    "waitingFor": [],
+    "trace": [
+      "PASS linked to a subcontract",
+      "PASS all evidence verbatim in source",
+      "PASS no dispute noted in source",
+      "PASS subcontract has a back-charge clause",
+      "PASS §14.3 Back-Charges allows deduction from payments",
+      "PASS subcontract party mapped to a payments vendor",
+      "PASS §14.3 Back-Charges notice sent for BC-4471",
+      "HOLD not disputed by sub"
+    ]
+  },
+  "history": [
+    {
+      "seq": 7,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Sample extractions (hand-written)",
+      "what": "extracted $4,000.00 (new → extracted)",
+      "evidence": [
+        "BC-4471: overtime for missed inspection, $4,000.00."
+      ]
+    },
+    {
+      "seq": 11,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "dana.ortiz (PM)",
+      "what": "link confirmed (extracted → linked)",
+      "evidence": [
+        "job: \"Summit MOB\" -> SUM-01 Summit Medical Office",
+        "alias: \"Ridgeline Drywall\" -> Ridgeline Interiors LLC (seed)",
+        "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
+      ]
+    },
+    {
+      "seq": 18,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Contra",
+      "what": "included in notice (linked → noticed)",
+      "evidence": [
+        "N-1"
+      ]
+    },
+    {
+      "seq": 20,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Contra",
+      "what": "held: disputed_by_sub (noticed → held)",
+      "evidence": [
+        "Fine, except 4471."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "bc-02",
+  "description": "Trade name 'Ridgeline Drywall' on Summit; damaged door frame",
+  "email": {
+    "id": "bc-02",
+    "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    "to": "Ridgeline Drywall <office@ridgelinedrywall.example>",
+    "subject": "Summit - BC-5002 door frame, Room 214",
+    "receivedAt": "2026-10-02T15:20:00.000Z",
+    "body": "Hi,\n\nYour crew's board cart hit the hollow metal frame at Room 214 at Summit and bent the jamb. The frame had to be cut out and replaced.\n\nBC-5002: replace damaged door frame, Room 214, $2,300.00.\n\nThanks,\nDana Ortiz\nProject Manager, Apex Builders"
+  }
+}

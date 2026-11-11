@@ -1,0 +1,33 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T10:20:37.474Z",
+  "items": [
+    {
+      "ref": "BC-5018",
+      "description": "Repair damaged wall, L2 elevator lobby",
+      "amountCents": 72000,
+      "amountEvidence": {
+        "emailId": "bc-18",
+        "sentence": "BC-5018: repair damaged wall, L2 elevator lobby, $720.00."
+      },
+      "vendorNameAsWritten": "Ridgeline Drywall",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": "BC-5018",
+        "description": "Repair damaged wall, L2 elevator lobby",
+        "amountText": "$720.00",
+        "amountSentence": "BC-5018: repair damaged wall, L2 elevator lobby, $720.00.",
+        "vendorNameAsWritten": "Ridgeline Drywall",
+        "jobRef": "Summit",
+        "disputeNoted": false
+      }
+    ]
+  }
+}

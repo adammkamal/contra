@@ -1,0 +1,38 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T10:19:35.377Z",
+  "items": [
+    {
+      "ref": "BC-5010",
+      "description": "Condensate damage repair, L4 staff lounge",
+      "amountCents": 440000,
+      "amountEvidence": {
+        "emailId": "bc-10",
+        "sentence": "BC-5010: condensate damage repair, L4 staff lounge, $4,400.00."
+      },
+      "vendorNameAsWritten": "Harbor Mechanical",
+      "jobRef": "Summit",
+      "disputeNoted": true,
+      "disputeEvidence": {
+        "emailId": "bc-10",
+        "sentence": "Harbor is contesting this one."
+      }
+    }
+  ],
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": "BC-5010",
+        "description": "Condensate damage repair, L4 staff lounge",
+        "amountText": "$4,400.00",
+        "amountSentence": "BC-5010: condensate damage repair, L4 staff lounge, $4,400.00.",
+        "vendorNameAsWritten": "Harbor Mechanical",
+        "jobRef": "Summit",
+        "disputeNoted": true,
+        "disputeSentence": "Harbor is contesting this one."
+      }
+    ]
+  }
+}

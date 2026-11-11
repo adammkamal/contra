@@ -1,0 +1,33 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T10:19:10.481Z",
+  "items": [
+    {
+      "ref": "BC-5007",
+      "description": "Replacement of damaged door frames, L2",
+      "amountCents": 210000,
+      "amountEvidence": {
+        "emailId": "bc-07",
+        "sentence": "BC-5007: replacement of damaged door frames, L2, $2,100.00."
+      },
+      "vendorNameAsWritten": "Keystone Receivables",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": "BC-5007",
+        "description": "Replacement of damaged door frames, L2",
+        "amountText": "$2,100.00",
+        "amountSentence": "BC-5007: replacement of damaged door frames, L2, $2,100.00.",
+        "vendorNameAsWritten": "Keystone Receivables",
+        "jobRef": "Summit",
+        "disputeNoted": false
+      }
+    ]
+  }
+}

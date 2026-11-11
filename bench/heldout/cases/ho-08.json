@@ -1,0 +1,12 @@
+{
+  "id": "ho-08",
+  "description": "'Ridgeline Drywall' on Summit; damaged doors, written as BC-6018 and later in the same email as BC-6081",
+  "email": {
+    "id": "ho-08",
+    "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    "to": "Ridgeline Drywall <office@ridgelinedrywall.example>",
+    "subject": "Summit - back-charge, damaged doors",
+    "receivedAt": "2026-10-27T16:05:00.000Z",
+    "body": "Hi,\n\nTwo doors on L4 at Summit were gouged during board delivery and had to be replaced.\n\nBC-6018: damaged doors, $1,150.00.\n\nBC-6081 covers both doors.\n\nThanks,\nDana Ortiz\nProject Manager, Apex Builders"
+  }
+}

@@ -1,0 +1,59 @@
+Held-out benchmark, first scored run (npm run bench -- --set heldout).
+Scored at commit 98ad028 ("Held-out labels (written after recording)", 2026-11-10 00:27:30 -0800): the file was
+written in the same second as that commit, and re-running the held-out bench at 98ad028 reproduces the output below exactly.
+The code was changed after these results, so later scores on this set are not held-out.
+---
+
+> bench
+> tsx bench/run.ts --set heldout
+
+Set: heldout (scored separately, never merged into the main numbers)
+Extractions: fixtures/bench-extractions/heldout, 3 run(s), claude-opus-5-5 (medium)
+┌─────────┬─────────┬─────┬───────┬────────────────────────────┬─────────┬───────────┬────────────────────────────┬─────────┬───────────┐
+│ (index) │ case    │ run │ items │ contra                     │ c match │ c dispute │ baseline                   │ b match │ b dispute │
+├─────────┼─────────┼─────┼───────┼────────────────────────────┼─────────┼───────────┼────────────────────────────┼─────────┼───────────┤
+│ 0       │ 'ho-01' │ 1   │ 1     │ 'hold'                     │ true    │ true      │ 'link SC-SUM-0912 +credit' │ false   │ true      │
+│ 1       │ 'ho-01' │ 2   │ 1     │ 'hold'                     │ true    │ true      │ 'link SC-SUM-0912 +credit' │ false   │ true      │
+│ 2       │ 'ho-01' │ 3   │ 1     │ 'hold'                     │ true    │ true      │ 'link SC-SUM-0912 +credit' │ false   │ true      │
+│ 3       │ 'ho-02' │ 1   │ 1     │ 'hold'                     │ true    │ true      │ 'link SC-SUM-0700 +credit' │ false   │ true      │
+│ 4       │ 'ho-02' │ 2   │ 1     │ 'hold'                     │ true    │ true      │ 'link SC-SUM-0700 +credit' │ false   │ true      │
+│ 5       │ 'ho-02' │ 3   │ 1     │ 'hold'                     │ true    │ true      │ 'link SC-SUM-0700 +credit' │ false   │ true      │
+│ 6       │ 'ho-03' │ 1   │ 1     │ 'link SC-LAK-0301 +credit' │ true    │ true      │ 'link SC-LAK-0301 +credit' │ true    │ true      │
+│ 7       │ 'ho-03' │ 2   │ 1     │ 'link SC-LAK-0301 +credit' │ true    │ true      │ 'link SC-LAK-0301 +credit' │ true    │ true      │
+│ 8       │ 'ho-03' │ 3   │ 1     │ 'link SC-LAK-0301 +credit' │ true    │ true      │ 'link SC-LAK-0301 +credit' │ true    │ true      │
+│ 9       │ 'ho-04' │ 1   │ 0     │ 'review (0 items)'         │ false   │ true      │ 'review (0 items)'         │ false   │ true      │
+│ 10      │ 'ho-04' │ 2   │ 0     │ 'review (0 items)'         │ false   │ true      │ 'review (0 items)'         │ false   │ true      │
+│ 11      │ 'ho-04' │ 3   │ 0     │ 'review (0 items)'         │ false   │ true      │ 'review (0 items)'         │ false   │ true      │
+│ 12      │ 'ho-05' │ 1   │ 1     │ 'review'                   │ true    │ true      │ 'review'                   │ true    │ true      │
+│ 13      │ 'ho-05' │ 2   │ 1     │ 'review'                   │ true    │ true      │ 'review'                   │ true    │ true      │
+│ 14      │ 'ho-05' │ 3   │ 1     │ 'review'                   │ true    │ true      │ 'review'                   │ true    │ true      │
+│ 15      │ 'ho-06' │ 1   │ 0     │ 'review (0 items)'         │ true    │ true      │ 'review (0 items)'         │ true    │ true      │
+│ 16      │ 'ho-06' │ 2   │ 0     │ 'review (0 items)'         │ true    │ true      │ 'review (0 items)'         │ true    │ true      │
+│ 17      │ 'ho-06' │ 3   │ 0     │ 'review (0 items)'         │ true    │ true      │ 'review (0 items)'         │ true    │ true      │
+│ 18      │ 'ho-07' │ 1   │ 1     │ 'link SC-LAK-0301 +credit' │ true    │ true      │ 'link SC-LAK-0301 +credit' │ true    │ true      │
+│ 19      │ 'ho-07' │ 2   │ 1     │ 'link SC-LAK-0301 +credit' │ true    │ true      │ 'link SC-LAK-0301 +credit' │ true    │ true      │
+│ 20      │ 'ho-07' │ 3   │ 1     │ 'link SC-LAK-0301 +credit' │ true    │ true      │ 'link SC-LAK-0301 +credit' │ true    │ true      │
+│ 21      │ 'ho-08' │ 1   │ 1     │ 'link SC-SUM-0912 +credit' │ false   │ true      │ 'link SC-SUM-0912 +credit' │ false   │ true      │
+│ 22      │ 'ho-08' │ 2   │ 1     │ 'link SC-SUM-0912 +credit' │ false   │ true      │ 'link SC-SUM-0912 +credit' │ false   │ true      │
+│ 23      │ 'ho-08' │ 3   │ 1     │ 'link SC-SUM-0912 +credit' │ false   │ true      │ 'link SC-SUM-0912 +credit' │ false   │ true      │
+└─────────┴─────────┴─────┴───────┴────────────────────────────┴─────────┴───────────┴────────────────────────────┴─────────┴───────────┘
+
+contra (per run; matching = correct link or correct review)
+┌─────────┬─────┬────────┬────────┬──────────┬─────────┬────────────┬──────────────┬───────────────┐
+│ (index) │ run │ scored │ failed │ matching │ dispute │ wrongLinks │ wrongCredits │ routedToHuman │
+├─────────┼─────┼────────┼────────┼──────────┼─────────┼────────────┼──────────────┼───────────────┤
+│ 0       │ 1   │ 8      │ 0      │ 6        │ 8       │ 1          │ 1            │ 4             │
+│ 1       │ 2   │ 8      │ 0      │ 6        │ 8       │ 1          │ 1            │ 4             │
+│ 2       │ 3   │ 8      │ 0      │ 6        │ 8       │ 1          │ 1            │ 4             │
+└─────────┴─────┴────────┴────────┴──────────┴─────────┴────────────┴──────────────┴───────────────┘
+
+baseline (per run; matching = correct link or correct review)
+┌─────────┬─────┬────────┬────────┬──────────┬─────────┬────────────┬──────────────┬───────────────┐
+│ (index) │ run │ scored │ failed │ matching │ dispute │ wrongLinks │ wrongCredits │ routedToHuman │
+├─────────┼─────┼────────┼────────┼──────────┼─────────┼────────────┼──────────────┼───────────────┤
+│ 0       │ 1   │ 8      │ 0      │ 4        │ 8       │ 3          │ 3            │ 2             │
+│ 1       │ 2   │ 8      │ 0      │ 4        │ 8       │ 3          │ 3            │ 2             │
+│ 2       │ 3   │ 8      │ 0      │ 4        │ 8       │ 3          │ 3            │ 2             │
+└─────────┴─────┴────────┴────────┴──────────┴─────────┴────────────┴──────────────┴───────────────┘
+
+Unstable cases (outcome differs between runs): contra none; baseline none

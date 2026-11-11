@@ -1,0 +1,33 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T10:21:49.827Z",
+  "items": [
+    {
+      "ref": "BC-6018",
+      "description": "Damaged doors - two doors on L4 gouged during board delivery and replaced",
+      "amountCents": 115000,
+      "amountEvidence": {
+        "emailId": "ho-08",
+        "sentence": "BC-6018: damaged doors, $1,150.00."
+      },
+      "vendorNameAsWritten": "Ridgeline Drywall",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": "BC-6018",
+        "description": "Damaged doors - two doors on L4 gouged during board delivery and replaced",
+        "amountText": "$1,150.00",
+        "amountSentence": "BC-6018: damaged doors, $1,150.00.",
+        "vendorNameAsWritten": "Ridgeline Drywall",
+        "jobRef": "Summit",
+        "disputeNoted": false
+      }
+    ]
+  }
+}

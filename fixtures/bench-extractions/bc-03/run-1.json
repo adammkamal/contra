@@ -1,0 +1,33 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T10:18:45.639Z",
+  "items": [
+    {
+      "ref": "BC-5003",
+      "description": "Floor protection and cleaning, L1 lobby",
+      "amountCents": 95000,
+      "amountEvidence": {
+        "emailId": "bc-03",
+        "sentence": "BC-5003: floor protection and cleaning, L1 lobby, $950.00."
+      },
+      "vendorNameAsWritten": "Ridgeline",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": "BC-5003",
+        "description": "Floor protection and cleaning, L1 lobby",
+        "amountText": "$950.00",
+        "amountSentence": "BC-5003: floor protection and cleaning, L1 lobby, $950.00.",
+        "vendorNameAsWritten": "Ridgeline",
+        "jobRef": "Summit",
+        "disputeNoted": false
+      }
+    ]
+  }
+}

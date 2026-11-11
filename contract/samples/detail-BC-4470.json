@@ -1,0 +1,89 @@
+{
+  "ref": "BC-4470",
+  "description": "Re-patch corridor wall after MEP rework",
+  "amount": "$2,750.00",
+  "status": {
+    "label": "Held: dispute noted in the PM's email",
+    "tone": "danger"
+  },
+  "vendorAsWritten": "Ridgeline Drywall",
+  "jobRef": "Summit",
+  "email": {
+    "id": "E-2",
+    "subject": "RE: Summit corridor patch",
+    "from": "dana.ortiz@apexbuilders.example",
+    "body": "BC-4470: re-patch corridor wall after MEP rework, $2,750.00. Ridgeline disputes\nthis one, holding until we sort out who caused it.\n\nDana"
+  },
+  "sourceSentence": "BC-4470: re-patch corridor wall after MEP rework, $2,750.00.",
+  "disputeSentence": "Ridgeline disputes this one, holding until we sort out who caused it.",
+  "link": {
+    "subcontractId": "SC-SUM-0912",
+    "explanation": [
+      "job: \"Summit\" -> SUM-01 Summit Medical Office",
+      "alias: \"Ridgeline Drywall\" -> Ridgeline Interiors LLC (seed)",
+      "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
+    ]
+  },
+  "clause": {
+    "section": "§14.3 Back-Charges",
+    "text": "Contractor shall give Subcontractor written notice of any back-charge. Subcontractor shall have five (5) working days from receipt to dispute in writing. Undisputed back-charges may be deducted from any payment due Subcontractor.",
+    "responseWindow": "5 working days",
+    "deductionAllowed": true,
+    "noticeRequired": true
+  },
+  "eligibility": {
+    "status": "held",
+    "holdReasons": [
+      "dispute noted in the PM's email",
+      "no notice was sent"
+    ],
+    "waitingFor": [],
+    "trace": [
+      "PASS linked to a subcontract",
+      "PASS all evidence verbatim in source",
+      "HOLD no dispute noted in source",
+      "PASS subcontract has a back-charge clause",
+      "PASS §14.3 Back-Charges allows deduction from payments",
+      "PASS subcontract party mapped to a payments vendor",
+      "HOLD §14.3 Back-Charges notice sent for BC-4470",
+      "PASS not disputed by sub"
+    ]
+  },
+  "history": [
+    {
+      "seq": 5,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Sample extractions (hand-written)",
+      "what": "extracted $2,750.00 (new → extracted)",
+      "evidence": [
+        "BC-4470: re-patch corridor wall after MEP rework, $2,750.00.",
+        "Ridgeline disputes this one, holding until we sort out who caused it."
+      ]
+    },
+    {
+      "seq": 10,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "dana.ortiz (PM)",
+      "what": "link confirmed (extracted → linked)",
+      "evidence": [
+        "job: \"Summit\" -> SUM-01 Summit Medical Office",
+        "alias: \"Ridgeline Drywall\" -> Ridgeline Interiors LLC (seed)",
+        "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
+      ]
+    },
+    {
+      "seq": 12,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Contra",
+      "what": "held: dispute_noted_in_source (linked → held)",
+      "evidence": [
+        "PASS linked to a subcontract",
+        "PASS all evidence verbatim in source",
+        "HOLD no dispute noted in source",
+        "PASS subcontract has a back-charge clause",
+        "PASS §14.3 Back-Charges allows deduction from payments",
+        "PASS subcontract party mapped to a payments vendor"
+      ]
+    }
+  ]
+}

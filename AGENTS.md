@@ -6,7 +6,7 @@ Read SPEC.md and INVARIANTS.md before writing code.
 
 ## Hard rules
 1. **Never edit** `INVARIANTS.md`, `test/invariants.test.ts`, `test/demo.test.ts` or anything under
-   `bench/labels/`. If one of them looks wrong, stop and say so. A pre-commit hook rejects such edits
+   `bench/labels/` or `bench/heldout/labels/`. If one of them looks wrong, stop and say so. A pre-commit hook rejects such edits
    (`scripts/protect.sh`).
 2. **Money:** use `Cents` from `src/money.ts`. Never use `number` arithmetic on dollars, `toFixed` for
    math, or `parseFloat` on amounts.
@@ -33,6 +33,7 @@ src/clock.ts         injectable clock
 src/audit.ts         append-only event log
 src/state.ts         back-charge and credit state machines
 src/span.ts          verbatim source check
+src/intake.ts        per-item ingest checks (span, dispute, link); shared with bench/
 src/resolver.ts      job -> subcontract party -> alias linkage
 src/eligibility.ts   deterministic eligibility rules
 src/credits.ts       credit proposal from eligible items
@@ -43,7 +44,12 @@ src/memo.ts          credit memo for the Ramp AP-inbox route
 src/reconcile.ts     read-only "missed back-charges" scan (shadow mode)
 src/store/sqlite.ts  append-only event log + snapshots (node:sqlite, built in)
 src/app.ts           App: the ONLY entry point for UI and scripts
-src/commands.ts      one function per UI button; each runs inside app.run
+src/commands.ts      one function per UI button (each inside app.run) + runAction(app, action, input) dispatcher
+server/api.ts        JSON API over the same functions (npm run api); node:http, plus ingest/ for .eml
+ingest/eml.ts        parseEml / loadPmEmails: .eml files -> Email (mailparser; outside src/ on purpose)
+scripts/make-eml.ts  writes fixtures/emails/E-1..E-3.eml from the seed (QP, HTML-only, 7bit)
+FRONTEND_CONTRACT.md what the frontend may rely on; contract/samples/ = real JSON per demo step
+INTEGRATION.md       how Contra maps onto real Ramp (public docs only)
 src/view.ts          buildScreens(app) / nextStep(app): everything the screens show
 src/actors.ts        demo identities (PM, controller, AP)
 src/extract/         AI extraction: prompt, Anthropic adapter, strict validation, fixtures

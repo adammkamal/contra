@@ -1,0 +1,70 @@
+{
+  "request": {
+    "to": "Harbor Mechanical Co <service@harbormech.example>",
+    "subject": "Summit MOB - back-charge for ceiling repair",
+    "body": "Hi,\n\nA condensate line from the level 3 fan coil was left uncapped and leaked onto the corridor ceiling.\n\nBC-5521: ceiling tile and grid repair, level 3 corridor, $1,840.00 per the attached invoice.\n\nThanks,\nNoor Haddad\nProject Manager"
+  },
+  "response": {
+    "ok": true,
+    "model": "sample (hand-written tool output, not a model call)",
+    "latencyMs": 0,
+    "note": "outcome is what Contra would do next, not a credit. held_at_intake: a check held the item when the email came in, and a person must look at it. will_hold_dispute: the item passes intake, but the email notes a dispute, so the eligibility check will hold it. needs_link: the item passes intake but couldn't be linked to one subcontract, so a PM must choose one. ready_for_notice: linked and nothing holds it, so the PM can confirm it and send the sub a notice. In every case a credit still needs a notice to the sub, the response window to pass, the eligibility check and a controller's approval. Nothing was saved.",
+    "items": [
+      {
+        "ref": "BC-5521",
+        "amount": "$1,840.00",
+        "description": "Ceiling tile and grid repair, level 3 corridor",
+        "vendorAsWritten": "Harbor Mechanical Co",
+        "jobRef": "Summit MOB",
+        "sourceSentence": "BC-5521: ceiling tile and grid repair, level 3 corridor, $1,840.00 per the attached invoice.",
+        "highlight": [
+          106,
+          198
+        ],
+        "checks": [
+          {
+            "name": "Amount and its sentence are in the email, word for word",
+            "passed": true,
+            "detail": "the sentence states $1,840.00"
+          },
+          {
+            "name": "Stated in the email's own text, not only in quoted or forwarded mail",
+            "passed": true,
+            "detail": "yes"
+          },
+          {
+            "name": "No text aimed at an AI or automated system",
+            "passed": true,
+            "detail": "none found"
+          },
+          {
+            "name": "Every back-charge number in the email was extracted",
+            "passed": true,
+            "detail": "yes"
+          },
+          {
+            "name": "No dispute noted in the email",
+            "passed": true,
+            "detail": "none found"
+          },
+          {
+            "name": "Linked to one subcontract",
+            "passed": true,
+            "detail": "SC-SUM-0700: job: \"Summit MOB\" -> SUM-01 Summit Medical Office; party: \"Harbor Mechanical Co\" = legal name Harbor Mechanical Co; subcontract: SC-SUM-0700 (HVAC) on SUM-01"
+          }
+        ],
+        "holdReasons": [],
+        "link": {
+          "subcontractId": "SC-SUM-0700",
+          "explanation": [
+            "job: \"Summit MOB\" -> SUM-01 Summit Medical Office",
+            "party: \"Harbor Mechanical Co\" = legal name Harbor Mechanical Co",
+            "subcontract: SC-SUM-0700 (HVAC) on SUM-01"
+          ]
+        },
+        "outcome": "ready_for_notice"
+      }
+    ],
+    "rejected": []
+  }
+}

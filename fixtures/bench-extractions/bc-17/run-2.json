@@ -1,0 +1,33 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T10:20:29.858Z",
+  "items": [
+    {
+      "ref": "BC-5017",
+      "description": "Cleanup of scrap and dust in L4 patient rooms after drywall hanging",
+      "amountCents": 64000,
+      "amountEvidence": {
+        "emailId": "bc-17",
+        "sentence": "BC-5017: cleanup, L4 patient rooms, $640.00."
+      },
+      "vendorNameAsWritten": "Ridgline Drywal",
+      "jobRef": "Summit",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": "BC-5017",
+        "description": "Cleanup of scrap and dust in L4 patient rooms after drywall hanging",
+        "amountText": "$640.00",
+        "amountSentence": "BC-5017: cleanup, L4 patient rooms, $640.00.",
+        "vendorNameAsWritten": "Ridgline Drywal",
+        "jobRef": "Summit",
+        "disputeNoted": false
+      }
+    ]
+  }
+}

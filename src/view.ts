@@ -1,8 +1,9 @@
 import type { AuditEvent } from "./audit.ts";
-import type { App } from "./app.ts";
+import type { App, Workspace } from "./app.ts";
 import { DEMO_BILL, DEMO_SC } from "./commands.ts";
 import { formatUsd } from "./money.ts";
-import type { Actor, BackCharge, Credit, HoldReason, Notice } from "./types.ts";
+import { EMAIL_INGESTED, type Actor, type BackCharge, type Credit, type EmailOrigin, type HoldReason, type Notice } from "./types.ts";
+import { Contra } from "./workflow.ts";
 
 /**
  * Pure screen data. Screens render this and nothing else: every status word, amount and available
@@ -16,6 +17,7 @@ export interface Status {
   tone: Tone;
 }
 export type Action =
+  | { command: "ingestPmEmails" }
   | { command: "confirmLink"; ref: string }
   | { command: "chooseSubcontract"; ref: string; options: string[] }
   | { command: "draftNotice"; subcontractId: string }
@@ -29,9 +31,10 @@ export type Action =
   | { command: "rejectCredit"; creditId: string }
   | { command: "billArrives" }
   | { command: "turnOnCredits"; billId: string }
-  | { command: "payBill"; billId: string };
+  | { command: "payBill"; billId: string }
+  | { command: "sendCreditMemo"; creditId: string };
 
-const HOLD_WORDS: Record<HoldReason, string> = {
+export const HOLD_WORDS: Record<HoldReason, string> = {
   dispute_noted_in_source: "dispute noted in the PM's email",
   disputed_by_sub: "disputed by the sub",
   no_clause: "no back-charge clause",
@@ -41,6 +44,9 @@ const HOLD_WORDS: Record<HoldReason, string> = {
   unverified_evidence: "amount not found in the source email",
   conflicting_amounts: "two emails give different amounts",
   unresolved_link: "not linked to a subcontract",
+  only_in_quoted_text: "found only in quoted or forwarded text (may already have been sent or credited)",
+  suspicious_instructions: "email contains instructions aimed at an AI or automated system",
+  unaccounted_reference: "the email mentions a back-charge number that wasn't extracted",
 };
 
 export function backChargeStatus(b: Readonly<BackCharge>): Status {
@@ -78,9 +84,24 @@ const CREDIT_STATUS: Record<Credit["state"], Status> = {
   applied: { label: "Applied to a bill", tone: "ok" },
 };
 
+/** The memo's delivery in words. "queued" that stays queued means the send may or may not have happened. */
+export function memoStatus(c: Readonly<Credit>): Status {
+  const d = c.memoDelivery;
+  if (!d) return { label: "Memo not sent", tone: "idle" };
+  switch (d.state) {
+    case "queued":
+      return { label: `Memo sending to ${d.to} (if this doesn't change, check that inbox before sending again)`, tone: "warn" };
+    case "sent":
+      return { label: `Memo sent to ${d.to}`, tone: "ok" };
+    case "failed":
+      return { label: `Memo not sent: ${d.error ?? "the send failed"}. You can send it again.`, tone: "danger" };
+  }
+}
+
 export function actorLabel(a: Actor): string {
   if (a.kind === "human") return `${a.id} (${a.role === "pm" ? "PM" : a.role === "ap" ? "AP" : "Controller"})`;
   if (a.kind === "llm") return `AI extractor (${a.model})`;
+  if (a.id === "sample-extractions") return "Sample extractions (hand-written)";
   return "Contra";
 }
 
@@ -96,11 +117,18 @@ export interface InboxRow {
 }
 
 export interface Screens {
+  /** "demo" (the scripted demo) or "live" (mail from the live inbox only). Each is separate state. */
+  workspace: Workspace;
   now: string;
+  /** Who produced the extractions on screen. "sample" must be shown as hand-written, never as AI output. */
+  extractionSource: "model" | "sample" | "mixed" | null;
+  /** Where the Inbox's PM emails were read from: "eml" (.eml files), "builtin" (built-in sample), "gmail" (the live inbox), "mixed", or null before ingest. */
+  emailSource: EmailOrigin | "mixed" | null;
   nextStep: { text: string; action: Action | null };
   inbox: InboxRow[];
   outbox: { id: string; total: string; refs: string[]; body: string; status: Status; actions: Action[] }[];
-  credits: { id: string; amount: string; job: string; refs: string[]; status: Status; actions: Action[]; hasMemo: boolean }[];
+  /** memo: the memo's delivery to the AP inbox, or null when the credit has no memo yet (not approved). */
+  credits: { id: string; amount: string; job: string; refs: string[]; status: Status; actions: Action[]; hasMemo: boolean; memo: Status | null }[];
   bills: {
     id: string;
     vendor: string;
@@ -160,20 +188,28 @@ export function buildScreens(app: App): Screens {
         : []) as Action[],
   }));
 
-  const creditRows = credits.map((c) => ({
-    id: c.id,
-    amount: formatUsd(c.amountCents),
-    job: c.jobId,
-    refs: c.backChargeRefs,
-    status: CREDIT_STATUS[c.state],
-    actions: (c.state === "proposed"
-      ? [
-          { command: "approveCredit", creditId: c.id },
-          { command: "rejectCredit", creditId: c.id },
-        ]
-      : []) as Action[],
-    hasMemo: c.state === "approved" || c.state === "synced" || c.state === "applied",
-  }));
+  const creditRows = credits.map((c) => {
+    const hasMemo = c.state === "approved" || c.state === "synced" || c.state === "applied";
+    const actions: Action[] =
+      c.state === "proposed"
+        ? [
+            { command: "approveCredit", creditId: c.id },
+            { command: "rejectCredit", creditId: c.id },
+          ]
+        : [];
+    // Offered only with a memo sender configured, for a credit with a recorded approval whose memo isn't sent (or failed).
+    if (app.ctx.memoSender && Contra.memoSendable(c)) actions.push({ command: "sendCreditMemo", creditId: c.id });
+    return {
+      id: c.id,
+      amount: formatUsd(c.amountCents),
+      job: c.jobId,
+      refs: c.backChargeRefs,
+      status: CREDIT_STATUS[c.state],
+      actions,
+      hasMemo,
+      memo: hasMemo ? memoStatus(c) : null,
+    };
+  });
 
   const bills = ramp.bills
     .filter((b) => !b.id.startsWith("B-OLD"))
@@ -221,8 +257,18 @@ export function buildScreens(app: App): Screens {
       evidence: [...e.evidence],
     }));
 
+  const extractedBy = [...contra.audit.all()].filter((e) => e.entity === "backcharge" && e.to === "extracted").map((e) => e.actor.kind);
+  const extractionSource: Screens["extractionSource"] =
+    extractedBy.length === 0 ? null : extractedBy.every((k) => k === "llm") ? "model" : extractedBy.some((k) => k === "llm") ? "mixed" : "sample";
+
+  const origins = new Set(emailOrigins(app).values());
+  const emailSource: Screens["emailSource"] = origins.size === 0 ? null : origins.size === 1 ? [...origins][0]! : "mixed";
+
   return {
+    workspace: app.ctx.workspace,
     now: when(clock.now()),
+    extractionSource,
+    emailSource,
     nextStep: nextStep(app),
     inbox,
     outbox,
@@ -234,15 +280,33 @@ export function buildScreens(app: App): Screens {
   };
 }
 
-/** Presenter guidance for the demo, derived only from state. */
+/** Each ingested email's origin, by email id, from the audit log ("ingested" alone is built-in). */
+function emailOrigins(app: App): Map<string, EmailOrigin> {
+  const byAction = new Map(Object.entries(EMAIL_INGESTED).map(([origin, action]) => [action, origin as EmailOrigin]));
+  const out = new Map<string, EmailOrigin>();
+  for (const e of app.ctx.contra.audit.all()) {
+    const origin = e.entity === "email" ? byAction.get(e.action) : undefined;
+    if (origin) out.set(e.entityId, origin);
+  }
+  return out;
+}
+
+/**
+ * Presenter guidance for the demo, derived only from state. It follows the demo's own emails (built-in
+ * or .eml) only: mail from the live inbox is handled with its own row buttons and never steers the script.
+ */
 export function nextStep(app: App): { text: string; action: Action | null } {
+  if (app.ctx.workspace === "live") return liveNextStep(app);
   const { contra, ramp } = app.ctx;
-  const bcs = [...contra.backCharges.values()];
+  const origins = emailOrigins(app);
+  const live = (emailId: string) => origins.get(emailId) === "gmail";
+  const bcs = [...contra.backCharges.values()].filter((b) => !live(b.extracted.amountEvidence.emailId));
   const notices = [...contra.notices.values()];
   const credits = [...contra.credits.values()];
   const bill = ramp.bills.find((b) => b.id === DEMO_BILL);
 
-  if (bcs.length === 0) return { text: "Ingest the PM's back-charge emails", action: null };
+  const demoIngested = [...origins.values()].some((o) => o !== "gmail");
+  if (!demoIngested && bcs.length === 0) return { text: "Ingest the PM's back-charge emails", action: { command: "ingestPmEmails" } };
   const toConfirm = bcs.find((b) => b.state === "extracted" || b.state === "needs_review");
   if (toConfirm) return { text: `PM confirms the link for ${toConfirm.ref}`, action: { command: "confirmLink", ref: toConfirm.ref } };
   if (notices.length === 0) return { text: "Draft the back-charge notice", action: { command: "draftNotice", subcontractId: DEMO_SC } };
@@ -263,4 +327,114 @@ export function nextStep(app: App): { text: string; action: Action | null } {
   if (bill.status === "approved" && !bill.applyCredits) return { text: "Turn on credits for the bill", action: { command: "turnOnCredits", billId: bill.id } };
   if (bill.status === "approved") return { text: "Pay the bill (simulated)", action: { command: "payBill", billId: bill.id } };
   return { text: "Demo complete", action: null };
+}
+
+/**
+ * Guidance for the live workspace: the same workflow, for whatever the live inbox brought in, with none of
+ * the demo's scripted steps (its emails, the sub's reply, the bill). Ends at the credit memo, the real
+ * route into Ramp. action is null while a person must choose in a row, and while waiting for mail.
+ */
+function liveNextStep(app: App): { text: string; action: Action | null } {
+  const { contra } = app.ctx;
+  const bcs = [...contra.backCharges.values()];
+  const toConfirm = bcs.find((b) => b.state === "extracted" && contra.proposals.get(b.ref)?.kind === "linked");
+  if (toConfirm) return { text: `PM confirms the link for ${toConfirm.ref}`, action: { command: "confirmLink", ref: toConfirm.ref } };
+  const toChoose = bcs.find((b) => b.state === "needs_review");
+  if (toChoose) return { text: `PM chooses the subcontract for ${toChoose.ref} (in its Inbox row)`, action: null };
+  const notices = [...contra.notices.values()];
+  const drafted = notices.find((n) => n.state === "drafted");
+  if (drafted) return { text: `Controller approves notice ${drafted.id}`, action: { command: "approveNotice", noticeId: drafted.id } };
+  const approved = notices.find((n) => n.state === "approved");
+  if (approved) return { text: `Send notice ${approved.id}`, action: { command: "sendNotice", noticeId: approved.id } };
+  // After the unsent notices above: an item stays "linked" until its notice is sent, so drafting must wait
+  // until no notice is drafted or approved, or the same items would be drafted twice.
+  const linked = bcs.find((b) => b.state === "linked" && b.subcontractId && !b.noticeId);
+  if (linked) return { text: `Draft the back-charge notice for ${linked.subcontractId}`, action: { command: "draftNotice", subcontractId: linked.subcontractId! } };
+  const noticed = bcs.filter((b) => b.state === "noticed");
+  if (noticed.length) {
+    if (noticed.every((b) => contra.explainEligibility(b.ref).status === "pending")) return { text: "Wait for the response window: advance a week (moves this workspace 7 days ahead of real time)", action: { command: "advanceDays", days: 7 } };
+    return { text: "Check eligibility", action: { command: "evaluateAll" } };
+  }
+  const credits = [...contra.credits.values()];
+  const proposed = credits.find((c) => c.state === "proposed");
+  if (proposed) return { text: `Controller approves credit ${proposed.id}`, action: { command: "approveCredit", creditId: proposed.id } };
+  const eligible = bcs.find((b) => b.state === "eligible" && !b.creditId && b.subcontractId);
+  if (eligible) return { text: `Propose the vendor credit for ${eligible.subcontractId}`, action: { command: "proposeCredit", subcontractId: eligible.subcontractId! } };
+  const unsent = app.ctx.memoSender ? credits.find((c) => Contra.memoSendable(c) && !c.memoDelivery) : undefined;
+  if (unsent) return { text: `Send the credit memo for ${unsent.id} to the AP inbox`, action: { command: "sendCreditMemo", creditId: unsent.id } };
+  return { text: "Waiting for back-charge emails from the live inbox", action: null };
+}
+
+export interface BackChargeDetail {
+  ref: string;
+  description: string;
+  amount: string;
+  status: Status;
+  vendorAsWritten: string;
+  jobRef: string;
+  email: { id: string; subject: string; from: string; body: string } | null;
+  sourceSentence: string;
+  disputeSentence: string | null;
+  link: { subcontractId: string | null; explanation: string[] };
+  /** The subcontract's back-charge clause, quoted, or null if not linked / no clause. */
+  clause: { section: string; text: string; responseWindow: string; deductionAllowed: boolean; noticeRequired: boolean } | null;
+  eligibility: { status: "eligible" | "pending" | "held"; holdReasons: string[]; waitingFor: string[]; trace: string[] };
+  history: { seq: number; at: string; actor: string; what: string; evidence: string[] }[];
+}
+
+const WINDOW_WORDS = { hours: "hours", calendar_days: "calendar days", working_days: "working days" } as const;
+
+/** Everything the back-charge detail screen shows. Read-only. Throws for an unknown ref. */
+export function backChargeDetail(app: App, ref: string): BackChargeDetail {
+  const { contra, erp } = app.ctx;
+  const b = contra.backCharges.get(ref);
+  if (!b) throw new Error(`no back-charge ${ref}`);
+  const email = contra.emails.get(b.extracted.amountEvidence.emailId) ?? null;
+  const proposal = contra.proposals.get(ref);
+  const scId = b.subcontractId ?? (proposal?.kind === "linked" ? proposal.subcontractId : null);
+  const sc = scId ? erp.subcontract(scId) : null;
+  const r = contra.explainEligibility(ref);
+  return {
+    ref,
+    description: b.extracted.description,
+    amount: formatUsd(b.extracted.amountCents),
+    status: backChargeStatus(b),
+    vendorAsWritten: b.extracted.vendorNameAsWritten,
+    jobRef: b.extracted.jobRef,
+    email: email ? { id: email.id, subject: email.subject, from: email.from, body: email.body } : null,
+    sourceSentence: b.extracted.amountEvidence.sentence,
+    disputeSentence: b.extracted.disputeEvidence?.sentence || null,
+    link: { subcontractId: b.subcontractId, explanation: b.linkExplanation.length ? b.linkExplanation : proposal?.kind === "review" ? proposal.reasons : proposal?.kind === "linked" ? proposal.explanation : [] },
+    clause: sc?.clause
+      ? {
+          section: sc.clause.section,
+          text: sc.clause.text,
+          responseWindow: `${sc.clause.responseWindow.amount} ${WINDOW_WORDS[sc.clause.responseWindow.unit]}`,
+          deductionAllowed: sc.clause.deductionAllowed,
+          noticeRequired: sc.clause.noticeRequired,
+        }
+      : null,
+    eligibility: { status: r.status, holdReasons: r.holdReasons.map((h) => HOLD_WORDS[h]), waitingFor: r.pendingReasons, trace: r.trace },
+    history: contra.audit.forEntity("backcharge", ref).map((e) => ({ seq: e.seq, at: when(e.at), actor: actorLabel(e.actor), what: e.action + (e.from || e.to ? ` (${e.from ?? "new"} → ${e.to ?? e.from})` : ""), evidence: [...e.evidence] })),
+  };
+}
+
+/** Every action the screens currently offer. runAction refuses anything else (forged, stale or double-clicked). */
+export function offeredActions(app: App): Action[] {
+  const s = buildScreens(app);
+  const all: Action[] = [
+    ...s.inbox.flatMap((r) => r.actions),
+    ...s.outbox.flatMap((r) => r.actions),
+    ...s.credits.flatMap((r) => r.actions),
+    ...s.bills.flatMap((r) => r.actions),
+    ...(s.nextStep.action ? [s.nextStep.action] : []),
+  ];
+  return all;
+}
+
+const canonical = (a: Action) => JSON.stringify(Object.keys(a).sort().map((k) => [k, (a as Record<string, unknown>)[k]]));
+
+export function isOffered(app: App, action: Action): boolean {
+  const want = canonical(action);
+  return offeredActions(app).some((a) => canonical(a) === want);
 }

@@ -23,6 +23,23 @@ export function normName(s: string): string {
 }
 
 /**
+ * A name is ambiguous for `party` when every word of the normalized name also appears in a
+ * different party's legal name ("Ridgeline" vs Ridgeline Glass & Glazing). Returns that other
+ * party's legal name, or null. An empty name is ambiguous against any other party.
+ */
+export function ambiguousWith(name: string, party: string, parties: readonly string[]): string | null {
+  const words = normName(name).split(" ").filter(Boolean);
+  const self = normName(party);
+  for (const p of parties) {
+    const np = normName(p);
+    if (np === self) continue;
+    const toks = new Set(np.split(" "));
+    if (words.every((w) => toks.has(w))) return p;
+  }
+  return null;
+}
+
+/**
  * Deterministic linkage: job -> subcontracts on that job -> party name or confirmed alias.
  * Inputs are deliberately limited to party names and aliases: remit-to, payee and lockbox
  * names never reach this function (INVARIANT 8).
@@ -46,9 +63,20 @@ export function resolve(x: Pick<ExtractedBackCharge, "jobRef" | "vendorNameAsWri
   const vn = normName(x.vendorNameAsWritten);
 
   const direct = onJob.filter((s) => normName(s.partyLegalName) === vn);
+  // An alias whose name is ambiguous against another party on this job never links: it may have been
+  // learned before that party was added.
+  const jobParties = onJob.map((s) => s.partyLegalName);
+  const ignored: string[] = [];
   const viaAlias = data.aliases
     .filter((a) => normName(a.alias) === vn)
-    .flatMap((a) => onJob.filter((s) => normName(s.partyLegalName) === normName(a.partyLegalName)).map((s) => ({ s, a })));
+    .flatMap((a) => onJob.filter((s) => normName(s.partyLegalName) === normName(a.partyLegalName)).map((s) => ({ s, a })))
+    .filter(({ a }) => {
+      const other = ambiguousWith(a.alias, a.partyLegalName, jobParties);
+      if (!other) return true;
+      const why = `alias "${a.alias}" -> ${a.partyLegalName} ignored: every word of it also appears in ${other}, another party on ${job.id}`;
+      if (!ignored.includes(why)) ignored.push(why);
+      return false;
+    });
 
   const ids = new Set([...direct.map((s) => s.id), ...viaAlias.map((v) => v.s.id)]);
   if (ids.size === 1) {
@@ -75,6 +103,7 @@ export function resolve(x: Pick<ExtractedBackCharge, "jobRef" | "vendorNameAsWri
       ids.size === 0
         ? `no party or confirmed alias on ${job.id} matches "${x.vendorNameAsWritten}"`
         : `"${x.vendorNameAsWritten}" matches ${ids.size} subcontracts on ${job.id}`,
+      ...ignored,
     ],
     hints,
   };

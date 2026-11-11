@@ -13,6 +13,7 @@ const newApp = () => new App(join(mkdtempSync(join(tmpdir(), "contra-")), "d.db"
 /** Executes whatever nextStep suggests, exactly as a presenter clicking the highlighted button would. */
 function click(app: App, a: Action) {
   switch (a.command) {
+    case "ingestPmEmails": return cmd.ingestPmEmails(app, { fixturesDir: null });
     case "confirmLink": return cmd.confirmLink(app, a.ref);
     case "draftNotice": return cmd.draftNotice(app, a.subcontractId);
     case "approveNotice": return cmd.approveNotice(app, a.noticeId);
@@ -34,6 +35,8 @@ test("empty state renders and points at the first step", () => {
   const s = buildScreens(app);
   assert.equal(s.inbox.length, 0);
   assert.equal(s.nextStep.text, "Ingest the PM's back-charge emails");
+  assert.deepEqual(s.nextStep.action, { command: "ingestPmEmails" });
+  assert.equal(s.extractionSource, null);
   assert.equal(s.opener.notDeducted, "$12,850.00");
   assert.equal(s.opener.sampleData, true);
   app.close();
@@ -41,7 +44,6 @@ test("empty state renders and points at the first step", () => {
 
 test("following nextStep from start to finish reproduces the demo script exactly", () => {
   const app = newApp();
-  cmd.ingestPmEmails(app);
   const seen: string[] = [];
   for (let i = 0; i < 30; i++) {
     const step = nextStep(app);
@@ -50,6 +52,7 @@ test("following nextStep from start to finish reproduces the demo script exactly
     click(app, step.action);
   }
   assert.deepEqual(seen, [
+    "Ingest the PM's back-charge emails",
     "PM confirms the link for BC-4467",
     "PM confirms the link for BC-4468",
     "PM confirms the link for BC-4470",
@@ -82,7 +85,7 @@ test("following nextStep from start to finish reproduces the demo script exactly
 
 test("inbox rows show each amount beside its verbatim sentence and the link explanation", () => {
   const app = newApp();
-  cmd.ingestPmEmails(app);
+  cmd.ingestPmEmails(app, { fixturesDir: null });
   const row = buildScreens(app).inbox.find((r) => r.ref === "BC-4467")!;
   assert.equal(row.amount, "$6,800.00");
   assert.match(row.sourceSentence, /\$6,800\.00/);
@@ -93,7 +96,7 @@ test("inbox rows show each amount beside its verbatim sentence and the link expl
 
 test("buttons only appear when the action is legal", () => {
   const app = newApp();
-  cmd.ingestPmEmails(app);
+  cmd.ingestPmEmails(app, { fixturesDir: null });
   for (const r of ["BC-4467", "BC-4468", "BC-4470", "BC-4471"]) cmd.confirmLink(app, r);
   const id = cmd.draftNotice(app)!;
   let s = buildScreens(app);

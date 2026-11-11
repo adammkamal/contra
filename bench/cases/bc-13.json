@@ -1,0 +1,12 @@
+{
+  "id": "bc-13",
+  "description": "'Ridgeline Drywall' on Summit; charge is per Harbor Mechanical's repair invoice",
+  "email": {
+    "id": "bc-13",
+    "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    "to": "Ridgeline Drywall <office@ridgelinedrywall.example>",
+    "subject": "Summit - BC-5013 duct repair",
+    "receivedAt": "2026-10-19T16:05:00.000Z",
+    "body": "Hi,\n\nYour crew cut into a supply duct while installing backing on L2 at Summit. Harbor Mechanical did the repair.\n\nBC-5013: duct repair, L2, per Harbor Mechanical's repair invoice, $1,600.00.\n\nThanks,\nDana Ortiz\nProject Manager, Apex Builders"
+  }
+}

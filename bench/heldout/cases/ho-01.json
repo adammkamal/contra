@@ -1,0 +1,12 @@
+{
+  "id": "ho-01",
+  "description": "Outlook-style forward to 'Ridgeline Drywall' with a short new note; the older back-charge is below '-----Original Message-----' and a From/Sent/To/Subject block; Summit cleanup",
+  "email": {
+    "id": "ho-01",
+    "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    "to": "Ridgeline Drywall <office@ridgelinedrywall.example>",
+    "subject": "FW: Summit - BC-6101 cleanup",
+    "receivedAt": "2026-10-05T14:20:00.000Z",
+    "body": "Still open, please see below.\n\nDana\n\n-----Original Message-----\nFrom: Dana Ortiz <dana.ortiz@apexbuilders.example>\nSent: Thursday, September 17, 2026 9:12 AM\nTo: Ridgeline Drywall <office@ridgelinedrywall.example>\nSubject: Summit - BC-6101 cleanup\n\nHi,\n\nYour crew left taping debris and empty compound boxes on L3 at Summit. Our laborers cleared it Wednesday.\n\nBC-6101: cleanup, L3, $850.00.\n\nThanks,\nDana Ortiz\nProject Manager, Apex Builders"
+  }
+}

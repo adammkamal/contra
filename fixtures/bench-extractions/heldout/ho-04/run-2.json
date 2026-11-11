@@ -1,0 +1,33 @@
+{
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "recordedAt": "2026-11-10T10:21:25.448Z",
+  "items": [
+    {
+      "ref": "BC-6104",
+      "description": "Debris removal at north entrance (glass crates and broken setting blocks left after storefront install)",
+      "amountCents": 120000,
+      "amountEvidence": {
+        "emailId": "ho-04",
+        "sentence": "BC-6104: debris removal, north entrance, USD 1,200."
+      },
+      "vendorNameAsWritten": "Ridgeline Glass & Glazing",
+      "jobRef": "Summit MOB",
+      "disputeNoted": false
+    }
+  ],
+  "rejected": [],
+  "rawToolInput": {
+    "items": [
+      {
+        "ref": "BC-6104",
+        "description": "Debris removal at north entrance (glass crates and broken setting blocks left after storefront install)",
+        "amountText": "USD 1,200",
+        "amountSentence": "BC-6104: debris removal, north entrance, USD 1,200.",
+        "vendorNameAsWritten": "Ridgeline Glass & Glazing",
+        "jobRef": "Summit MOB",
+        "disputeNoted": false
+      }
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "model": "claude-opus-5-5",
+  "items": [
+    {
+      "ref": "BC-4470",
+      "description": "Re-patch corridor wall after MEP rework",
+      "amountCents": 275000,
+      "amountEvidence": {
+        "emailId": "E-2",
+        "sentence": "BC-4470: re-patch corridor wall after MEP rework, $2,750.00."
+      },
+      "vendorNameAsWritten": "Ridgeline Drywall",
+      "jobRef": "Summit",
+      "disputeNoted": true,
+      "disputeEvidence": {
+        "emailId": "E-2",
+        "sentence": "Ridgeline disputes this one, holding until we sort out who caused it."
+      }
+    }
+  ],
+  "recordedAt": "2026-11-10T08:05:46.553Z"
+}
