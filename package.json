@@ -20,9 +20,12 @@
     "contract:samples": "tsx scripts/contract-samples.ts",
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "typecheck:ui": "tsc -p tsconfig.next.json --noEmit && tsc -p tsconfig.e2e.json --noEmit",
+    "e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "@types/mailparser": "^3.9.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.3.0",

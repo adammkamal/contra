@@ -12,3 +12,8 @@ bench/heldout/results.json
 private/
 .next/
 next-env.d.ts
+# Playwright output
+e2e/screenshots/
+test-results/
+playwright-report/
+*.tsbuildinfo

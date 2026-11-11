@@ -49,3 +49,20 @@ th.num, td.num { text-align: right; white-space: nowrap; }
 .totals .big { font-size: 2rem; font-weight: 700; }
 pre.body { white-space: pre-wrap; font: inherit; background: var(--bg); padding: 12px 14px; margin: 8px 0; }
 .trace { font-family: Consolas, monospace; font-size: .95rem; }
+h3 { font-size: 1rem; margin: 14px 0 6px; }
+.switch { display: inline-flex; border: 2px solid #8a99a6; border-radius: 4px; overflow: hidden; }
+.seg { font: inherit; font-weight: 600; padding: 6px 12px; border: 0; background: transparent; color: #e8eef3; cursor: pointer; }
+.seg.on { background: #e8eef3; color: #12202c; }
+.seg:disabled { opacity: .55; cursor: not-allowed; }
+.presenter .badge { margin-left: 0; }
+.live-dot { font-size: .85rem; opacity: .75; }
+.inbox-status { display: flex; flex-wrap: wrap; gap: 8px 24px; padding: 10px 32px; background: var(--surface); border-bottom: 1px solid var(--rule); }
+.notes { margin: 0 0 16px; }
+.field { display: block; margin-bottom: 12px; font-weight: 600; }
+.field input, .field textarea { display: block; width: 100%; margin-top: 4px; font-weight: 400; }
+textarea { font: inherit; padding: 8px 10px; border: 2px solid var(--rule); background: var(--surface); color: var(--ink); border-radius: 3px; }
+mark { background: var(--hl); color: #12202c; padding: 0 2px; }
+.note { border-left: 3px solid var(--info); padding-left: 10px; }
+.memo-status { margin-top: 6px; }
+details { margin-top: 10px; }
+summary { cursor: pointer; font-weight: 600; }
