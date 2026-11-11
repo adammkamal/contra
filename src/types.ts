@@ -52,8 +52,40 @@ export interface Email {
   body: string;
   /** The RFC 5322 Message-ID (or, when a message has none, a stable stand-in). Ingest skips one it has already seen. */
   messageId?: string;
-  /** Attachments the message carried. They are not read yet; the count is recorded so a person knows. */
+  /** How many attachments the message carried (read or not). */
   attachmentCount?: number;
+  /**
+   * What became of each attachment, in message order, numbered from 1 (`n`). Read outside src/ (ingest/),
+   * so src/ sees only text and decisions, never file bytes. Absent on emails read before attachments were.
+   */
+  attachments?: EmailAttachment[];
+}
+
+/**
+ * One attachment of a PM email, as ingest read it.
+ * - "text": a PDF with a text layer on every page; `pages` holds each page's text, read locally. Evidence
+ *   cited from it is verified word for word against `pages`, like the body.
+ * - "image": a photo, or a PDF with a page that has no text layer (a scan). The model saw it as an image;
+ *   nothing read from it can be verified word for word. `pageCount` is set for a PDF.
+ * - "skipped": not read and not shown to the model; `reason` says why, in words.
+ */
+export interface EmailAttachment {
+  n: number;
+  filename: string;
+  /** The detected type (from the file's bytes where possible): "application/pdf", "image/jpeg", ... */
+  mediaType: string;
+  read: "text" | "image" | "skipped";
+  pages?: string[];
+  pageCount?: number;
+  reason?: string;
+}
+
+/** Bytes of an "image" attachment for the model call only. Never stored: ingest hands it straight to the extractor. */
+export interface AttachmentMedia {
+  /** The attachment's `n`. */
+  n: number;
+  mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp" | "application/pdf";
+  data: Uint8Array;
 }
 
 /** Where an ingested PM email came from: an .eml file read by ingest/eml.ts, the built-in sample in seed.ts, or the live Gmail inbox. */
@@ -66,6 +98,8 @@ export const EMAIL_INGESTED: Record<EmailOrigin, string> = { builtin: "ingested"
 export interface Evidence {
   emailId: string;
   sentence: string;
+  /** Where the sentence is, as the extractor cited it: attachment `attachment` (its `n`), page `page` (1 for a photo). Absent: the email body. */
+  at?: { attachment: number; page: number };
 }
 
 /** What the extractor (LLM) returns for one back-charge. Untrusted until verified. */
@@ -110,7 +144,8 @@ export type HoldReason =
   | "unresolved_link"
   | "only_in_quoted_text"
   | "suspicious_instructions"
-  | "unaccounted_reference";
+  | "unaccounted_reference"
+  | "amount_only_in_image";
 
 export interface BackCharge {
   ref: string;

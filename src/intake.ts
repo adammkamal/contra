@@ -1,5 +1,6 @@
 import { resolve, type ResolverData, type Resolution } from "./resolver.ts";
-import { disputeSentencesFor, normalize, verifyAmountEvidence, verifySpan } from "./span.ts";
+import { findUsdAmounts, formatUsd, unreadableUsd } from "./money.ts";
+import { attachmentPages, disputeSentencesFor, normalize, ownLines, verifyAmountEvidence, verifySpan } from "./span.ts";
 import type { Email, ExtractedBackCharge, HoldReason } from "./types.ts";
 
 /**
@@ -40,11 +41,40 @@ const BC_NUMBER = /(?<![A-Za-z0-9])BC[ -]?(\d{3,6})(?!\d)/gi;
  */
 export function unaccountedRefs(email: Email, extractedRefs: readonly string[]): string[] {
   const have = new Set(extractedRefs);
-  const text = `${normalize(email.subject)}\n${normalize(email.body, { excludeQuoted: true })}`;
+  // Pages of attachments read as text are the email's own text too.
+  const text = [normalize(email.subject), normalize(email.body, { excludeQuoted: true }), ...attachmentPages(email).map((p) => normalize(p.text))].join("\n");
   const out: string[] = [];
   for (const m of text.matchAll(BC_NUMBER)) {
     const ref = `BC-${m[1]}`;
     if (!have.has(ref) && !out.includes(ref)) out.push(ref);
+  }
+  return out;
+}
+
+/**
+ * Statements elsewhere in the email that give the same back-charge a different amount. "Elsewhere" is
+ * every text section other than the one the amount is cited from: the body (its own text, without quoted
+ * or forwarded mail) and each page of an attachment read as text. A statement is a line, split at
+ * sentence ends, that names the ref and has readable dollar amounts, none equal to the extracted amount.
+ * Sections are only compared with each other, never with themselves, so an email without attachments
+ * never has any.
+ */
+export function conflictingStatements(email: Email, x: ExtractedBackCharge): string[] {
+  const own = x.amountEvidence.at;
+  const sections = [
+    ...(own ? [{ where: "email body", lines: ownLines(email.body, { excludeQuoted: true }) }] : []),
+    ...attachmentPages(email)
+      .filter((p) => !(own && own.attachment === p.at.attachment && own.page === p.at.page))
+      .map((p) => ({ where: p.where, lines: ownLines(p.text) })),
+  ];
+  const ref = new RegExp(`(?<![A-Za-z0-9])BC[ -]?${x.ref.replace(/^\D+/, "")}(?!\\d)`, "i");
+  const out: string[] = [];
+  for (const sec of sections) {
+    for (const st of sec.lines.flatMap((l) => normalize(l).split(/(?<=[.!?])\s+/))) {
+      if (!ref.test(st) || unreadableUsd(st).length) continue;
+      const amounts = findUsdAmounts(st);
+      if (amounts.length && !amounts.includes(x.amountCents)) out.push(`${sec.where} gives ${x.ref} ${amounts.map(formatUsd).join(", ")}, not ${formatUsd(x.amountCents)}: ${st}`);
+    }
   }
   return out;
 }
@@ -75,15 +105,29 @@ export interface IntakeAssessment {
 export function assessExtractedItem(email: Email, x: ExtractedBackCharge, data: ResolverData, extractedRefs: readonly string[]): IntakeAssessment {
   const amountCheck = verifyAmountEvidence(email, x.amountEvidence, x.amountCents);
   const disputeCheck = x.disputeNoted && x.disputeEvidence ? verifySpan(email, x.disputeEvidence) : { ok: true as const };
-  const backstop = disputeSentencesFor(email.body, x.ref);
+  const backstop = [disputeSentencesFor(email.body, x.ref), ...attachmentPages(email).map((p) => disputeSentencesFor(p.text, x.ref))].flat();
   const evidenceOk = amountCheck.ok && disputeCheck.ok;
   const disputeInSource = x.disputeNoted || backstop.length > 0;
+  // The amount was read from a photo or a scanned page: it can't be verified word for word, so the item is
+  // always held until a person confirms the amount (amount_only_in_image, not unverified_evidence).
+  const imageAmount = !amountCheck.ok && amountCheck.image === true;
 
   const holdReasons: HoldReason[] = [];
   const holdEvidence: string[] = [];
-  if (!evidenceOk) {
+  if (imageAmount) {
+    holdReasons.push("amount_only_in_image");
+    holdEvidence.push(amountCheck.reason);
+  }
+  const unverified = [!amountCheck.ok && !imageAmount ? amountCheck.reason : "", !disputeCheck.ok ? disputeCheck.reason : ""].filter(Boolean);
+  if (unverified.length) {
     holdReasons.push("unverified_evidence");
-    holdEvidence.push(...[!amountCheck.ok ? amountCheck.reason : "", !disputeCheck.ok ? disputeCheck.reason : ""].filter(Boolean));
+    holdEvidence.push(...unverified);
+  }
+  // Another section of the email (the body, or a page of an attachment) gives this back-charge another amount.
+  const conflicts = amountCheck.ok || imageAmount ? conflictingStatements(email, x) : [];
+  if (conflicts.length) {
+    holdReasons.push("conflicting_amounts");
+    holdEvidence.push(...conflicts);
   }
   // A back-charge stated only in a quoted or forwarded older email may already have been sent or credited.
   if (amountCheck.ok && !verifySpan(email, x.amountEvidence, { excludeQuoted: true }).ok) {
@@ -93,6 +137,8 @@ export function assessExtractedItem(email: Email, x: ExtractedBackCharge, data: 
   const aimed = [
     ...aiDirectedText(email.subject).map((t) => `text aimed at an automated system (subject): ${t}`),
     ...aiDirectedText(email.body).map((t) => `text aimed at an automated system: ${t}`),
+    ...(email.attachments ?? []).flatMap((a) => aiDirectedText(a.filename).map((t) => `text aimed at an automated system (attachment name ${a.filename}): ${t}`)),
+    ...attachmentPages(email).flatMap((p) => aiDirectedText(p.text).map((t) => `text aimed at an automated system (${p.where}): ${t}`)),
   ];
   if (aimed.length) {
     holdReasons.push("suspicious_instructions");
@@ -101,7 +147,8 @@ export function assessExtractedItem(email: Email, x: ExtractedBackCharge, data: 
   // Every item from the email is held, since a person must decide which of the numbers is the real charge.
   // Like only_in_quoted_text, checked only when the evidence verified: an unverified item is already held
   // and keeps that single reason.
-  const unaccounted = evidenceOk ? unaccountedRefs(email, extractedRefs) : [];
+  // Also for an amount read from an image: confirming that amount must not clear a doubt about which charge is real.
+  const unaccounted = evidenceOk || (imageAmount && disputeCheck.ok) ? unaccountedRefs(email, extractedRefs) : [];
   if (unaccounted.length) {
     holdReasons.push("unaccounted_reference");
     holdEvidence.push(`email mentions ${unaccounted.join(", ")}, not among the extracted items (${extractedRefs.join(", ") || "none"})`);

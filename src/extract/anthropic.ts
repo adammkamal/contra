@@ -23,6 +23,12 @@ export type CallResult =
   | { status: "OK"; toolInput: unknown; model: string }
   | { status: "INVALID_CREDENTIAL" | "NETWORK_ERROR" | "TIMEOUT" | "RATE_LIMITED" | "MODEL_ERROR" | "INVALID_OUTPUT"; message: string };
 
+/** A user-message content block: text, a base64 image (JPEG, PNG, GIF, WebP) or a base64 PDF document. */
+export type ContentBlock =
+  | { type: "text"; text: string }
+  | { type: "image"; source: { type: "base64"; media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string } }
+  | { type: "document"; source: { type: "base64"; media_type: "application/pdf"; data: string } };
+
 export interface CallOptions {
   fetcher?: typeof fetch;
   timeoutMs?: number;
@@ -117,7 +123,7 @@ function describeNoToolCall(parsed: Record<string, unknown>, toolName: string, c
 
 export async function callTool(
   settings: ModelSettings,
-  req: { system: string; user: string; tool: { name: string; description: string; input_schema: unknown }; maxTokens?: number },
+  req: { system: string; user: string | ContentBlock[]; tool: { name: string; description: string; input_schema: unknown }; maxTokens?: number },
   opts: CallOptions = {},
 ): Promise<CallResult> {
   const key = normalizeApiKey(settings.apiKey);

@@ -1,0 +1,9 @@
+{
+  "id": "ba-04",
+  "labeledBy": "Claude (proposed, not reviewed by a person)",
+  "link": "review",
+  "disputed": false,
+  "amountCents": 64000,
+  "expectedHold": "amount_only_in_image",
+  "why": "$640.00 appears only in the photo, so it cannot be verified word for word and must be confirmed by a person. After confirming, it would link to SC-SUM-0912."
+}

@@ -4,7 +4,7 @@ import { loadFixtures } from "./extract/index.ts";
 import { isOffered } from "./view.ts";
 
 export class NotOffered extends Error {}
-import { cents } from "./money.ts";
+import { cents, parseUsd } from "./money.ts";
 import { demoReply } from "./seed.ts";
 import type { Actor, Email, EmailOrigin, ExtractedBackCharge, ExtractedResponse } from "./types.ts";
 
@@ -120,6 +120,14 @@ export function confirmLink(app: App, ref: string, subcontractId?: string) {
   app.run(({ contra }) => contra.confirmLink(ref, PM, subcontractId));
 }
 
+/** The PM confirms an amount read from a photo or scanned page (typed as they see it, e.g. "$1,250.00") and links the item. */
+export function confirmImageAmount(app: App, ref: string, amount: string, subcontractId: string) {
+  const t = amount.trim();
+  // "1,250.00" and "$1,250.00" both read; anything that isn't exactly one readable amount is refused.
+  const typed = parseUsd(/^\d/.test(t) ? "$" + t : t);
+  app.run(({ contra }) => contra.confirmImageAmount(ref, PM, typed, subcontractId));
+}
+
 export function draftNotice(app: App, subcontractId = DEMO_SC) {
   return app.run(({ contra }) => contra.draftNotice(subcontractId)?.id ?? null);
 }
@@ -185,6 +193,8 @@ export interface ActionInput {
   choice?: string;
   /** For rejectCredit: the reason the controller typed. */
   reason?: string;
+  /** For confirmImageAmount: the amount the PM typed from the image, e.g. "$1,250.00". */
+  amount?: string;
 }
 
 /**
@@ -211,6 +221,11 @@ export async function runAction(
     case "chooseSubcontract": {
       if (!input.choice || !action.options.includes(input.choice)) throw new Error(`choose one of: ${action.options.join(", ")}`);
       return confirmLink(app, action.ref, input.choice);
+    }
+    case "confirmImageAmount": {
+      if (!input.choice || !action.options.includes(input.choice)) throw new Error(`choose one of: ${action.options.join(", ")}`);
+      if (!input.amount?.trim()) throw new Error("type the amount you see in the image");
+      return confirmImageAmount(app, action.ref, input.amount, input.choice);
     }
     case "draftNotice":
       draftNotice(app, action.subcontractId);

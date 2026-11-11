@@ -1,6 +1,6 @@
 import { findUsdAmounts, unreadableUsd } from "../money.ts";
 import { normalize } from "../span.ts";
-import type { Email, ExtractedBackCharge, ExtractedResponse } from "../types.ts";
+import type { Email, Evidence, ExtractedBackCharge, ExtractedResponse } from "../types.ts";
 
 /**
  * Strict checks on model output BEFORE it enters the workflow. Anything off-shape is rejected with a
@@ -16,7 +16,30 @@ export function normalizeRef(x: string): string | null {
   return m ? `BC-${m[1]}` : null;
 }
 
-const ITEM_KEYS = new Set(["ref", "description", "amountText", "amountSentence", "vendorNameAsWritten", "jobRef", "disputeNoted", "disputeSentence"]);
+const ITEM_KEYS = new Set([
+  "ref", "description", "amountText", "amountSentence", "vendorNameAsWritten", "jobRef", "disputeNoted", "disputeSentence",
+  // Only asked for when the email has attachments; absent (or 0) means the sentence is in the email body.
+  "amountAttachment", "amountPage", "disputeAttachment", "disputePage",
+]);
+
+/**
+ * Where the model says a sentence is: undefined for the body (attachment absent or 0), else attachment n
+ * and a page, which must be an attachment the model was shown and a page it has. A photo is page 1.
+ * Only the location is taken from the model; whether the sentence is really there is checked in code.
+ */
+function citedAt(raw: Record<string, unknown>, aKey: string, pKey: string, email: Email): { ok: true; at?: Evidence["at"] } | { ok: false; reason: string } {
+  const a = raw[aKey];
+  const p = raw[pKey];
+  if (a === undefined || a === 0) return { ok: true };
+  if (!Number.isSafeInteger(a) || (a as number) < 0) return { ok: false, reason: `${aKey} must be a whole number` };
+  const att = email.attachments?.find((x) => x.n === a);
+  if (!att || att.read === "skipped") return { ok: false, reason: `${aKey} ${a} is not an attachment that was read` };
+  const pages = att.read === "text" ? att.pages?.length ?? 0 : att.pageCount ?? 1;
+  const page = p === undefined ? (pages === 1 ? 1 : null) : p;
+  if (page === null) return { ok: false, reason: `${pKey} is missing for ${att.filename}, which has ${pages} pages` };
+  if (!Number.isSafeInteger(page) || (page as number) < 1 || (page as number) > pages) return { ok: false, reason: `${pKey} ${String(page).slice(0, 20)} is not a page of ${att.filename} (1-${pages})` };
+  return { ok: true, at: { attachment: a as number, page: page as number } };
+}
 
 export interface Rejected {
   index: number;
@@ -54,18 +77,22 @@ export function parseBackCharges(input: unknown, email: Email): { items: Extract
     const amounts = findUsdAmounts(amountText);
     if (amounts.length !== 1) return bad(`${ref}: amountText "${amountText}" is not exactly one $ amount`);
     if (!normalize(amountSentence).includes(normalize(amountText))) return bad(`${ref}: amountText not inside amountSentence`);
+    const amountAt = citedAt(raw, "amountAttachment", "amountPage", email);
+    if (!amountAt.ok) return bad(`${ref}: ${amountAt.reason}`);
     let disputeEvidence: ExtractedBackCharge["disputeEvidence"];
     if (raw.disputeNoted) {
       const ds = str(raw.disputeSentence, 1000);
       // A dispute without its sentence still counts as a dispute (conservative); the span check will flag it.
-      disputeEvidence = { emailId: email.id, sentence: ds ?? "" };
+      // A dispute cited at an impossible place is kept too, cited in the body, where the span check fails.
+      const disputeAt = citedAt(raw, "disputeAttachment", "disputePage", email);
+      disputeEvidence = { emailId: email.id, sentence: ds ?? "", ...(disputeAt.ok && disputeAt.at ? { at: disputeAt.at } : {}) };
     }
     seen.add(ref);
     items.push({
       ref,
       description,
       amountCents: amounts[0]!,
-      amountEvidence: { emailId: email.id, sentence: amountSentence },
+      amountEvidence: { emailId: email.id, sentence: amountSentence, ...(amountAt.at ? { at: amountAt.at } : {}) },
       vendorNameAsWritten: vendor,
       jobRef,
       disputeNoted: raw.disputeNoted,

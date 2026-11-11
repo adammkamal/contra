@@ -174,6 +174,7 @@ const COMMANDS: Record<Action["command"], Record<string, "string" | "number" | "
   ingestPmEmails: {},
   confirmLink: { ref: "string" },
   chooseSubcontract: { ref: "string", options: "string[]" },
+  confirmImageAmount: { ref: "string", options: "string[]" },
   draftNotice: { subcontractId: "string" },
   approveNotice: { noticeId: "string" },
   sendNotice: { noticeId: "string" },
@@ -393,11 +394,12 @@ export function createApiServer(opts: ApiOptions): {
         const ws = workspaceOf(url);
         const body = (await readJson(req)) as { action?: unknown; input?: unknown };
         const action = parseAction(body?.action);
-        if (!action) return send(res, 400, { ok: false, error: "invalid action; send { action: <an Action from /api/screens>, input?: { choice?, reason? } }" });
+        if (!action) return send(res, 400, { ok: false, error: "invalid action; send { action: <an Action from /api/screens>, input?: { choice?, reason?, amount? } }" });
         const rawInput = body.input && typeof body.input === "object" ? (body.input as Record<string, unknown>) : {};
         const input: ActionInput = {
           ...(typeof rawInput.choice === "string" ? { choice: rawInput.choice } : {}),
           ...(typeof rawInput.reason === "string" ? { reason: rawInput.reason } : {}),
+          ...(typeof rawInput.amount === "string" ? { amount: rawInput.amount.slice(0, 40) } : {}),
         };
         const app = appFor(ws);
         await runAction(app, action, input, action.command === "ingestPmEmails" ? { pmEmails: await pmEmails } : {});

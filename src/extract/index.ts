@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import type { Actor, Email, ExtractedBackCharge, ExtractedResponse } from "../types.ts";
-import { callTool, type CallOptions, type CallResult, type ModelSettings } from "./anthropic.ts";
-import { BACKCHARGE_TOOL, RESPONSE_TOOL, backchargeSystem, responseSystem } from "./prompt.ts";
+import type { Actor, AttachmentMedia, Email, ExtractedBackCharge, ExtractedResponse } from "../types.ts";
+import { callTool, type CallOptions, type CallResult, type ContentBlock, type ModelSettings } from "./anthropic.ts";
+import { BACKCHARGE_TOOL, BACKCHARGE_TOOL_WITH_ATTACHMENTS, RESPONSE_TOOL, attachmentRules, backchargeSystem, responseSystem } from "./prompt.ts";
 import { parseBackCharges, parseResponse, type Rejected } from "./validate.ts";
 
 /** Why a model call failed, as callTool classifies it. */
@@ -33,13 +33,65 @@ export function wrap(e: Email, boundary: () => string = randomBoundary): { tag: 
   throw new Error("could not choose an email boundary that the email does not contain");
 }
 
+/** A filename as an attribute value: no quotes, angle brackets, ampersands or line breaks, at most 120 characters. */
+const attr = (s: string) => s.replace(/["<>&\p{Cc}]/gu, "_").slice(0, 120);
+
+/**
+ * The back-charge extraction input. Without attachments that were read: exactly wrap(email), a string.
+ * With them: content blocks. First each photo or scanned PDF (from `media`), each after a label
+ * <attachment_{b} n=".." filename=".."> naming it (the API docs advise images before text); then one text
+ * block with the email, followed by one <attachment_{b}> section per PDF read as text, one <page_{b}> per
+ * page, each separate from the body. The boundary id `b` is the same random one as the email's tag, and
+ * is redrawn if any of that text contains it. An image attachment without media is left out.
+ */
+export function backChargeInput(
+  e: Email,
+  media: readonly AttachmentMedia[] = [],
+  boundary: () => string = randomBoundary,
+): { tag: string; id: string; user: string | ContentBlock[]; withAttachments: boolean } {
+  const textAtts = (e.attachments ?? []).filter((a) => a.read === "text");
+  const imageAtts = (e.attachments ?? []).filter((a) => a.read === "image" && media.some((m) => m.n === a.n));
+  if (textAtts.length === 0 && imageAtts.length === 0) {
+    const w = wrap(e, boundary);
+    return { tag: w.tag, id: w.tag.slice("email_".length), user: w.text, withAttachments: false };
+  }
+  const extra = [...textAtts.flatMap((a) => [a.filename, ...(a.pages ?? [])]), ...imageAtts.map((a) => a.filename)].join("\n");
+  for (let i = 0; i < 5; i++) {
+    const w = wrap(e, boundary);
+    const b = w.tag.slice("email_".length);
+    if (extra.includes(b)) continue;
+    const sections = textAtts.map((a) =>
+      [
+        `<attachment_${b} n="${a.n}" filename="${attr(a.filename)}" kind="PDF read as text" pages="${a.pages?.length ?? 0}">`,
+        ...(a.pages ?? []).map((p, j) => `<page_${b} n="${j + 1}">\n${p}\n</page_${b}>`),
+        `</attachment_${b}>`,
+      ].join("\n"),
+    );
+    const blocks: ContentBlock[] = imageAtts.flatMap((a) => {
+      const m = media.find((x) => x.n === a.n)!;
+      const kind = m.mediaType === "application/pdf" ? `scanned PDF, ${a.pageCount ?? "?"} pages` : "photo";
+      const label: ContentBlock = { type: "text", text: `<attachment_${b} n="${a.n}" filename="${attr(a.filename)}" kind="${kind}">` };
+      const data = Buffer.from(m.data).toString("base64");
+      const block: ContentBlock =
+        m.mediaType === "application/pdf"
+          ? { type: "document", source: { type: "base64", media_type: "application/pdf", data } }
+          : { type: "image", source: { type: "base64", media_type: m.mediaType, data } };
+      return [label, block];
+    });
+    blocks.push({ type: "text", text: [w.text, ...sections].join("\n") });
+    return { tag: w.tag, id: b, user: blocks, withAttachments: true };
+  }
+  throw new Error("could not choose an email boundary that the email does not contain");
+}
+
 export async function extractBackCharges(
   settings: ModelSettings,
   email: Email,
-  opts: ExtractOptions = {},
+  opts: ExtractOptions & { media?: readonly AttachmentMedia[] } = {},
 ): Promise<{ ok: true; items: ExtractedBackCharge[]; rejected: Rejected[]; actor: Actor; rawToolInput: unknown } | { ok: false; reason: string; errorType: CallErrorType }> {
-  const w = wrap(email, opts.boundary);
-  const r = await callTool(settings, { system: backchargeSystem(w.tag), user: w.text, tool: BACKCHARGE_TOOL }, opts);
+  const w = backChargeInput(email, opts.media, opts.boundary);
+  const system = w.withAttachments ? `${backchargeSystem(w.tag)}\n${attachmentRules(w.id)}` : backchargeSystem(w.tag);
+  const r = await callTool(settings, { system, user: w.user, tool: w.withAttachments ? BACKCHARGE_TOOL_WITH_ATTACHMENTS : BACKCHARGE_TOOL }, opts);
   if (r.status !== "OK") return { ok: false, reason: `${r.status}: ${r.message}`, errorType: r.status };
   const parsed = parseBackCharges(r.toolInput, email);
   // rawToolInput is the model's output before validation, so recordings can be re-validated later.

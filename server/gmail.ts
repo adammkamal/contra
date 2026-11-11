@@ -7,13 +7,13 @@
  * token only in an Authorization header. No error message, status or log line is built from a response
  * body (only HTTP status codes and Google's short error codes), so none of them can carry a secret.
  */
-import { EmlError, parseEml } from "../ingest/eml.ts";
+import { EmlError, parseEmlWithMedia } from "../ingest/eml.ts";
 import type { App } from "../src/app.ts";
 import { ingestInboxEmail } from "../src/commands.ts";
 import type { ModelSettings } from "../src/extract/anthropic.ts";
 import { extractBackCharges } from "../src/extract/index.ts";
 import type { MemoSender } from "../src/memo.ts";
-import type { Actor, Email, ExtractedBackCharge } from "../src/types.ts";
+import type { Actor, AttachmentMedia, Email, ExtractedBackCharge } from "../src/types.ts";
 import { MODEL_ERROR_MESSAGES } from "./try.ts";
 
 export type Transport = (url: string, init?: RequestInit) => Promise<Response>;
@@ -21,7 +21,9 @@ export type Transport = (url: string, init?: RequestInit) => Promise<Response>;
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const API = "https://gmail.googleapis.com/gmail/v1/users/me";
 export const MAX_PER_POLL = 20;
-export const MAX_MESSAGE_BYTES = 5 * 1024 * 1024;
+/** Gmail's own limit for sending a message (larger files go as Drive links, which aren't read). Attachments have their own limits (ingest/attachments.ts). */
+export const MAX_MESSAGE_BYTES = 25 * 1024 * 1024;
+const TOO_LARGE = "larger than 25 MB";
 export const GENERATED_HEADER = "X-Contra-Generated";
 export const EXPIRED = "expired: run npm run gmail:auth";
 export const NOT_CONFIGURED = "not configured: run npm run gmail:auth";
@@ -335,7 +337,7 @@ export const messageKey = (m: Pick<MessageMeta, "messageId" | "gmailId">) => m.m
  */
 export function skipReason(m: MessageMeta, config: Pick<GmailConfig, "intake" | "allowedSenders">, alreadyIngested: (key: string) => boolean): string | null {
   if (m.generated) return `sent by Contra (${GENERATED_HEADER})`;
-  if (m.sizeEstimate > MAX_MESSAGE_BYTES) return "larger than 5 MB";
+  if (m.sizeEstimate > MAX_MESSAGE_BYTES) return TOO_LARGE;
   if (!m.deliveredTo.includes(config.intake.toLowerCase())) return `not delivered to ${config.intake}`;
   if (config.allowedSenders.length === 0) return NO_ALLOWED_SENDERS;
   if (!m.fromAddress) return "sender not allowed (no single From address)";
@@ -376,16 +378,16 @@ export const SAMPLE_INBOX: InboxStatus = { mode: "sample", address: null, lastPo
 /**
  * Extraction for one live email: the model's items, or a reason (in words) it couldn't be extracted.
  * One call is at most one model call (the poller counts each against the daily cap), so retries are the
- * poller's own, each counted.
+ * poller's own, each counted. `media` holds the bytes of the email's photos and scans, for the model only.
  */
-export type Extract = (email: Email) => Promise<{ ok: true; items: ExtractedBackCharge[]; actor: Actor } | { ok: false; reason: string }>;
+export type Extract = (email: Email, media: readonly AttachmentMedia[]) => Promise<{ ok: true; items: ExtractedBackCharge[]; actor: Actor } | { ok: false; reason: string }>;
 
 /** The live extractor: src/extract with Contra's model settings, one model call and no retry. Never writes anything to disk. */
 export function modelExtractor(settings: () => { ok: true; settings: ModelSettings } | { ok: false; message: string }): Extract {
-  return async (email) => {
+  return async (email, media) => {
     const s = settings();
     if (!s.ok) return { ok: false, reason: "the model isn't configured (CONTRA_ANTHROPIC_API_KEY in .env.local)" };
-    const r = await extractBackCharges(s.settings, email, { maxRetries: 0 });
+    const r = await extractBackCharges(s.settings, email, { maxRetries: 0, media });
     if (!r.ok) return { ok: false, reason: MODEL_ERROR_MESSAGES[r.errorType] };
     return { ok: true, items: r.items, actor: r.actor };
   };
@@ -475,7 +477,7 @@ export class InboxPoller {
         }
         const raw = await client.raw(m.gmailId);
         if (raw.length > MAX_MESSAGE_BYTES) {
-          this.#skipped.set(m.gmailId, "larger than 5 MB");
+          this.#skipped.set(m.gmailId, TOO_LARGE);
           continue;
         }
         if (new RegExp(`^${GENERATED_HEADER}\\s*:`, "im").test(headerBlock(raw))) {
@@ -483,8 +485,9 @@ export class InboxPoller {
           continue;
         }
         let email: Email;
+        let media: AttachmentMedia[];
         try {
-          email = await parseEml(raw, `gmail-${m.gmailId}`);
+          ({ email, media } = await parseEmlWithMedia(raw, `gmail-${m.gmailId}`));
         } catch (e) {
           this.#skipped.set(m.gmailId, e instanceof EmlError ? `unreadable: ${e.message}` : "unreadable message");
           continue;
@@ -493,7 +496,7 @@ export class InboxPoller {
         // gave none does the Date header stand.
         email = { ...email, messageId: email.messageId ?? messageKey(m), ...(m.internalDate !== null ? { receivedAt: new Date(m.internalDate) } : {}) };
         this.#calls++; // counted before the call: a failed call (or a retry on a later poll) costs the same
-        const x = await this.opts.extract(email);
+        const x = await this.opts.extract(email, media);
         if (!x.ok) {
           const tries = (this.#tries.get(m.gmailId) ?? 0) + 1;
           this.#tries.set(m.gmailId, tries);

@@ -5,8 +5,8 @@ import { evaluateEligibility, type EligibilityResult } from "./eligibility.ts";
 import { renderCreditMemo } from "./memo.ts";
 import { formatUsd, sub as subCents, sum, type Cents } from "./money.ts";
 import { assessExtractedItem } from "./intake.ts";
-import { ambiguousWith, type Resolution } from "./resolver.ts";
-import { disputeSentencesFor, normalize, verifySpan } from "./span.ts";
+import { ambiguousWith, matchJobs, resolve, type Resolution } from "./resolver.ts";
+import { describeAt, describeAttachment, disputeSentencesFor, normalize, verifySpan } from "./span.ts";
 import { IllegalTransition, transitionBackCharge, transitionCredit, transitionMemo, transitionNotice } from "./state.ts";
 import type { MockERP } from "./mocks/erp.ts";
 import { planApplication, type PaymentsPlatform, type PlannedApplication } from "./mocks/ramp.ts";
@@ -116,7 +116,8 @@ export class Contra {
   ingestBackChargeEmail(email: Email, extracted: ExtractedBackCharge[], extractor: Actor, origin: EmailOrigin = "builtin"): BackCharge[] {
     if (email.messageId && this.hasMessage(email.messageId)) return [];
     this.emails.set(email.id, email);
-    const attachments = email.attachmentCount ? [`${email.attachmentCount} attachment(s), not read`] : [];
+    // One line per attachment: read as text, read as an image, or skipped and why. Never dropped silently.
+    const attachments = email.attachments ? email.attachments.map(describeAttachment) : email.attachmentCount ? [`${email.attachmentCount} attachment(s), not read`] : [];
     // Live mail: when Gmail received it (the host sets receivedAt from Gmail's internalDate).
     const received = origin === "gmail" ? [`received ${email.receivedAt.toISOString()}`] : [];
     this.d.log.append({ actor: SYSTEM, entity: "email", entityId: email.id, action: EMAIL_INGESTED[origin], from: null, to: null, evidence: [email.subject, ...received, ...attachments] });
@@ -154,7 +155,13 @@ export class Contra {
         action: `extracted ${formatUsd(x.amountCents)}`,
         from: null,
         to: "extracted",
-        evidence: [x.amountEvidence.sentence, ...(x.disputeEvidence ? [x.disputeEvidence.sentence] : []), ...a.backstop],
+        evidence: [
+          x.amountEvidence.sentence,
+          // Where it is, when not in the body: "in attachment estimate.pdf, page 2".
+          ...(x.amountEvidence.at ? [`in ${describeAt(email, x.amountEvidence.at)}`] : []),
+          ...(x.disputeEvidence ? [x.disputeEvidence.sentence] : []),
+          ...a.backstop,
+        ],
       });
 
       if (a.holdReasons.length) {
@@ -193,6 +200,46 @@ export class Contra {
     }
     bc.subcontractId = sc.id;
     transitionBackCharge(this.d.log, bc, "linked", pm, "link confirmed", bc.linkExplanation);
+  }
+
+  /**
+   * The PM confirms an amount the model read from a photo or scanned page, and links the item: held ->
+   * linked, a human transition. Only for an item held for amount_only_in_image and nothing else. The PM
+   * types the amount they see; it must equal the amount read, or nothing changes and the item stays held.
+   * The subcontract must be on the item's job when its job resolves (as for chooseSubcontract).
+   */
+  confirmImageAmount(ref: string, pm: Actor, typed: Cents, subcontractId: string): void {
+    const bc = this.#bc(ref);
+    if (bc.state !== "held" || bc.holdReasons.length !== 1 || bc.holdReasons[0] !== "amount_only_in_image") {
+      throw new Error(`${ref}: only an item held just for an amount read from an image can be confirmed this way`);
+    }
+    if (pm.kind !== "human") throw new IllegalTransition(`${ref}: confirming an amount requires a human, got ${pm.kind}`);
+    if (typed !== bc.extracted.amountCents) {
+      throw new Error(`${ref}: you typed ${formatUsd(typed)}, but the amount read from the image is ${formatUsd(bc.extracted.amountCents)}; nothing changed and ${ref} stays held`);
+    }
+    const sc = this.d.erp.subcontract(subcontractId);
+    if (!sc) throw new Error(`no subcontract ${subcontractId}`);
+    const jobs = matchJobs(bc.extracted.jobRef, this.d.erp.jobs);
+    if (jobs.length === 1 && sc.jobId !== jobs[0]!.id) throw new Error(`${sc.id} is not on ${jobs[0]!.id}, the job of ${ref}`);
+
+    const email = this.emails.get(bc.extracted.amountEvidence.emailId);
+    const where = email ? describeAt(email, bc.extracted.amountEvidence.at) : "an image";
+    this.d.log.append({
+      actor: pm,
+      entity: "backcharge",
+      entityId: ref,
+      action: `amount ${formatUsd(typed)} confirmed by the PM against ${where}`,
+      from: null,
+      to: null,
+      evidence: [`read from the image: ${bc.extracted.amountEvidence.sentence}`],
+    });
+    // The person's confirmation stands in for the word-for-word check an image can't have.
+    this.#evidenceOk.set(ref, true);
+    bc.holdReasons = [];
+    const r = resolve(bc.extracted, this.d.erp);
+    this.proposals.set(ref, r);
+    if (r.kind === "linked" && r.subcontractId === sc.id) bc.linkExplanation = r.explanation;
+    this.confirmLink(ref, pm, sc.id);
   }
 
   // ---- Step 2: notice ----------------------------------------------------------------------
