@@ -35,8 +35,17 @@ test("live inbox: status in words, choose a subcontract, notice, credit, memo fa
   await expect(pdfRow.locator(".quote")).toContainText("BC-7611: corridor wall repair, Summit, $1,250.00.");
   await expect(pdfRow.getByTestId("image-reading-BC-7611")).toHaveCount(0);
 
-  // Before the PM confirms, the model's reading of the photo ($604.00) is shown nowhere: not on the row, the
-  // detail screen, the audit log or the PM queue.
+  // Before the PM confirms, the API withholds the model's reading of the photo ($604.00): amount and
+  // sourceSentence are "" and photoAmount is null, on the row and on the detail. The UI renders that as is.
+  const api = "http://127.0.0.1:4310/api";
+  type Row = { ref: string; amount: string; sourceSentence: string; photoAmount: { pmEntered: string; modelRead: string } | null };
+  const inboxRow = async (ref: string) => ((await (await page.request.get(`${api}/screens?workspace=live`)).json()) as { inbox: Row[] }).inbox.find((r) => r.ref === ref)!;
+  const detailOf = async (ref: string) => (await (await page.request.get(`${api}/backcharge/${ref}?workspace=live`)).json()) as Row;
+  for (const r of [await inboxRow("BC-7612"), await detailOf("BC-7612")]) {
+    expect(r.amount).toBe("");
+    expect(r.sourceSentence).toBe("");
+    expect(r.photoAmount).toBeNull();
+  }
   const main = page.locator("main");
   await expect(photoRow.getByTestId("hidden-reading-BC-7612")).toBeVisible();
   await expect(photoRow.locator(".quote")).toHaveCount(0);
@@ -91,6 +100,14 @@ test("live inbox: status in words, choose a subcontract, notice, credit, memo fa
   await expect(reading).toContainText("Model's reading of the photo, not checked word for word");
   await expect(reading).toContainText("BC-7612 FLOOR PROTECTION $604.00");
   await expect(photoRow.locator(".quote")).toHaveCount(0); // not the verified-quote style
+  // Server side: the PM's amount is the item's amount, with both readings in photoAmount.
+  for (const r of [await inboxRow("BC-7612"), await detailOf("BC-7612")]) {
+    expect(r.amount).toBe("$640.00");
+    expect(r.sourceSentence).toBe("BC-7612 FLOOR PROTECTION $604.00");
+    expect(r.photoAmount).toEqual({ pmEntered: "$640.00", modelRead: "$604.00" });
+  }
+  // A text item is untouched: its amount and sentence are there, and photoAmount is null.
+  expect(await inboxRow("BC-7611")).toMatchObject({ amount: "$1,250.00", photoAmount: null });
   await shot(page, "live-01g-photo-confirmed");
 
   // The detail screens: the PDF's page is shown with the sentence highlighted; the photo's reading is labelled,
