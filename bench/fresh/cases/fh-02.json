@@ -1,0 +1,12 @@
+{
+  "id": "fh-02",
+  "description": "independent held-out case",
+  "email": {
+    "id": "fh-02",
+    "from": "dana.ortiz@apexbuilders.example",
+    "to": "contra.demo+backcharges@example.com",
+    "subject": "FW: Mechanical damage – Summit",
+    "receivedAt": "2026-10-26T14:00:00.000Z",
+    "body": "Accounting,\n\nPlease issue the back-charge described below to Harbor Mechanical. This is the first time I'm sending it over, so it hasn't been logged yet.\n\nThanks,\nDana\n\n-----Original Message-----\nFrom: Marco Silva, Field Superintendent\nSubject: Damaged ceiling grid – Summit MOB\n\nDana,\n\nHarbor Mechanical damaged the ceiling grid while moving ductwork above the second-floor corridor. The repair crew's cost came to $1,340.00. This needs to go back to Harbor."
+  }
+}

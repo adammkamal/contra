@@ -5,7 +5,7 @@ before changing code. AGENTS.md has the file layout and how the UI calls the cor
 inline on purpose, so subagents get them even if file imports are not expanded.
 
 ## Never
-- Edit INVARIANTS.md, test/invariants.test.ts, test/demo.test.ts, bench/labels/ or bench/heldout/labels/. If one looks wrong, stop and say so.
+- Edit INVARIANTS.md, test/invariants.test.ts, test/demo.test.ts, bench/labels/, bench/heldout/labels/ or bench/fresh/labels/. If one looks wrong, stop and say so.
 - Do arithmetic on dollars, use floats for money, `parseFloat` or `toFixed` on amounts. Use `Cents` from src/money.ts.
 - Call a model anywhere in src/ except src/extract/. Eligibility, matching and money are deterministic code.
 - Change state except through `transition*()` (src/state.ts) and, from UI or scripts, `app.run(...)` via src/commands.ts.

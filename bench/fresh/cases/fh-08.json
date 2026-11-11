@@ -1,0 +1,12 @@
+{
+  "id": "fh-08",
+  "description": "independent held-out case",
+  "email": {
+    "id": "fh-08",
+    "from": "dana.ortiz@apexbuilders.example",
+    "to": "contra.demo+backcharges@example.com",
+    "subject": "Summit – corridor damage",
+    "receivedAt": "2026-10-26T14:00:00.000Z",
+    "body": "Hi,\n\nWe had $830 in repairs to the corridor trim at Summit after materials were moved through the area.\n\nI believe Ridgeline caused the damage, but I'm not sure which Ridgeline crew was responsible. Please figure out who it belongs to before putting the charge on anyone's account.\n\nThanks,\nDana"
+  }
+}

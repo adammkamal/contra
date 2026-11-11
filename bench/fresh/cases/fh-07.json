@@ -1,0 +1,12 @@
+{
+  "id": "fh-07",
+  "description": "independent held-out case",
+  "email": {
+    "id": "fh-07",
+    "from": "dana.ortiz@apexbuilders.example",
+    "to": "contra.demo+backcharges@example.com",
+    "subject": "Harbor Mechanical – payment status",
+    "receivedAt": "2026-10-26T14:00:00.000Z",
+    "body": "Hi Accounting,\n\nHarbor Mechanical finished the approved punch-list work at Summit Medical Office last week. We still owe them $4,900 under their approved payment application.\n\nCan you confirm when their payment will go out? They're asking for an update.\n\nThanks,\nDana"
+  }
+}

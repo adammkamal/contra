@@ -1,0 +1,12 @@
+{
+  "id": "fh-05",
+  "description": "independent held-out case",
+  "email": {
+    "id": "fh-05",
+    "from": "dana.ortiz@apexbuilders.example",
+    "to": "contra.demo+backcharges@example.com",
+    "subject": "Lakeview Library – drywall repairs",
+    "receivedAt": "2026-10-26T14:00:00.000Z",
+    "body": "Hi,\n\nRidgeline Drywall damaged several finished corners while transporting material through the main reading room at Lakeview Library.\n\nThe repair invoice is for twelve hundred fifty dollars even. Please put that amount back on their account as a back-charge.\n\nThanks,\nDana"
+  }
+}

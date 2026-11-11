@@ -1,0 +1,12 @@
+{
+  "id": "fh-03",
+  "description": "independent held-out case",
+  "email": {
+    "id": "fh-03",
+    "from": "dana.ortiz@apexbuilders.example",
+    "to": "contra.demo+backcharges@example.com",
+    "subject": "Broken storefront glass – Summit",
+    "receivedAt": "2026-10-26T14:00:00.000Z",
+    "body": "Hi,\n\nWe found another damaged storefront panel at Summit MOB after the glazing crew finished moving materials.\n\nPlease charge Ridgline Glass & Glazzing $930 for replacing the panel. Photos are in the daily report.\n\nThanks,\nDana"
+  }
+}

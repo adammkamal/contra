@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseBackCharges, type Rejected } from "../src/extract/validate.ts";
+import { normalizeRef, parseBackCharges, type Rejected } from "../src/extract/validate.ts";
 import { cents } from "../src/money.ts";
 import type { RampVendor } from "../src/mocks/ramp.ts";
 import { assessExtractedItem } from "../src/intake.ts";
@@ -44,22 +44,51 @@ export interface BenchLabel {
   amountCents: number | null;
 }
 
-/** Which benchmark: the main set, or the held-out set that is scored separately and never merged into the main numbers. */
-export type BenchSet = "main" | "heldout";
+/** One back-charge in a multi-item label (see bench/fresh/LABEL-FORMAT.md). */
+export interface BenchLabelItem {
+  /** The BC number when the email states one. Without it, the item is matched by amount (and subcontract on a tie). */
+  ref?: string;
+  /** A subcontract ID, or "review" if a careful person would not auto-link this item. */
+  link: string;
+  disputed: boolean;
+  amountCents: number;
+}
 
-/** Reads `--set <main|heldout>` from argv; main when absent. Throws on any other value. */
+/**
+ * A label listing every back-charge in the email, scored item by item. For emails that can hold several
+ * charges, or whose charges have no BC number (the fresh set). An email with no back-charge keeps the
+ * single-item form with link "none".
+ */
+export interface BenchItemsLabel {
+  id: string;
+  labeledBy: string;
+  items: BenchLabelItem[];
+}
+
+export type AnyBenchLabel = BenchLabel | BenchItemsLabel;
+
+export const isItemsLabel = (l: AnyBenchLabel): l is BenchItemsLabel => "items" in l;
+
+/**
+ * Which benchmark: the main set, the held-out set, or the fresh set (written outside the team). Each is
+ * scored separately and never merged into another's numbers.
+ */
+export type BenchSet = "main" | "heldout" | "fresh";
+const SETS: readonly string[] = ["main", "heldout", "fresh"];
+
+/** Reads `--set <main|heldout|fresh>` from argv; main when absent. Throws on any other value. */
 export function parseSet(argv: readonly string[]): BenchSet {
   const i = argv.indexOf("--set");
   if (i < 0) return "main";
   const v = argv[i + 1];
-  if (v === "main" || v === "heldout") return v;
-  throw new Error(`--set must be "main" or "heldout", got ${v === undefined ? "nothing" : `"${v}"`}`);
+  if (v !== undefined && SETS.includes(v)) return v as BenchSet;
+  throw new Error(`--set must be "main", "heldout" or "fresh", got ${v === undefined ? "nothing" : `"${v}"`}`);
 }
 
 /** Where a set's cases, labels, recordings and results live, from the repo root. */
 export function setPaths(repoRoot: string, set: BenchSet) {
-  const bench = set === "main" ? join(repoRoot, "bench") : join(repoRoot, "bench", "heldout");
-  const recordings = join(repoRoot, "fixtures", "bench-extractions", ...(set === "main" ? [] : ["heldout"]));
+  const bench = set === "main" ? join(repoRoot, "bench") : join(repoRoot, "bench", set);
+  const recordings = join(repoRoot, "fixtures", "bench-extractions", ...(set === "main" ? [] : [set]));
   return { cases: join(bench, "cases"), labels: join(bench, "labels"), recordings, results: join(bench, "results.json") };
 }
 
@@ -75,10 +104,11 @@ export const REVIEW: Outcome = { decision: { kind: "review" }, wouldCredit: fals
 
 /**
  * Contra: the product's own ingest checks (src/intake.ts assessExtractedItem), mapped to an outcome. Nothing bench-specific.
- * A scored run has exactly one accepted item, so it is the only extracted ref from the email.
+ * `extractedRefs` is every accepted ref from the run, as ingest passes them. A run scored against a
+ * single-item label has exactly one accepted item, so by default it is the only extracted ref from the email.
  */
-export function contraDecide(email: Email, x: ExtractedBackCharge, data: ResolverData): Outcome {
-  const a = assessExtractedItem(email, x, data, [x.ref]);
+export function contraDecide(email: Email, x: ExtractedBackCharge, data: ResolverData, extractedRefs: readonly string[] = [x.ref]): Outcome {
+  const a = assessExtractedItem(email, x, data, extractedRefs);
   if (a.holdReasons.length) return { decision: { kind: "hold", why: a.holdReasons.join(", ") }, wouldCredit: false };
   const r = a.resolution!;
   if (r.kind !== "linked") return { decision: { kind: "review" }, wouldCredit: false };
@@ -155,6 +185,76 @@ export function score(o: Outcome, label: BenchLabel, extracted: number, accepted
   };
 }
 
+/** Label "none", used to score an accepted item that matches no labeled back-charge. */
+const NO_CHARGE: BenchLabel = { id: "", labeledBy: "", link: "none", disputed: false, amountCents: null };
+
+/** One accepted item of a run with one system's outcome for it. */
+export interface DecidedItem {
+  x: ExtractedBackCharge;
+  o: Outcome;
+}
+
+/** One labeled item's result: `at` is the index of the accepted item it was paired with, or null. */
+export interface ItemScore {
+  label: BenchLabelItem;
+  at: number | null;
+  score: Score;
+}
+
+/**
+ * Pairs a run's accepted items with a multi-item label's items, then scores each pair with `score`.
+ * The system's answer is used only to break ties:
+ *  1. a labeled item with a ref pairs with the accepted item of that ref;
+ *  2. a labeled item without a ref pairs with an unpaired accepted item of exactly its amount; among
+ *     several, the one the system linked to the labeled subcontract, else the first in extraction order.
+ * A labeled item left unpaired was not extracted: scored as REVIEW, like a run with no accepted item.
+ * An accepted item left unpaired matches no labeled charge: scored against label "none" (crediting it is
+ * a wrong credit, linking it a wrong link, otherwise routed to a person; never matching).
+ * The run: matching only if every labeled item matches and no accepted item is left over; dispute only if
+ * every item's (labeled and left over) is; wrongLink, wrongCredit and routedToHuman if any item's is.
+ */
+export function scoreItems(decided: readonly DecidedItem[], label: BenchItemsLabel): { score: Score; items: ItemScore[]; extra: number[] } {
+  const free = new Set(decided.map((_, i) => i));
+  const at: (number | null)[] = label.items.map(() => null);
+  const take = (li: number, i: number | undefined) => {
+    if (i === undefined) return;
+    at[li] = i;
+    free.delete(i);
+  };
+  label.items.forEach((l, li) => {
+    if (l.ref === undefined) return;
+    const want = normalizeRef(l.ref);
+    take(li, [...free].find((i) => decided[i]!.x.ref === want));
+  });
+  label.items.forEach((l, li) => {
+    if (l.ref !== undefined) return;
+    const same = [...free].filter((i) => decided[i]!.x.amountCents === l.amountCents);
+    const toLabeled = (i: number) => {
+      const d = decided[i]!.o.decision;
+      return d.kind === "link" && d.subcontractId === l.link;
+    };
+    take(li, same.find(toLabeled) ?? same[0]);
+  });
+  const items: ItemScore[] = label.items.map((l, li) => {
+    const i = at[li]!;
+    const one: BenchLabel = { id: label.id, labeledBy: label.labeledBy, link: l.link, disputed: l.disputed, amountCents: l.amountCents };
+    return { label: l, at: i, score: i === null ? score(REVIEW, one, 0, 0) : score(decided[i]!.o, one, decided[i]!.x.amountCents, 1) };
+  });
+  const extra = [...free].sort((a, b) => a - b);
+  const all = [...items.map((s) => s.score), ...extra.map((i) => score(decided[i]!.o, NO_CHARGE, decided[i]!.x.amountCents, 1))];
+  return {
+    score: {
+      matching: extra.length === 0 && items.every((s) => s.score.matching),
+      dispute: all.every((s) => s.dispute),
+      wrongLink: all.some((s) => s.wrongLink),
+      wrongCredit: all.some((s) => s.wrongCredit),
+      routedToHuman: all.some((s) => s.routedToHuman),
+    },
+    items,
+    extra,
+  };
+}
+
 const reviveDates = (_k: string, v: unknown) => (typeof v === "string" && /^\d{4}-\d\d-\d\dT/.test(v) ? new Date(v) : v);
 
 export function loadCases(dir: string): BenchCase[] {
@@ -185,12 +285,36 @@ export function loadRuns(recordingsDir: string, c: BenchCase): BenchRun[] {
     });
 }
 
-export function loadLabels(dir: string): Map<string, BenchLabel> {
-  const out = new Map<string, BenchLabel>();
+export function loadLabels(dir: string): Map<string, AnyBenchLabel> {
+  const out = new Map<string, AnyBenchLabel>();
   if (!existsSync(dir)) return out;
   for (const f of readdirSync(dir).filter((f) => f.endsWith(".json"))) {
-    const l = JSON.parse(readFileSync(join(dir, f), "utf8")) as BenchLabel;
+    const l = JSON.parse(readFileSync(join(dir, f), "utf8")) as AnyBenchLabel;
+    if (isItemsLabel(l)) {
+      const bad = itemsLabelProblem(l);
+      if (bad) throw new Error(`${join(dir, f)}: ${bad}`);
+    }
     out.set(l.id, l);
   }
   return out;
+}
+
+/** Why a multi-item label can't be scored, or null. Single-item labels are read as before, unchecked. */
+export function itemsLabelProblem(l: BenchItemsLabel): string | null {
+  for (const k of ["link", "disputed", "amountCents"]) if (k in l) return `an "items" label must not also have "${k}"`;
+  if (!Array.isArray(l.items) || l.items.length === 0) return `"items" must list at least one back-charge (an email with none uses link "none")`;
+  const refs = new Set<string>();
+  for (const [n, it] of l.items.entries()) {
+    const at = `items[${n}]`;
+    if (typeof it.link !== "string" || !it.link || it.link === "none") return `${at}.link must be a subcontract ID or "review"`;
+    if (typeof it.disputed !== "boolean") return `${at}.disputed must be true or false`;
+    if (!Number.isSafeInteger(it.amountCents) || it.amountCents <= 0) return `${at}.amountCents must be a positive whole number of cents`;
+    if (it.ref !== undefined) {
+      const r = typeof it.ref === "string" ? normalizeRef(it.ref) : null;
+      if (!r) return `${at}.ref must be a BC number, or left out`;
+      if (refs.has(r)) return `${at}.ref ${r} appears twice`;
+      refs.add(r);
+    }
+  }
+  return null;
 }

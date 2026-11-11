@@ -3,7 +3,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MockERP } from "../src/mocks/erp.ts";
 import { demoSeed } from "../src/seed.ts";
-import { baselineDecide, contraDecide, loadCases, loadLabels, loadRuns, parseSet, REVIEW, score, setPaths, type BenchSet, type Outcome, type Score } from "./lib.ts";
+import { baselineDecide, contraDecide, isItemsLabel, loadCases, loadLabels, loadRuns, parseSet, REVIEW, score, scoreItems, setPaths, type BenchSet, type DecidedItem, type Outcome, type Score } from "./lib.ts";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 let set: BenchSet;
@@ -44,6 +44,7 @@ type Sys = "contra" | "baseline";
 type RunRow = { caseId: string; run: number; items: number; failed?: string; contra?: Score; baseline?: Score; contraDecision: string; baselineDecision: string };
 
 const show = (o: Outcome) => (o.decision.kind === "link" ? `link ${o.decision.subcontractId}` : o.decision.kind) + (o.wouldCredit ? " +credit" : "");
+const showItems = (d: readonly DecidedItem[]) => (d.length ? d.map(({ x, o }) => `${x.ref} ${show(o)}`).join("; ") : "review (0 items)");
 
 const rows: RunRow[] = [];
 for (const c of cases) {
@@ -52,6 +53,18 @@ for (const c of cases) {
     const run = i + 1;
     if (r.error) {
       rows.push({ caseId: c.id, run, items: 0, failed: r.error, contraDecision: "failed", baselineDecision: "failed" });
+      return;
+    }
+    if (isItemsLabel(label)) {
+      // Multi-item label: every accepted item is decided, as ingest would, and paired with the labeled items.
+      const refs = r.items.map((x) => x.ref);
+      const co = r.items.map((x) => ({ x, o: contraDecide(c.email, x, erp, refs) }));
+      const bo = r.items.map((x) => ({ x, o: baselineDecide(x, seed.vendors, seed.subcontracts, seed.jobs) }));
+      rows.push({
+        caseId: c.id, run, items: r.items.length,
+        contra: scoreItems(co, label).score, baseline: scoreItems(bo, label).score,
+        contraDecision: showItems(co), baselineDecision: showItems(bo),
+      });
       return;
     }
     const x = r.items.length === 1 ? r.items[0]! : null;

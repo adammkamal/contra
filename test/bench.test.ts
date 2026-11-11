@@ -4,7 +4,7 @@ import { cents } from "../src/money.ts";
 import { join } from "node:path";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { baselineDecide, contraDecide, loadRuns, parseSet, REVIEW, score, setPaths, type BenchCase, type BenchLabel, type BenchRun, type Outcome } from "../bench/lib.ts";
+import { baselineDecide, contraDecide, itemsLabelProblem, loadLabels, loadRuns, parseSet, REVIEW, score, scoreItems, setPaths, type BenchCase, type BenchItemsLabel, type BenchLabel, type BenchRun, type DecidedItem, type Outcome } from "../bench/lib.ts";
 import { parseBackCharges } from "../src/extract/validate.ts";
 import { MockERP } from "../src/mocks/erp.ts";
 import { demoSeed } from "../src/seed.ts";
@@ -77,11 +77,12 @@ test("scoring 'none': an accepted item not credited is routed to a person and no
   }
 });
 
-test("--set: main by default, heldout on request, anything else rejected", () => {
+test("--set: main by default, heldout or fresh on request, anything else rejected", () => {
   assert.equal(parseSet(["node", "run.ts"]), "main");
   assert.equal(parseSet(["node", "run.ts", "--runs", "3"]), "main");
   assert.equal(parseSet(["node", "run.ts", "--set", "main"]), "main");
   assert.equal(parseSet(["node", "run.ts", "--set", "heldout"]), "heldout");
+  assert.equal(parseSet(["node", "run.ts", "--set", "fresh"]), "fresh");
   assert.throws(() => parseSet(["node", "run.ts", "--set", "all"]), /--set/);
   assert.throws(() => parseSet(["node", "run.ts", "--set"]), /--set/);
 });
@@ -96,6 +97,101 @@ test("--set: each set has its own cases, labels, recordings and results", () => 
     cases: join(r, "bench", "heldout", "cases"), labels: join(r, "bench", "heldout", "labels"),
     recordings: join(r, "fixtures", "bench-extractions", "heldout"), results: join(r, "bench", "heldout", "results.json"),
   });
+  assert.deepEqual(setPaths(r, "fresh"), {
+    cases: join(r, "bench", "fresh", "cases"), labels: join(r, "bench", "fresh", "labels"),
+    recordings: join(r, "fixtures", "bench-extractions", "fresh"), results: join(r, "bench", "fresh", "results.json"),
+  });
+});
+
+// Multi-item labels (bench/fresh/LABEL-FORMAT.md). Made-up items, written for these tests only.
+const item = (ref: string, amount: number): ExtractedBackCharge => ({
+  ref, description: "d", amountCents: cents(amount), amountEvidence: { emailId: "e", sentence: "s" },
+  vendorNameAsWritten: "v", jobRef: "Summit", disputeNoted: false,
+});
+const dec = (...xs: [ExtractedBackCharge, Outcome][]): DecidedItem[] => xs.map(([x, o]) => ({ x, o }));
+const ITEMS = (...items: BenchItemsLabel["items"]): BenchItemsLabel => ({ id: "x", labeledBy: "kamal", items });
+const ALL_OK = { matching: true, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: false };
+
+test("items label: two charges without BC numbers, both linked and credited correctly", () => {
+  const label = ITEMS({ link: "SC-SUM-0912", disputed: false, amountCents: 36_000 }, { link: "SC-SUM-0700", disputed: false, amountCents: 72_500 });
+  // Extraction order differs from label order: pairing is by amount, not position.
+  const r = scoreItems(dec([item("BC-2", 72_500), link("SC-SUM-0700")], [item("BC-1", 36_000), link("SC-SUM-0912")]), label);
+  assert.deepEqual(r.score, ALL_OK);
+  assert.deepEqual(r.items.map((s) => s.at), [1, 0]);
+  assert.deepEqual(r.extra, []);
+});
+
+test("items label: one of two charges not extracted -> routed to a person, not matching, no wrong credit", () => {
+  const label = ITEMS({ link: "SC-SUM-0912", disputed: false, amountCents: 36_000 }, { link: "SC-SUM-0700", disputed: false, amountCents: 72_500 });
+  const r = scoreItems(dec([item("BC-1", 36_000), link("SC-SUM-0912")]), label);
+  assert.deepEqual(r.score, { matching: false, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: true });
+  assert.deepEqual(r.items.map((s) => s.at), [0, null]);
+});
+
+test("items label: wrong amount does not pair; crediting it is a wrong credit", () => {
+  const label = ITEMS({ link: "SC-SUM-0912", disputed: false, amountCents: 47_500 });
+  const r = scoreItems(dec([item("BC-1", 4_750), link("SC-SUM-0912")]), label);
+  assert.deepEqual(r.extra, [0]);
+  assert.equal(r.score.matching, false);
+  assert.equal(r.score.wrongCredit, true);
+});
+
+test("items label: same amount twice -> the subcontract breaks the tie", () => {
+  const label = ITEMS({ link: "SC-SUM-0700", disputed: false, amountCents: 50_000 }, { link: "SC-SUM-0912", disputed: false, amountCents: 50_000 });
+  const r = scoreItems(dec([item("BC-1", 50_000), link("SC-SUM-0912")], [item("BC-2", 50_000), link("SC-SUM-0700")]), label);
+  assert.deepEqual(r.items.map((s) => s.at), [1, 0]);
+  assert.deepEqual(r.score, ALL_OK);
+});
+
+test("items label: a ref pairs by ref, whatever the amount", () => {
+  const label = ITEMS({ ref: "bc 7001", link: "SC-SUM-0912", disputed: false, amountCents: 10_000 });
+  const r = scoreItems(dec([item("BC-7002", 10_000), link("SC-SUM-0912")], [item("BC-7001", 99_900), link("SC-SUM-0912")]), label);
+  assert.deepEqual(r.items.map((s) => s.at), [1]);
+  assert.deepEqual(r.extra, [0]);
+  assert.equal(r.items[0]!.score.wrongCredit, true); // right ref, wrong amount, credited
+  assert.equal(r.score.wrongCredit, true);
+});
+
+test("items label: review item and disputed item", () => {
+  const review1 = ITEMS({ link: "review", disputed: false, amountCents: 83_000 });
+  assert.deepEqual(scoreItems(dec([item("BC-1", 83_000), review]), review1).score, { ...ALL_OK, routedToHuman: true });
+  assert.deepEqual(scoreItems([], review1).score, { ...ALL_OK, routedToHuman: true });
+  const linked = scoreItems(dec([item("BC-1", 83_000), link("SC-SUM-0912")]), review1).score;
+  assert.equal(linked.wrongLink && linked.wrongCredit && !linked.matching, true);
+  const disputed = ITEMS({ link: "SC-SUM-0700", disputed: true, amountCents: 215_000 });
+  assert.deepEqual(scoreItems(dec([item("BC-1", 215_000), link("SC-SUM-0700", false)]), disputed).score, ALL_OK);
+  const credited = scoreItems(dec([item("BC-1", 215_000), link("SC-SUM-0700", true)]), disputed).score;
+  assert.equal(credited.wrongCredit && !credited.dispute, true);
+});
+
+test("items label: an accepted item beyond the labeled ones is never matching", () => {
+  const label = ITEMS({ link: "SC-SUM-0700", disputed: false, amountCents: 134_000 });
+  const r = scoreItems(dec([item("BC-1", 134_000), link("SC-SUM-0700")], [item("BC-2", 49_000), review]), label);
+  assert.deepEqual(r.score, { matching: false, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: true });
+  const credited = scoreItems(dec([item("BC-1", 134_000), link("SC-SUM-0700")], [item("BC-2", 49_000), link("SC-SUM-0912")]), label).score;
+  assert.deepEqual(credited, { matching: false, dispute: false, wrongLink: true, wrongCredit: true, routedToHuman: false });
+});
+
+test("items label: malformed labels are refused when loaded", () => {
+  const ok = { link: "SC-SUM-0912", disputed: false, amountCents: 100 };
+  assert.equal(itemsLabelProblem(ITEMS(ok)), null);
+  assert.equal(itemsLabelProblem(ITEMS({ ...ok, ref: "BC-1001" }, { ...ok, ref: "BC-1002" })), null);
+  assert.match(itemsLabelProblem(ITEMS())!, /at least one/);
+  assert.match(itemsLabelProblem(ITEMS({ ...ok, link: "none" }))!, /link/);
+  assert.match(itemsLabelProblem(ITEMS({ ...ok, amountCents: 1.5 }))!, /amountCents/);
+  assert.match(itemsLabelProblem(ITEMS({ ...ok, ref: "BC-1001" }, { ...ok, ref: "bc-1001" }))!, /twice/);
+  assert.match(itemsLabelProblem(ITEMS({ ...ok, ref: "7" }))!, /BC number/);
+  assert.match(itemsLabelProblem({ ...ITEMS(ok), link: "review" } as BenchItemsLabel)!, /must not also/);
+  const dir = mkdtempSync(join(tmpdir(), "contra-labels-"));
+  try {
+    writeFileSync(join(dir, "a.json"), JSON.stringify({ id: "a", labeledBy: "kamal", link: "SC-SUM-0912", disputed: false, amountCents: 100 }));
+    writeFileSync(join(dir, "b.json"), JSON.stringify(ITEMS(ok)));
+    assert.equal(loadLabels(dir).size, 2);
+    writeFileSync(join(dir, "c.json"), JSON.stringify({ ...ITEMS(), id: "c" }));
+    assert.throws(() => loadLabels(dir), /c\.json.*at least one/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 // Recordings: a made-up case, written for these tests only.

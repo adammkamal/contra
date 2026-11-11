@@ -14,7 +14,7 @@ Rules (inline because file imports may not reach subagents):
 - Disputed, unlinked or unverified items must never reach a credit.
 - Every state change goes through src/state.ts and is logged; every UI mutation goes through app.run.
 - MockRamp may implement only documented Ramp behavior (SPEC.md section 4).
-- Do not edit INVARIANTS.md, test/invariants.test.ts, test/demo.test.ts, bench/labels/ or bench/heldout/labels/.
+- Do not edit INVARIANTS.md, test/invariants.test.ts, test/demo.test.ts, bench/labels/, bench/heldout/labels/ or bench/fresh/labels/.
 
 Method:
 1. Read SPEC.md and INVARIANTS.md, then the files listed in the description.

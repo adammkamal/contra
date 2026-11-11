@@ -48,6 +48,17 @@ set), so the comparison isolates matching. Columns, per system and per run:
 main benchmark's: recordings go to `fixtures/bench-extractions/heldout/<caseId>/`, results to
 `bench/heldout/results.json`.
 
+## Fresh set
+
+`bench/fresh/` holds a third set (`cases/`, fh-01 ...), written by someone outside the team, with its own
+protected, human-written `labels/`. Run it with `--set fresh`. Recordings go to
+`fixtures/bench-extractions/fresh/<caseId>/` and results to `bench/fresh/results.json`, never merged with
+the other sets' numbers. Its labels can also use the items form (several charges per email, charges
+without a BC number); see `bench/fresh/LABEL-FORMAT.md`. Labels in the single-item form are scored exactly
+as in the other sets.
+
+## Labels: "none"
+
 A label's `link` may also be `"none"` (the email holds no back-charge), with `amountCents: null`. Such a run
 is correct only if no item is accepted. An accepted item that would be credited counts as a wrong credit;
 any other accepted outcome is routed to a person and is not correct.
