@@ -15,7 +15,8 @@ import { backChargeInput, extractBackCharges, wrap } from "../src/extract/index.
 import { parseBackCharges } from "../src/extract/validate.ts";
 import { assessExtractedItem } from "../src/intake.ts";
 import type { AttachmentMedia, Email } from "../src/types.ts";
-import { buildScreens, HOLD_WORDS, type InboxRow, type Screens } from "../src/view.ts";
+import { SqliteStore } from "../src/store/sqlite.ts";
+import { backChargeDetail, buildScreens, HOLD_WORDS, type InboxRow, type Screens } from "../src/view.ts";
 import { eml, png, scannedPdf, textPdf, type Part } from "./attachment-fakes.ts";
 import { CONFIG, fakeGmail, gmailAuthPass } from "./gmail-fakes.ts";
 import { LLM, PM, setup } from "./helpers.ts";
@@ -637,5 +638,53 @@ test("attachments: before a PM confirms an image amount, no API response carries
     await reader.cancel().catch(() => {});
     await pump;
     await api.close();
+  }
+});
+
+test("attachments: the stored audit log keeps the model's reading of an image amount; only the audit views withhold it", async () => {
+  const db = join(mkdtempSync(join(tmpdir(), "contra-")), "d.db");
+  const app = liveApp(db);
+  const photo: Part = { filename: "IMG_2041.jpg", contentType: "image/jpeg", data: png(64, 48) };
+  const ingest = async (id: string, body: string, parts: Part[], item: Record<string, unknown>) => {
+    const { email } = await parseEmlWithMedia(eml({ id, subject: `Summit - ${String(item.ref)}`, body, parts }), `gmail-${id}`);
+    const { items } = parseBackCharges({ items: [item] }, email);
+    assert.equal(items.length, 1);
+    cmd.ingestInboxEmail(app, email, items, LLM, "gmail");
+  };
+  try {
+    // BC-7403: read from a photo as $604.00. BC-7404: read from a photo as $617.00 while the body says $1,111.00.
+    await ingest("s1", "Photo of the ticket attached.", [photo], photoItem({ amountText: "$604.00", amountSentence: "BC-7403 FLOOR PROTECTION $604.00" }));
+    await ingest("s2", "BC-7404 is $1,111.00 per the ticket.", [photo], photoItem({ ref: "BC-7404", amountText: "$617.00", amountSentence: "BC-7404 FLOOR PROTECTION $617.00" }));
+    // BC-7406: stated in a body, then a later email's photo is read as another amount for it ($1,520.00).
+    const sentence = "BC-7406: corridor wall repair, Summit L3, $1,250.00.";
+    await ingest("s3", `Hi,\n\n${sentence}\n\nDana`, [], rawItem({ ref: "BC-7406", amountText: "$1,250.00", amountSentence: sentence, amountAttachment: 0, amountPage: undefined }));
+    await ingest("s4", "Updated ticket attached.", [photo], photoItem({ ref: "BC-7406", amountText: "$1,520.00", amountSentence: "BC-7406 WALL REPAIR $1,520.00" }));
+    assert.deepEqual(app.ctx.contra.backCharges.get("BC-7406")!.holdReasons, ["conflicting_amounts"]);
+
+    // The audit views: none of the three readings, in any form.
+    const READINGS = /604\.00|\$604\b|60400|617\.00|\$617\b|61700|1,520\.00|152000/;
+    const views = [buildScreens(app).audit, ...["BC-7403", "BC-7404", "BC-7406"].map((ref) => backChargeDetail(app, ref).history)];
+    for (const v of views) assert.doesNotMatch(JSON.stringify(v), READINGS);
+    const later = backChargeDetail(app, "BC-7406").history.find((h) => h.what.startsWith("held: conflicting_amounts"))!;
+    assert.match(later.evidence[0]!, /: another amount, read by the model from an image in that email \(the model's reading isn't shown; a person must read the image\)$/);
+  } finally {
+    app.close();
+  }
+
+  // The stored log, read straight from the database: every reading is there, as the model gave it.
+  const store = new SqliteStore(db);
+  try {
+    const log = store.auditLog({ now: () => LIVE_START });
+    const events = (ref: string) => log.forEntity("backcharge", ref);
+    const extracted = events("BC-7403").find((e) => e.to === "extracted")!;
+    assert.equal(extracted.action, "extracted $604.00");
+    assert.deepEqual(extracted.evidence, ["BC-7403 FLOOR PROTECTION $604.00", "in attachment IMG_2041.jpg"]);
+    assert.equal(events("BC-7404").find((e) => e.to === "extracted")!.action, "extracted $617.00");
+    const held = events("BC-7404").find((e) => e.to === "held")!;
+    assert.ok(held.evidence.some((v) => v.startsWith("email body gives BC-7404 $1,111.00, not $617.00: ")), held.evidence.join(" | "));
+    const conflict = events("BC-7406").find((e) => e.to === "held")!;
+    assert.match(conflict.evidence[0]!, /^[^:]+: BC-7406 WALL REPAIR \$1,520\.00$/);
+  } finally {
+    store.close();
   }
 });

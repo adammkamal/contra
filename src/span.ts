@@ -91,6 +91,15 @@ export function readFromImage(email: Email, at: Evidence["at"]): boolean {
 }
 
 /**
+ * True when the sentence appears (after normalization) in the email's text: its body (quoted mail included)
+ * or a page of an attachment read as text. A model's reading of an image never does.
+ */
+export function inEmailText(email: Email, sentence: string): boolean {
+  const needle = normalize(sentence);
+  return needle.length > 0 && [email.body, ...attachmentPages(email).map((p) => p.text)].some((t) => normalize(t).includes(needle));
+}
+
+/**
  * The sentence must appear (after normalization) in the text it cites: the body, or the locally extracted
  * text of the cited attachment page. An attachment is never quoted mail, so excludeQuoted applies to the body only.
  */

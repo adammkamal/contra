@@ -227,15 +227,17 @@ being anchored on the model's figure:
 - The Inbox row and the detail screen have `amount: ""`, `sourceSentence: ""` (the sentence is the model's
   reading too) and `photoAmount: null`. `sourceLocation` still names the file. The detail's `description`
   shows any dollar amount in it as `[amount withheld]`; so does a `disputeSentence` read from an image.
-- The item's `extracted` audit entry says `extracted (amount read from an image: withheld until a person
+- The stored audit log keeps the reading like any other evidence; only `audit[]` and `history[]` leave it out.
+  There the item's `extracted` entry says `extracted (amount read from an image: withheld until a person
   confirms the amount from the image)`, with where it is (`in attachment IMG_2041.jpg`) and no sentence. A
-  `conflicting amounts` hold says what the email's text gives, `not the amount read from the image`.
+  `conflicting amounts` hold says what the email's text gives, `not the amount read from the image`. A later
+  email's image reading of another amount for an existing item shows as `<email id>: another amount, read by
+  the model from an image in that email (...)`. After the confirmation the item's entries show as stored, with
+  the reading.
 - After `confirmImageAmount`, `amount` is what the person typed, `sourceSentence` is the model's sentence, and
   `photoAmount` is `{ "pmEntered": "$640.00", "modelRead": "$604.00" }` (both always present; they may be
   equal). Show both from `photoAmount`; never parse `audit[]` or `amountNotes[]` for them. The confirmation's
   audit entry and the credit's `amountNotes[]` carry both readings too.
-- Audit entries written before this rule (a database from an older server) still carry the reading; reset
-  that workspace to start clean.
 
 ## Hold reasons
 
