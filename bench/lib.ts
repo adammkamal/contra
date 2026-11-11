@@ -99,7 +99,7 @@ export interface Outcome {
   wouldCredit: boolean;
 }
 
-/** Both systems send a run with 0 or several accepted items to a human. */
+/** The outcome of a run without exactly one accepted item: nothing linked or credited (0 items is scored as missed, see `score`). */
 export const REVIEW: Outcome = { decision: { kind: "review" }, wouldCredit: false };
 
 /**
@@ -150,6 +150,8 @@ export interface Score {
   wrongLink: boolean;
   wrongCredit: boolean;
   routedToHuman: boolean;
+  /** A labeled back-charge that no accepted item stands for: in the product nobody ever sees it. */
+  missed: boolean;
 }
 
 /**
@@ -160,6 +162,10 @@ export interface Score {
  * wrongCredit: would create a credit that a careful human would not (wrong party, disputed, or wrong amount).
  * `extracted` is the extracted amount; it only matters when the system would credit.
  * `accepted` is how many items the extractor accepted in the run (o is REVIEW when it isn't exactly 1).
+ *
+ * missed: the label names a back-charge (a subcontract or "review") and the run accepted no item. Nothing
+ *   reaches the Inbox, so no person sees it: never matching (even when the label says review) and never
+ *   routed to a person.
  *
  * Label "none" (no back-charge): correct only if no item is accepted. An accepted item that would be
  * credited is a wrong credit; any other accepted outcome is routed to a person and not correct.
@@ -173,8 +179,10 @@ export function score(o: Outcome, label: BenchLabel, extracted: number, accepted
       wrongLink: linked !== null,
       wrongCredit: o.wouldCredit,
       routedToHuman: accepted > 0 && !o.wouldCredit,
+      missed: false,
     };
   }
+  if (accepted === 0) return { matching: false, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: false, missed: true };
   const wrongLink = linked !== null && linked !== label.link;
   return {
     matching: label.link === "review" ? linked === null : linked === label.link,
@@ -182,6 +190,7 @@ export function score(o: Outcome, label: BenchLabel, extracted: number, accepted
     wrongLink,
     wrongCredit: o.wouldCredit && (wrongLink || label.disputed || extracted !== label.amountCents),
     routedToHuman: linked === null,
+    missed: false,
   };
 }
 
@@ -207,11 +216,11 @@ export interface ItemScore {
  *  1. a labeled item with a ref pairs with the accepted item of that ref;
  *  2. a labeled item without a ref pairs with an unpaired accepted item of exactly its amount; among
  *     several, the one the system linked to the labeled subcontract, else the first in extraction order.
- * A labeled item left unpaired was not extracted: scored as REVIEW, like a run with no accepted item.
+ * A labeled item left unpaired was not extracted: missed (nobody sees it), like a run with no accepted item.
  * An accepted item left unpaired matches no labeled charge: scored against label "none" (crediting it is
  * a wrong credit, linking it a wrong link, otherwise routed to a person; never matching).
  * The run: matching only if every labeled item matches and no accepted item is left over; dispute only if
- * every item's (labeled and left over) is; wrongLink, wrongCredit and routedToHuman if any item's is.
+ * every item's (labeled and left over) is; wrongLink, wrongCredit, routedToHuman and missed if any item's is.
  */
 export function scoreItems(decided: readonly DecidedItem[], label: BenchItemsLabel): { score: Score; items: ItemScore[]; extra: number[] } {
   const free = new Set(decided.map((_, i) => i));
@@ -249,6 +258,7 @@ export function scoreItems(decided: readonly DecidedItem[], label: BenchItemsLab
       wrongLink: all.some((s) => s.wrongLink),
       wrongCredit: all.some((s) => s.wrongCredit),
       routedToHuman: all.some((s) => s.routedToHuman),
+      missed: all.some((s) => s.missed),
     },
     items,
     extra,

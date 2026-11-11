@@ -26,8 +26,9 @@ without a label for every case, it exits listing the unlabeled cases.
   `"review"` if a careful person would not auto-link), `disputed`, `amountCents`, `labeledBy` (your name).
   The run prints **NOT VALID FOR THE DEMO** while any label for a current case isn't human-written.
 
-Scoring is per run. A run with exactly one accepted item is scored on that item. A run with 0 accepted
-items, or more than 1, counts as "review" for both systems (the item count is shown). A failed call is
+Scoring is per run. A run with exactly one accepted item is scored on that item. A run with more than 1
+accepted item counts as "review" for both systems (the item count is shown). A run with 0 accepted items
+is **missed** when the label names a back-charge (shown as "nothing extracted"). A failed call is
 reported and not scored. A case is **stable** if each system's outcome is the same in every run; the run
 lists the unstable cases.
 
@@ -40,6 +41,10 @@ set), so the comparison isolates matching. Columns, per system and per run:
 - **wrong links**, **wrong credits** (would credit something a careful human wouldn't: wrong party,
   disputed, or wrong amount) and **routed to human**. Report wrong credits together with the
   routed-to-human count: "0 wrong credits" means nothing if everything was routed to a human.
+- **missed** — the label names a back-charge (a subcontract or `"review"`) and nothing was extracted for
+  it. In the product nothing reaches the Inbox, so nobody sees it: a missed run is never matching (even
+  when the label says review) and never counted as routed to human. A `"none"` label with nothing
+  extracted is correct, not missed.
 
 ## Held-out set
 

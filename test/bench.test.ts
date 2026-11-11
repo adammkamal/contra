@@ -16,7 +16,7 @@ const review: Outcome = { decision: { kind: "review" }, wouldCredit: false };
 
 test("scoring: linking when the label says review is a wrong link AND a wrong credit", () => {
   const s = score(link("SC-A"), L("review"), cents(100), 1);
-  assert.deepEqual(s, { matching: false, dispute: true, wrongLink: true, wrongCredit: true, routedToHuman: false });
+  assert.deepEqual(s, { matching: false, dispute: true, wrongLink: true, wrongCredit: true, routedToHuman: false, missed: false });
 });
 
 test("scoring: right party but disputed -> crediting it is a wrong credit and a dispute miss", () => {
@@ -39,7 +39,17 @@ test("scoring: right party, wrong extracted amount -> wrong credit", () => {
 });
 
 test("scoring: review when a link was expected is safe but not matching", () => {
-  assert.deepEqual(score(review, L("SC-A"), cents(100), 1), { matching: false, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: true });
+  assert.deepEqual(score(review, L("SC-A"), cents(100), 1), { matching: false, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: true, missed: false });
+});
+
+test("scoring: a labeled charge with no extracted item is missed: not correct and not routed to a person", () => {
+  // Nothing reaches the Inbox, so nobody sees the charge, whether the label links it or says review.
+  const MISSED = { matching: false, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: false, missed: true };
+  assert.deepEqual(score(REVIEW, L("SC-A"), 0, 0), MISSED);
+  assert.deepEqual(score(REVIEW, L("review"), 0, 0), MISSED);
+  assert.deepEqual(score(REVIEW, L("SC-A", true), 0, 0), MISSED);
+  // Several accepted items under a single-item label still reach a person: routed, not missed.
+  assert.deepEqual(score(REVIEW, L("SC-A"), 0, 2), { matching: false, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: true, missed: false });
 });
 
 test("baseline honors the extraction's disputeNoted", () => {
@@ -57,7 +67,7 @@ test("baseline honors the extraction's disputeNoted", () => {
 const NONE: BenchLabel = { id: "x", labeledBy: "kamal", link: "none", disputed: false, amountCents: null };
 
 test("scoring 'none': no accepted item is correct and not routed", () => {
-  assert.deepEqual(score(REVIEW, NONE, 0, 0), { matching: true, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: false });
+  assert.deepEqual(score(REVIEW, NONE, 0, 0), { matching: true, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: false, missed: false });
 });
 
 test("scoring 'none': an accepted item that would be credited is a wrong credit", () => {
@@ -110,7 +120,7 @@ const item = (ref: string, amount: number): ExtractedBackCharge => ({
 });
 const dec = (...xs: [ExtractedBackCharge, Outcome][]): DecidedItem[] => xs.map(([x, o]) => ({ x, o }));
 const ITEMS = (...items: BenchItemsLabel["items"]): BenchItemsLabel => ({ id: "x", labeledBy: "kamal", items });
-const ALL_OK = { matching: true, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: false };
+const ALL_OK = { matching: true, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: false, missed: false };
 
 test("items label: two charges without BC numbers, both linked and credited correctly", () => {
   const label = ITEMS({ link: "SC-SUM-0912", disputed: false, amountCents: 36_000 }, { link: "SC-SUM-0700", disputed: false, amountCents: 72_500 });
@@ -121,10 +131,11 @@ test("items label: two charges without BC numbers, both linked and credited corr
   assert.deepEqual(r.extra, []);
 });
 
-test("items label: one of two charges not extracted -> routed to a person, not matching, no wrong credit", () => {
+test("items label: one of two charges not extracted -> missed (not routed to a person), not matching, no wrong credit", () => {
   const label = ITEMS({ link: "SC-SUM-0912", disputed: false, amountCents: 36_000 }, { link: "SC-SUM-0700", disputed: false, amountCents: 72_500 });
   const r = scoreItems(dec([item("BC-1", 36_000), link("SC-SUM-0912")]), label);
-  assert.deepEqual(r.score, { matching: false, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: true });
+  assert.deepEqual(r.score, { matching: false, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: false, missed: true });
+  assert.deepEqual(r.items.map((s) => [s.score.missed, s.score.routedToHuman]), [[false, false], [true, false]]);
   assert.deepEqual(r.items.map((s) => s.at), [0, null]);
 });
 
@@ -155,7 +166,7 @@ test("items label: a ref pairs by ref, whatever the amount", () => {
 test("items label: review item and disputed item", () => {
   const review1 = ITEMS({ link: "review", disputed: false, amountCents: 83_000 });
   assert.deepEqual(scoreItems(dec([item("BC-1", 83_000), review]), review1).score, { ...ALL_OK, routedToHuman: true });
-  assert.deepEqual(scoreItems([], review1).score, { ...ALL_OK, routedToHuman: true });
+  assert.deepEqual(scoreItems([], review1).score, { ...ALL_OK, matching: false, missed: true });
   const linked = scoreItems(dec([item("BC-1", 83_000), link("SC-SUM-0912")]), review1).score;
   assert.equal(linked.wrongLink && linked.wrongCredit && !linked.matching, true);
   const disputed = ITEMS({ link: "SC-SUM-0700", disputed: true, amountCents: 215_000 });
@@ -167,9 +178,9 @@ test("items label: review item and disputed item", () => {
 test("items label: an accepted item beyond the labeled ones is never matching", () => {
   const label = ITEMS({ link: "SC-SUM-0700", disputed: false, amountCents: 134_000 });
   const r = scoreItems(dec([item("BC-1", 134_000), link("SC-SUM-0700")], [item("BC-2", 49_000), review]), label);
-  assert.deepEqual(r.score, { matching: false, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: true });
+  assert.deepEqual(r.score, { matching: false, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: true, missed: false });
   const credited = scoreItems(dec([item("BC-1", 134_000), link("SC-SUM-0700")], [item("BC-2", 49_000), link("SC-SUM-0912")]), label).score;
-  assert.deepEqual(credited, { matching: false, dispute: false, wrongLink: true, wrongCredit: true, routedToHuman: false });
+  assert.deepEqual(credited, { matching: false, dispute: false, wrongLink: true, wrongCredit: true, routedToHuman: false, missed: false });
 });
 
 test("items label: malformed labels are refused when loaded", () => {

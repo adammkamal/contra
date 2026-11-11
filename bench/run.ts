@@ -44,7 +44,9 @@ type Sys = "contra" | "baseline";
 type RunRow = { caseId: string; run: number; items: number; failed?: string; contra?: Score; baseline?: Score; contraDecision: string; baselineDecision: string };
 
 const show = (o: Outcome) => (o.decision.kind === "link" ? `link ${o.decision.subcontractId}` : o.decision.kind) + (o.wouldCredit ? " +credit" : "");
-const showItems = (d: readonly DecidedItem[]) => (d.length ? d.map(({ x, o }) => `${x.ref} ${show(o)}`).join("; ") : "review (0 items)");
+// A run with no accepted item puts nothing in the Inbox: shown as "nothing extracted", never as "review".
+const NOTHING = "nothing extracted";
+const showItems = (d: readonly DecidedItem[]) => (d.length ? d.map(({ x, o }) => `${x.ref} ${show(o)}`).join("; ") : NOTHING);
 
 const rows: RunRow[] = [];
 for (const c of cases) {
@@ -76,7 +78,7 @@ for (const c of cases) {
     rows.push({
       caseId: c.id, run, items: r.items.length,
       contra: score(co, label, amount, accepted), baseline: score(bo, label, amount, accepted),
-      contraDecision: show(co) + note, baselineDecision: show(bo) + note,
+      contraDecision: accepted === 0 ? NOTHING : show(co) + note, baselineDecision: accepted === 0 ? NOTHING : show(bo) + note,
     });
   });
 }
@@ -94,6 +96,7 @@ const perRun = (k: Sys) =>
       wrongLinks: rs.filter((r) => r[k]!.wrongLink).length,
       wrongCredits: rs.filter((r) => r[k]!.wrongCredit).length,
       routedToHuman: rs.filter((r) => r[k]!.routedToHuman).length,
+      missed: rs.filter((r) => r[k]!.missed).length,
     };
   });
 
@@ -114,11 +117,11 @@ console.log(`Set: ${set}${set === "main" ? "" : " (scored separately, never merg
 console.log(`Extractions: ${summary.extractions}`);
 console.table(rows.map((r) => ({
   case: r.caseId, run: r.run, items: r.failed ? "failed" : r.items,
-  contra: r.contraDecision, "c match": r.contra?.matching, "c dispute": r.contra?.dispute,
-  baseline: r.baselineDecision, "b match": r.baseline?.matching, "b dispute": r.baseline?.dispute,
+  contra: r.contraDecision, "c match": r.contra?.matching, "c dispute": r.contra?.dispute, "c missed": r.contra?.missed,
+  baseline: r.baselineDecision, "b match": r.baseline?.matching, "b dispute": r.baseline?.dispute, "b missed": r.baseline?.missed,
 })));
 for (const k of ["contra", "baseline"] as const) {
-  console.log(`\n${k} (per run; matching = correct link or correct review)`);
+  console.log(`\n${k} (per run; matching = correct link or correct review; missed = a labeled back-charge nothing was extracted for, which nobody sees)`);
   console.table(summary[k]);
 }
 console.log(`\nUnstable cases (outcome differs between runs): contra ${summary.unstable.contra.join(", ") || "none"}; baseline ${summary.unstable.baseline.join(", ") || "none"}`);
