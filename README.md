@@ -83,6 +83,8 @@ After the BC-number fix (each set re-recorded, 3 runs per case, every run the sa
 
 On the fresh set the 3 cases Contra doesn't get right all go to a person, none is credited: a charge stated only in forwarded mail (held), a misspelled sub name (sent to the PM to choose), and an amount written only in words (not taken in). Main and held-out are unchanged by the fix, row for row.
 
+A second independent set (fh-09..16), written to the PM's description and including a follow-up email that cites a BC number for a charge first reported without one, was run once after the fix: Contra 6/8 correct, 0 wrong credits, 0 missed, and it held the duplicate for the PM in all 3 runs. The baseline also scored 6/8 but charged the duplicate twice (1 wrong credit per run). Scored on branch `fresh2` at 740d6d9.
+
 ## Status at submission
 
 - **On `main`:** everything above, including roles (the PM approves notices, the controller approves credits, AP turns credits on; nobody approves a credit on a charge they raised or linked).
