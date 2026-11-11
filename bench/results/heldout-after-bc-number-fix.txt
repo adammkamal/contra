@@ -1,0 +1,54 @@
+Held-out set after the BC-number change (npx tsx bench/run.ts --set heldout). No longer held-out (see heldout-first-run.txt).
+Scored on bc-fix on top of commit 9d24007, with the recordings committed alongside this file (re-recorded with claude-opus-5-5, medium, 3 runs per case, after npm run extract:live passed 5/5).
+---
+Set: heldout (scored separately, never merged into the main numbers)
+Held-out: no longer held-out: the code was changed after its first scored run (bench/results/heldout-first-run.txt)
+Extractions: fixtures/bench-extractions/heldout, 3 run(s), claude-opus-5-5 (medium)
+┌─────────┬─────────┬─────┬───────┬────────────────────────────┬─────────┬───────────┬──────────┬────────────────────────────┬─────────┬───────────┬──────────┐
+│ (index) │ case    │ run │ items │ contra                     │ c match │ c dispute │ c missed │ baseline                   │ b match │ b dispute │ b missed │
+├─────────┼─────────┼─────┼───────┼────────────────────────────┼─────────┼───────────┼──────────┼────────────────────────────┼─────────┼───────────┼──────────┤
+│ 0       │ 'ho-01' │ 1   │ 1     │ 'hold'                     │ true    │ true      │ false    │ 'link SC-SUM-0912 +credit' │ false   │ true      │ false    │
+│ 1       │ 'ho-01' │ 2   │ 1     │ 'hold'                     │ true    │ true      │ false    │ 'link SC-SUM-0912 +credit' │ false   │ true      │ false    │
+│ 2       │ 'ho-01' │ 3   │ 1     │ 'hold'                     │ true    │ true      │ false    │ 'link SC-SUM-0912 +credit' │ false   │ true      │ false    │
+│ 3       │ 'ho-02' │ 1   │ 1     │ 'hold'                     │ true    │ true      │ false    │ 'link SC-SUM-0700 +credit' │ false   │ true      │ false    │
+│ 4       │ 'ho-02' │ 2   │ 1     │ 'hold'                     │ true    │ true      │ false    │ 'link SC-SUM-0700 +credit' │ false   │ true      │ false    │
+│ 5       │ 'ho-02' │ 3   │ 1     │ 'hold'                     │ true    │ true      │ false    │ 'link SC-SUM-0700 +credit' │ false   │ true      │ false    │
+│ 6       │ 'ho-03' │ 1   │ 1     │ 'link SC-LAK-0301 +credit' │ true    │ true      │ false    │ 'link SC-LAK-0301 +credit' │ true    │ true      │ false    │
+│ 7       │ 'ho-03' │ 2   │ 1     │ 'link SC-LAK-0301 +credit' │ true    │ true      │ false    │ 'link SC-LAK-0301 +credit' │ true    │ true      │ false    │
+│ 8       │ 'ho-03' │ 3   │ 1     │ 'link SC-LAK-0301 +credit' │ true    │ true      │ false    │ 'link SC-LAK-0301 +credit' │ true    │ true      │ false    │
+│ 9       │ 'ho-04' │ 1   │ 1     │ 'link SC-SUM-0820 +credit' │ true    │ true      │ false    │ 'link SC-SUM-0820 +credit' │ true    │ true      │ false    │
+│ 10      │ 'ho-04' │ 2   │ 1     │ 'link SC-SUM-0820 +credit' │ true    │ true      │ false    │ 'link SC-SUM-0820 +credit' │ true    │ true      │ false    │
+│ 11      │ 'ho-04' │ 3   │ 1     │ 'link SC-SUM-0820 +credit' │ true    │ true      │ false    │ 'link SC-SUM-0820 +credit' │ true    │ true      │ false    │
+│ 12      │ 'ho-05' │ 1   │ 1     │ 'review'                   │ true    │ true      │ false    │ 'review'                   │ true    │ true      │ false    │
+│ 13      │ 'ho-05' │ 2   │ 1     │ 'review'                   │ true    │ true      │ false    │ 'review'                   │ true    │ true      │ false    │
+│ 14      │ 'ho-05' │ 3   │ 1     │ 'review'                   │ true    │ true      │ false    │ 'review'                   │ true    │ true      │ false    │
+│ 15      │ 'ho-06' │ 1   │ 0     │ 'nothing extracted'        │ true    │ true      │ false    │ 'nothing extracted'        │ true    │ true      │ false    │
+│ 16      │ 'ho-06' │ 2   │ 0     │ 'nothing extracted'        │ true    │ true      │ false    │ 'nothing extracted'        │ true    │ true      │ false    │
+│ 17      │ 'ho-06' │ 3   │ 0     │ 'nothing extracted'        │ true    │ true      │ false    │ 'nothing extracted'        │ true    │ true      │ false    │
+│ 18      │ 'ho-07' │ 1   │ 1     │ 'link SC-LAK-0301 +credit' │ true    │ true      │ false    │ 'link SC-LAK-0301 +credit' │ true    │ true      │ false    │
+│ 19      │ 'ho-07' │ 2   │ 1     │ 'link SC-LAK-0301 +credit' │ true    │ true      │ false    │ 'link SC-LAK-0301 +credit' │ true    │ true      │ false    │
+│ 20      │ 'ho-07' │ 3   │ 1     │ 'link SC-LAK-0301 +credit' │ true    │ true      │ false    │ 'link SC-LAK-0301 +credit' │ true    │ true      │ false    │
+│ 21      │ 'ho-08' │ 1   │ 1     │ 'hold'                     │ true    │ true      │ false    │ 'link SC-SUM-0912 +credit' │ false   │ true      │ false    │
+│ 22      │ 'ho-08' │ 2   │ 1     │ 'hold'                     │ true    │ true      │ false    │ 'link SC-SUM-0912 +credit' │ false   │ true      │ false    │
+│ 23      │ 'ho-08' │ 3   │ 1     │ 'hold'                     │ true    │ true      │ false    │ 'link SC-SUM-0912 +credit' │ false   │ true      │ false    │
+└─────────┴─────────┴─────┴───────┴────────────────────────────┴─────────┴───────────┴──────────┴────────────────────────────┴─────────┴───────────┴──────────┘
+
+contra (per run; matching = correct link or correct review; missed = a labeled back-charge nothing was extracted or refused for, which nobody sees)
+┌─────────┬─────┬────────┬────────┬──────────┬─────────┬────────────┬──────────────┬───────────────┬────────┐
+│ (index) │ run │ scored │ failed │ matching │ dispute │ wrongLinks │ wrongCredits │ routedToHuman │ missed │
+├─────────┼─────┼────────┼────────┼──────────┼─────────┼────────────┼──────────────┼───────────────┼────────┤
+│ 0       │ 1   │ 8      │ 0      │ 8        │ 8       │ 0          │ 0            │ 4             │ 0      │
+│ 1       │ 2   │ 8      │ 0      │ 8        │ 8       │ 0          │ 0            │ 4             │ 0      │
+│ 2       │ 3   │ 8      │ 0      │ 8        │ 8       │ 0          │ 0            │ 4             │ 0      │
+└─────────┴─────┴────────┴────────┴──────────┴─────────┴────────────┴──────────────┴───────────────┴────────┘
+
+baseline (per run; matching = correct link or correct review; missed = a labeled back-charge nothing was extracted or refused for, which nobody sees)
+┌─────────┬─────┬────────┬────────┬──────────┬─────────┬────────────┬──────────────┬───────────────┬────────┐
+│ (index) │ run │ scored │ failed │ matching │ dispute │ wrongLinks │ wrongCredits │ routedToHuman │ missed │
+├─────────┼─────┼────────┼────────┼──────────┼─────────┼────────────┼──────────────┼───────────────┼────────┤
+│ 0       │ 1   │ 8      │ 0      │ 5        │ 8       │ 3          │ 3            │ 1             │ 0      │
+│ 1       │ 2   │ 8      │ 0      │ 5        │ 8       │ 3          │ 3            │ 1             │ 0      │
+│ 2       │ 3   │ 8      │ 0      │ 5        │ 8       │ 3          │ 3            │ 1             │ 0      │
+└─────────┴─────┴────────┴────────┴──────────┴─────────┴────────────┴──────────────┴───────────────┴────────┘
+
+Unstable cases (outcome differs between runs): contra none; baseline none

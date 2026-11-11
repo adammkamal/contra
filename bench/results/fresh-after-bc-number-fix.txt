@@ -1,0 +1,54 @@
+Fresh set after the BC-number change (npx tsx bench/run.ts --set fresh). NO LONGER HELD-OUT: its cases were read while building the change. Its held-out score is fresh-first-run.txt (Contra 1/8).
+Scored on bc-fix on top of commit 9d24007, with the recordings committed alongside this file (re-recorded with claude-opus-5-5, medium, 3 runs per case, after npm run extract:live passed 5/5).
+---
+Set: fresh (scored separately, never merged into the main numbers)
+Held-out: NO LONGER HELD-OUT: back-charges without a BC number (extraction, Contra references, duplicates, estimates) were built after its cases were read; scores from then on are not held-out
+Extractions: fixtures/bench-extractions/fresh, 3 run(s), claude-opus-5-5 (medium)
+┌─────────┬─────────┬─────┬───────┬────────────────────────────────────────────────────────────────────────────────────┬─────────┬───────────┬──────────┬────────────────────────────────────────────────────────────────────────────────────┬─────────┬───────────┬──────────┐
+│ (index) │ case    │ run │ items │ contra                                                                             │ c match │ c dispute │ c missed │ baseline                                                                           │ b match │ b dispute │ b missed │
+├─────────┼─────────┼─────┼───────┼────────────────────────────────────────────────────────────────────────────────────┼─────────┼───────────┼──────────┼────────────────────────────────────────────────────────────────────────────────────┼─────────┼───────────┼──────────┤
+│ 0       │ 'fh-01' │ 1   │ 1     │ '(no BC number) link SC-SUM-0912 +credit'                                          │ true    │ true      │ false    │ '(no BC number) link SC-SUM-0912 +credit'                                          │ true    │ true      │ false    │
+│ 1       │ 'fh-01' │ 2   │ 1     │ '(no BC number) link SC-SUM-0912 +credit'                                          │ true    │ true      │ false    │ '(no BC number) link SC-SUM-0912 +credit'                                          │ true    │ true      │ false    │
+│ 2       │ 'fh-01' │ 3   │ 1     │ '(no BC number) link SC-SUM-0912 +credit'                                          │ true    │ true      │ false    │ '(no BC number) link SC-SUM-0912 +credit'                                          │ true    │ true      │ false    │
+│ 3       │ 'fh-02' │ 1   │ 1     │ '(no BC number) hold'                                                              │ false   │ true      │ false    │ '(no BC number) link SC-SUM-0700 +credit'                                          │ true    │ true      │ false    │
+│ 4       │ 'fh-02' │ 2   │ 1     │ '(no BC number) hold'                                                              │ false   │ true      │ false    │ '(no BC number) link SC-SUM-0700 +credit'                                          │ true    │ true      │ false    │
+│ 5       │ 'fh-02' │ 3   │ 1     │ '(no BC number) hold'                                                              │ false   │ true      │ false    │ '(no BC number) link SC-SUM-0700 +credit'                                          │ true    │ true      │ false    │
+│ 6       │ 'fh-03' │ 1   │ 1     │ '(no BC number) review'                                                            │ false   │ true      │ false    │ '(no BC number) link SC-SUM-0820 +credit'                                          │ true    │ true      │ false    │
+│ 7       │ 'fh-03' │ 2   │ 1     │ '(no BC number) review'                                                            │ false   │ true      │ false    │ '(no BC number) link SC-SUM-0820 +credit'                                          │ true    │ true      │ false    │
+│ 8       │ 'fh-03' │ 3   │ 1     │ '(no BC number) review'                                                            │ false   │ true      │ false    │ '(no BC number) link SC-SUM-0820 +credit'                                          │ true    │ true      │ false    │
+│ 9       │ 'fh-04' │ 1   │ 2     │ '(no BC number) link SC-SUM-0912 +credit; (no BC number) link SC-SUM-0700 +credit' │ true    │ true      │ false    │ '(no BC number) link SC-SUM-0912 +credit; (no BC number) link SC-SUM-0700 +credit' │ true    │ true      │ false    │
+│ 10      │ 'fh-04' │ 2   │ 2     │ '(no BC number) link SC-SUM-0912 +credit; (no BC number) link SC-SUM-0700 +credit' │ true    │ true      │ false    │ '(no BC number) link SC-SUM-0912 +credit; (no BC number) link SC-SUM-0700 +credit' │ true    │ true      │ false    │
+│ 11      │ 'fh-04' │ 3   │ 2     │ '(no BC number) link SC-SUM-0912 +credit; (no BC number) link SC-SUM-0700 +credit' │ true    │ true      │ false    │ '(no BC number) link SC-SUM-0912 +credit; (no BC number) link SC-SUM-0700 +credit' │ true    │ true      │ false    │
+│ 12      │ 'fh-05' │ 1   │ 0     │ 'nothing taken in (1 refused)'                                                     │ false   │ true      │ false    │ 'nothing taken in (1 refused)'                                                     │ false   │ true      │ false    │
+│ 13      │ 'fh-05' │ 2   │ 0     │ 'nothing taken in (1 refused)'                                                     │ false   │ true      │ false    │ 'nothing taken in (1 refused)'                                                     │ false   │ true      │ false    │
+│ 14      │ 'fh-05' │ 3   │ 0     │ 'nothing taken in (1 refused)'                                                     │ false   │ true      │ false    │ 'nothing taken in (1 refused)'                                                     │ false   │ true      │ false    │
+│ 15      │ 'fh-06' │ 1   │ 1     │ '(no BC number) link SC-SUM-0700'                                                  │ true    │ true      │ false    │ '(no BC number) link SC-SUM-0700'                                                  │ true    │ true      │ false    │
+│ 16      │ 'fh-06' │ 2   │ 1     │ '(no BC number) link SC-SUM-0700'                                                  │ true    │ true      │ false    │ '(no BC number) link SC-SUM-0700'                                                  │ true    │ true      │ false    │
+│ 17      │ 'fh-06' │ 3   │ 1     │ '(no BC number) link SC-SUM-0700'                                                  │ true    │ true      │ false    │ '(no BC number) link SC-SUM-0700'                                                  │ true    │ true      │ false    │
+│ 18      │ 'fh-07' │ 1   │ 0     │ 'nothing extracted'                                                                │ true    │ true      │ false    │ 'nothing extracted'                                                                │ true    │ true      │ false    │
+│ 19      │ 'fh-07' │ 2   │ 0     │ 'nothing extracted'                                                                │ true    │ true      │ false    │ 'nothing extracted'                                                                │ true    │ true      │ false    │
+│ 20      │ 'fh-07' │ 3   │ 0     │ 'nothing extracted'                                                                │ true    │ true      │ false    │ 'nothing extracted'                                                                │ true    │ true      │ false    │
+│ 21      │ 'fh-08' │ 1   │ 1     │ '(no BC number) review'                                                            │ true    │ true      │ false    │ '(no BC number) link SC-SUM-0912 +credit'                                          │ false   │ true      │ false    │
+│ 22      │ 'fh-08' │ 2   │ 1     │ '(no BC number) review'                                                            │ true    │ true      │ false    │ '(no BC number) review'                                                            │ true    │ true      │ false    │
+│ 23      │ 'fh-08' │ 3   │ 1     │ '(no BC number) review'                                                            │ true    │ true      │ false    │ '(no BC number) review'                                                            │ true    │ true      │ false    │
+└─────────┴─────────┴─────┴───────┴────────────────────────────────────────────────────────────────────────────────────┴─────────┴───────────┴──────────┴────────────────────────────────────────────────────────────────────────────────────┴─────────┴───────────┴──────────┘
+
+contra (per run; matching = correct link or correct review; missed = a labeled back-charge nothing was extracted or refused for, which nobody sees)
+┌─────────┬─────┬────────┬────────┬──────────┬─────────┬────────────┬──────────────┬───────────────┬────────┐
+│ (index) │ run │ scored │ failed │ matching │ dispute │ wrongLinks │ wrongCredits │ routedToHuman │ missed │
+├─────────┼─────┼────────┼────────┼──────────┼─────────┼────────────┼──────────────┼───────────────┼────────┤
+│ 0       │ 1   │ 8      │ 0      │ 5        │ 8       │ 0          │ 0            │ 4             │ 0      │
+│ 1       │ 2   │ 8      │ 0      │ 5        │ 8       │ 0          │ 0            │ 4             │ 0      │
+│ 2       │ 3   │ 8      │ 0      │ 5        │ 8       │ 0          │ 0            │ 4             │ 0      │
+└─────────┴─────┴────────┴────────┴──────────┴─────────┴────────────┴──────────────┴───────────────┴────────┘
+
+baseline (per run; matching = correct link or correct review; missed = a labeled back-charge nothing was extracted or refused for, which nobody sees)
+┌─────────┬─────┬────────┬────────┬──────────┬─────────┬────────────┬──────────────┬───────────────┬────────┐
+│ (index) │ run │ scored │ failed │ matching │ dispute │ wrongLinks │ wrongCredits │ routedToHuman │ missed │
+├─────────┼─────┼────────┼────────┼──────────┼─────────┼────────────┼──────────────┼───────────────┼────────┤
+│ 0       │ 1   │ 8      │ 0      │ 6        │ 8       │ 1          │ 1            │ 1             │ 0      │
+│ 1       │ 2   │ 8      │ 0      │ 7        │ 8       │ 0          │ 0            │ 2             │ 0      │
+│ 2       │ 3   │ 8      │ 0      │ 7        │ 8       │ 0          │ 0            │ 2             │ 0      │
+└─────────┴─────┴────────┴────────┴──────────┴─────────┴────────────┴──────────────┴───────────────┴────────┘
+
+Unstable cases (outcome differs between runs): contra none; baseline fh-08

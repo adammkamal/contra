@@ -1,11 +1,11 @@
 {
   "model": "claude-opus-5-5",
   "effort": "medium",
-  "recordedAt": "2026-11-10T10:19:31.128Z",
+  "recordedAt": "2026-11-11T07:02:21.329Z",
   "items": [
     {
       "ref": "BC-5009",
-      "description": "repair gouged corridor walls, L3",
+      "description": "Repair gouged corridor walls, L3",
       "amountCents": 120000,
       "amountEvidence": {
         "emailId": "bc-09",
@@ -25,7 +25,7 @@
     "items": [
       {
         "ref": "BC-5009",
-        "description": "repair gouged corridor walls, L3",
+        "description": "Repair gouged corridor walls, L3",
         "amountText": "$1,200.00",
         "amountSentence": "BC-5009: repair gouged corridor walls, L3, $1,200.00.",
         "vendorNameAsWritten": "Ridgeline Drywall",

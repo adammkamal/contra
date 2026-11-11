@@ -1,10 +1,26 @@
 {
   "model": "claude-opus-5-5",
   "effort": "medium",
-  "recordedAt": "2026-11-11T03:36:27.091Z",
+  "recordedAt": "2026-11-11T07:13:30.253Z",
   "items": [],
-  "rejected": [],
+  "rejected": [
+    {
+      "index": 0,
+      "reason": "item 1 (no BC number): amountText \"twelve hundred fifty dollars even\" is not exactly one $ amount",
+      "words": "the model's amount isn't exactly one dollar amount"
+    }
+  ],
   "rawToolInput": {
-    "items": []
+    "items": [
+      {
+        "ref": null,
+        "description": "Repair of finished drywall corners damaged while transporting material through the main reading room",
+        "amountText": "twelve hundred fifty dollars even",
+        "amountSentence": "The repair invoice is for twelve hundred fifty dollars even.",
+        "vendorNameAsWritten": "Ridgeline Drywall",
+        "jobRef": "Lakeview Library",
+        "disputeNoted": false
+      }
+    ]
   }
 }

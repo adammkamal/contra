@@ -1,10 +1,38 @@
 {
   "model": "claude-opus-5-5",
   "effort": "medium",
-  "recordedAt": "2026-11-11T03:36:32.125Z",
-  "items": [],
+  "recordedAt": "2026-11-11T07:13:39.720Z",
+  "items": [
+    {
+      "ref": null,
+      "description": "Replacement of damaged ceiling tiles near Harbor Mechanical's work area (on hold pending photos; not to be deducted yet)",
+      "amountCents": 215000,
+      "amountEvidence": {
+        "emailId": "fh-06",
+        "sentence": "The replacement of damaged ceiling tiles near Harbor Mechanical's work area at Summit came to $2,150.00."
+      },
+      "vendorNameAsWritten": "Harbor Mechanical",
+      "jobRef": "Summit",
+      "disputeNoted": true,
+      "disputeEvidence": {
+        "emailId": "fh-06",
+        "sentence": "I notified Harbor that we intend to back-charge them, but they are disputing responsibility and say another contractor caused the damage."
+      }
+    }
+  ],
   "rejected": [],
   "rawToolInput": {
-    "items": []
+    "items": [
+      {
+        "ref": null,
+        "description": "Replacement of damaged ceiling tiles near Harbor Mechanical's work area (on hold pending photos; not to be deducted yet)",
+        "amountText": "$2,150.00",
+        "amountSentence": "The replacement of damaged ceiling tiles near Harbor Mechanical's work area at Summit came to $2,150.00.",
+        "vendorNameAsWritten": "Harbor Mechanical",
+        "jobRef": "Summit",
+        "disputeNoted": true,
+        "disputeSentence": "I notified Harbor that we intend to back-charge them, but they are disputing responsibility and say another contractor caused the damage."
+      }
+    ]
   }
 }

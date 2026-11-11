@@ -72,6 +72,12 @@ the other sets' numbers. Its labels can also use the items form (several charges
 without a BC number); see `bench/fresh/LABEL-FORMAT.md`. Labels in the single-item form are scored exactly
 as in the other sets.
 
+**The fresh set is no longer held-out.** Its cases were read while building extraction of back-charges
+without a BC number (and the Contra references, duplicate checks and estimates that go with it), so its
+scores from then on are not held-out; `npm run bench -- --set fresh` says so in its output and in
+`bench/fresh/results.json` (`heldOut: false`). Its last held-out scores are in
+`bench/results/fresh-first-run.txt` (Contra 1/8); after the change, `bench/results/fresh-after-bc-number-fix.txt`.
+
 ## Labels: "none"
 
 A label's `link` may also be `"none"` (the email holds no back-charge), with `amountCents: null`. Such a run

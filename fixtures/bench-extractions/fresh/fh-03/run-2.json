@@ -1,10 +1,33 @@
 {
   "model": "claude-opus-5-5",
   "effort": "medium",
-  "recordedAt": "2026-11-11T03:36:19.498Z",
-  "items": [],
+  "recordedAt": "2026-11-11T07:13:12.016Z",
+  "items": [
+    {
+      "ref": null,
+      "description": "Replacement of damaged storefront panel after glazing crew moved materials",
+      "amountCents": 93000,
+      "amountEvidence": {
+        "emailId": "fh-03",
+        "sentence": "Please charge Ridgline Glass & Glazzing $930 for replacing the panel."
+      },
+      "vendorNameAsWritten": "Ridgline Glass & Glazzing",
+      "jobRef": "Summit MOB",
+      "disputeNoted": false
+    }
+  ],
   "rejected": [],
   "rawToolInput": {
-    "items": []
+    "items": [
+      {
+        "ref": null,
+        "description": "Replacement of damaged storefront panel after glazing crew moved materials",
+        "amountText": "$930",
+        "amountSentence": "Please charge Ridgline Glass & Glazzing $930 for replacing the panel.",
+        "vendorNameAsWritten": "Ridgline Glass & Glazzing",
+        "jobRef": "Summit MOB",
+        "disputeNoted": false
+      }
+    ]
   }
 }
