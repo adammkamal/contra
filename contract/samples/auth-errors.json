@@ -17,7 +17,7 @@
     "status": 429,
     "body": {
       "ok": false,
-      "error": "too many failed sign-ins for this username; try again in 15 minutes"
+      "error": "too many failed sign-ins for this username from your address; try again in 15 minutes"
     }
   },
   "403 live workspace without --live": {

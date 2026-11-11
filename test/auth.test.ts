@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { request } from "node:http";
 import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -88,25 +89,79 @@ test("sessions: logout ends the session server-side; a session expires after its
   });
 });
 
-test("rate limit: after 5 failures for a username, even the right password is 429 for 15 minutes; other usernames still sign in", async () => {
+/** POST /api/login from a chosen loopback address (127.0.0.1 or 127.0.0.2), so tests can be two clients. */
+function loginFrom(base: string, localAddress: string, username: string, password: string): Promise<{ status: number; body: any; setCookie: string | undefined }> {
+  const u = new URL(`${base}/api/login`);
+  const body = JSON.stringify({ username, password });
+  return new Promise((resolve, reject) => {
+    const req = request({ host: u.hostname, port: u.port, path: u.pathname, method: "POST", localAddress, headers: { "content-type": "application/json", "content-length": Buffer.byteLength(body) } }, (res) => {
+      let text = "";
+      res.setEncoding("utf8");
+      res.on("data", (c: string) => (text += c));
+      res.on("end", () => resolve({ status: res.statusCode!, body: JSON.parse(text), setCookie: res.headers["set-cookie"]?.[0] }));
+    });
+    req.on("error", reject);
+    req.end(body);
+  });
+}
+const STRANGER = "127.0.0.2";
+const OWNER = "127.0.0.1";
+
+test("lockout: a stranger's 5 wrong passwords lock only the stranger's address for that username; the real person signs in from theirs", async () => {
   let now = START.getTime();
-  const auth = testAuth({ now: () => now });
+  const delays: number[] = [];
+  const auth = testAuth({ now: () => now, sleep: async (ms) => void delays.push(ms) });
   await auth.store.addUser("pat.pm", "pm", TEST_PASSWORD);
-  await auth.store.addUser("al.ap", "ap", TEST_PASSWORD);
   await withApi(auth, async (base) => {
-    for (let i = 0; i < 5; i++) assert.equal((await login(base, "pat.pm", `wrong password ${i}`)).status, 401);
-    const r = await login(base, "pat.pm", TEST_PASSWORD);
+    for (let i = 0; i < 5; i++) assert.equal((await loginFrom(base, STRANGER, "pat.pm", `wrong password ${i}`)).status, 401);
+    // The stranger's address is now refused for pat.pm, even with the right password, before it is checked.
+    const r = await loginFrom(base, STRANGER, "pat.pm", TEST_PASSWORD);
     assert.equal(r.status, 429);
-    assert.match(((await r.json()) as any).error, /too many failed sign-ins for this username/);
-    assert.equal(r.headers.get("set-cookie"), null);
-    assert.equal((await login(base, "al.ap", TEST_PASSWORD)).status, 200);
+    assert.equal(r.body.error, "too many failed sign-ins for this username from your address; try again in 15 minutes");
+    assert.equal(r.setCookie, undefined);
+    // Pat, from their own address, is not locked out: slowed down (the failures came from somewhere), then in.
+    delays.length = 0;
+    const own = await loginFrom(base, OWNER, "pat.pm", TEST_PASSWORD);
+    assert.equal(own.status, 200);
+    assert.deepEqual(delays, [500]);
+    // The pair lock lasts 15 minutes.
     now += 15 * MIN;
-    assert.equal((await login(base, "pat.pm", TEST_PASSWORD)).status, 200);
+    assert.equal((await loginFrom(base, STRANGER, "pat.pm", TEST_PASSWORD)).status, 200);
+  });
+});
+
+test("backoff: failures for a username from many addresses slow its sign-ins (doubling, capped at 8 s) but never refuse them", async () => {
+  const delays: number[] = [];
+  const auth = testAuth({ loginLimits: { perIp: 1000, perUserIp: 1000 }, sleep: async (ms) => void delays.push(ms) });
+  await auth.store.addUser("pat.pm", "pm", TEST_PASSWORD);
+  await withApi(auth, async (base) => {
+    for (let i = 0; i < 12; i++) assert.equal((await loginFrom(base, i % 2 ? STRANGER : OWNER, "pat.pm", `wrong ${i}`)).status, 401);
+    // No delay for the first 5 failures; then 0.5 s, doubling, capped at 8 s.
+    assert.deepEqual(delays, [500, 1000, 2000, 4000, 8000, 8000, 8000]);
+    delays.length = 0;
+    const ok = await loginFrom(base, OWNER, "pat.pm", TEST_PASSWORD);
+    assert.equal(ok.status, 200);
+    assert.deepEqual(delays, [8000]);
+    // A successful sign-in clears the username's backoff.
+    delays.length = 0;
+    assert.equal((await loginFrom(base, STRANGER, "pat.pm", "wrong again")).status, 401);
+    assert.deepEqual(delays, []);
+  });
+});
+
+test("backoff: the real delay is a real wait (no injected sleep)", async () => {
+  const auth = testAuth({ loginLimits: { backoffAfter: 1, backoffBaseMs: 120, perUserIp: 1000 } });
+  await auth.store.addUser("pat.pm", "pm", TEST_PASSWORD);
+  await withApi(auth, async (base) => {
+    assert.equal((await loginFrom(base, STRANGER, "pat.pm", "wrong")).status, 401);
+    const t = performance.now();
+    assert.equal((await loginFrom(base, OWNER, "pat.pm", TEST_PASSWORD)).status, 200);
+    assert.ok(performance.now() - t >= 110, "the sign-in waited out the backoff");
   });
 });
 
 test("rate limit: failures from one address across many usernames are capped per IP", async () => {
-  const auth = testAuth({ loginLimits: { perIp: 3, perUser: 100 } });
+  const auth = testAuth({ loginLimits: { perIp: 3, perUserIp: 100 } });
   await auth.store.addUser("al.ap", "ap", TEST_PASSWORD);
   await withApi(auth, async (base) => {
     for (const u of ["x1", "x2", "x3"]) assert.equal((await login(base, u, "wrong password!")).status, 401);

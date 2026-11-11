@@ -206,13 +206,31 @@ export function sessionCookie(id: string, maxAgeS: number, secure: boolean): str
 
 const WINDOW_MS = 15 * 60_000;
 
+export interface LoginLimits {
+  /** Failures from one client IP (any usernames) before that IP is refused. Default 20. */
+  perIp: number;
+  /** Failures for one username from one client IP before that pair is refused. Default 5. */
+  perUserIp: number;
+  /** Failures for one username (any IPs) before its sign-ins are slowed down. Default 5. */
+  backoffAfter: number;
+  /** The first delay; it doubles with each further failure, up to backoffMaxMs. Default 500 ms / 8 s. */
+  backoffBaseMs: number;
+  backoffMaxMs: number;
+}
+export const DEFAULT_LOGIN_LIMITS: LoginLimits = { perIp: 20, perUserIp: 5, backoffAfter: 5, backoffBaseMs: 500, backoffMaxMs: 8000 };
+
 /**
- * Failed-login limits on one injected clock: at most `perIp` failures per client IP and `perUser` per
- * username in a rolling 15 minutes. While either is reached, every attempt (right password or not) is
- * refused with 429 before the password is checked. A restart resets the counts.
+ * Failed-login limits on one injected clock, over a rolling 15 minutes. A restart resets the counts.
+ * - Refused with 429 before the password is checked (right password or not): a client IP with `perIp`
+ *   failures, and a username + client IP pair with `perUserIp` failures. So a stranger's guesses lock only
+ *   the stranger's own address, never the account itself.
+ * - A username alone is never locked. After `backoffAfter` failures from anywhere, each sign-in for it is
+ *   answered only after a delay (doubling, capped): guessing slows down, and the real person still gets in.
+ * - A successful sign-in clears that username's failures (its delay) and that pair's.
  */
-export function loginLimiter(limits: { perIp: number; perUser: number }, now: () => number) {
-  const fails = { ip: new Map<string, number[]>(), user: new Map<string, number[]>() };
+export function loginLimiter(limits: LoginLimits, now: () => number) {
+  const fails = { ip: new Map<string, number[]>(), user: new Map<string, number[]>(), pair: new Map<string, number[]>() };
+  const pairKey = (ip: string, username: string) => JSON.stringify([ip, username]);
   const recent = (m: Map<string, number[]>, k: string) => {
     const t = now();
     const v = (m.get(k) ?? []).filter((s) => s > t - WINDOW_MS);
@@ -227,14 +245,23 @@ export function loginLimiter(limits: { perIp: number; perUser: number }, now: ()
     /** Why this attempt is refused, or null. */
     blocked(ip: string, username: string): string | null {
       if (recent(fails.ip, ip).length >= limits.perIp) return "too many failed sign-ins from your address; try again in 15 minutes";
-      if (recent(fails.user, username).length >= limits.perUser) return "too many failed sign-ins for this username; try again in 15 minutes";
+      if (recent(fails.pair, pairKey(ip, username)).length >= limits.perUserIp) return "too many failed sign-ins for this username from your address; try again in 15 minutes";
       return null;
     },
+    /** How long to wait before checking a password for this username (0 until backoffAfter failures). */
+    delayMs(username: string): number {
+      const extra = recent(fails.user, username).length - limits.backoffAfter;
+      return extra < 0 ? 0 : Math.min(limits.backoffBaseMs * 2 ** Math.min(extra, 30), limits.backoffMaxMs);
+    },
     failed(ip: string, username: string): void {
-      prune(fails.ip);
-      prune(fails.user);
+      for (const m of Object.values(fails)) prune(m);
       fails.ip.set(ip, [...recent(fails.ip, ip), now()]);
       fails.user.set(username, [...recent(fails.user, username), now()]);
+      fails.pair.set(pairKey(ip, username), [...recent(fails.pair, pairKey(ip, username)), now()]);
+    },
+    succeeded(ip: string, username: string): void {
+      fails.user.delete(username);
+      fails.pair.delete(pairKey(ip, username));
     },
   };
 }

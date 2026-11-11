@@ -85,8 +85,9 @@ Errors are `{ "ok": false, "error": "<message to show the user>" }`:
 - **413:** the request body is too large (`POST /api/try`: over 256 KB; other routes: over 64 KB).
 - **415:** a POST without `Content-Type: application/json`. Nothing ran.
 - **429:** `POST /api/try`: another email is being checked, the hourly limit for your address is reached,
-  or the daily demo cap is reached. `POST /api/login`: too many failed sign-ins for this username or from
-  your address; even the right password is refused for 15 minutes. The message says which.
+  or the daily demo cap is reached. `POST /api/login`: too many failed sign-ins from your address, or for
+  this username from your address; from that address even the right password is refused for 15 minutes
+  (other addresses are unaffected, so nobody can lock a known account). The message says which.
 - **500:** an unexpected server error. The message is always "internal error".
 - **503** (`POST /api/try` only): no API key is configured, the model call failed, or the route isn't
   enabled. A failed model call gets one fixed sentence per failure kind (key refused, rate-limited, timed
@@ -105,7 +106,9 @@ memo emails); without it the account sees only the scripted demo.
 1. On start-up, call `GET /api/me`. 200: signed in; use `user` and `workspaces`. 401: show the sign-in page.
 2. The sign-in page sends `POST /api/login` with `{ "username", "password" }` as JSON. 200 sets the
    session cookie and returns the `/api/me` body. 401 `"wrong username or password"`: show it, keep the
-   username, clear the password. 429: show the message (it says how long to wait).
+   username, clear the password. 429: show the message (it says how long to wait). After repeated wrong
+   passwords for a username (from anywhere), the server answers that username's sign-ins more slowly, up
+   to 8 seconds: keep the button disabled with "Signing in…" until the answer comes; don't time out early.
 3. "Sign out" sends `POST /api/logout` with `{}`, then shows the sign-in page.
 
 **The session cookie** is `contra_session`: `HttpOnly; SameSite=Lax; Path=/; Max-Age=43200`, plus

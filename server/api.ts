@@ -18,7 +18,7 @@ import { tryEmail, TryUnavailable, type TryInput, type TrySettings } from "./try
 import { SAMPLE_INBOX, type InboxPoller, type InboxStatus } from "./gmail.ts";
 import type { MemoSender } from "../src/memo.ts";
 import type { Human } from "../src/types.ts";
-import { loginLimiter, sessionCookie, sessionIdFrom, SESSION_TTL_MS, type AuthStore, type Session, type User } from "./auth.ts";
+import { DEFAULT_LOGIN_LIMITS, loginLimiter, type LoginLimits, sessionCookie, sessionIdFrom, SESSION_TTL_MS, type AuthStore, type Session, type User } from "./auth.ts";
 
 /** POST /api/try: the model call is paid for with the demo's key, so it is capped and rate-limited. */
 export interface TryApiOptions {
@@ -151,8 +151,10 @@ export interface AuthOptions {
   secureCookies?: boolean;
   /** Session lifetime in ms. Default 12 hours. */
   sessionTtlMs?: number;
-  /** Failed sign-ins allowed per client IP / per username in a rolling 15 minutes. Default 20 / 5. */
-  loginLimits?: { perIp: number; perUser: number };
+  /** Sign-in limits (server/auth.ts loginLimiter); each field defaults to DEFAULT_LOGIN_LIMITS. */
+  loginLimits?: Partial<LoginLimits>;
+  /** Waits out a sign-in backoff. Default: a real timer; tests record the delay instead. */
+  sleep?: (ms: number) => Promise<void>;
   /** The clock sessions and the sign-in limits read (epoch ms). Default Date.now. */
   now?: () => number;
 }
@@ -353,7 +355,8 @@ export function createApiServer(opts: ApiOptions): {
   const auth = opts.auth;
   const authNow = auth.now ?? Date.now;
   const ttl = auth.sessionTtlMs ?? SESSION_TTL_MS;
-  const logins = loginLimiter(auth.loginLimits ?? { perIp: 20, perUser: 5 }, authNow);
+  const logins = loginLimiter({ ...DEFAULT_LOGIN_LIMITS, ...auth.loginLimits }, authNow);
+  const sleep = auth.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const sessionOf = (req: IncomingMessage): Session | null => {
     const id = sessionIdFrom(req.headers.cookie);
     return id ? auth.store.session(id, authNow()) : null;
@@ -424,11 +427,15 @@ export function createApiServer(opts: ApiOptions): {
         const ip = req.socket.remoteAddress ?? "unknown"; // the socket address, never X-Forwarded-For (a client can set it)
         const blocked = logins.blocked(ip, input.username);
         if (blocked) return send(res, 429, { ok: false, error: blocked });
+        // Failures for this username from anywhere slow its sign-ins down; they never lock it.
+        const wait = logins.delayMs(input.username);
+        if (wait > 0) await sleep(wait);
         const user = await auth.store.verify(input.username, input.password);
         if (!user) {
           logins.failed(ip, input.username);
           return send(res, 401, { ok: false, error: "wrong username or password" });
         }
+        logins.succeeded(ip, input.username);
         const s = auth.store.createSession(user.username, authNow(), ttl);
         return send(res, 200, meBody({ user, expiresAt: s.expiresAt }, workspacesFor(user)), { "set-cookie": sessionCookie(s.id, Math.floor(ttl / 1000), !!auth.secureCookies) });
       }

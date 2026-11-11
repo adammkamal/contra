@@ -171,7 +171,7 @@ const SAMPLE_PASSWORD = "sample password, not a real one";
 await authStore.addUser("pat.pm", "pm", SAMPLE_PASSWORD, { live: true });
 await authStore.addUser("dee.demo", "controller", SAMPLE_PASSWORD);
 const authApi = createApiServer({
-  auth: { store: authStore, now: () => authNow, loginLimits: { perIp: 100, perUser: 1 } },
+  auth: { store: authStore, now: () => authNow, loginLimits: { perIp: 100, perUserIp: 1 } },
   dbPath: join(tmp, "auth-demo.db"),
   liveDbPath: join(tmp, "auth-live.db"),
   realClock: { now: () => new Date(authNow) },
