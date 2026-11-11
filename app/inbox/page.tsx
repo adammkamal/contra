@@ -45,6 +45,16 @@ export default async function Inbox() {
                 · {r.emailSubject} · written as “{r.vendorAsWritten}”
               </span>
               <div className="quote">“{r.sourceSentence}”</div>
+              <div className="meta" data-testid={`source-location-${r.ref}`}>
+                Source: {r.sourceLocation}
+              </div>
+              {r.attachments.length > 0 && (
+                <ul className="plain meta" data-testid={`attachments-${r.ref}`}>
+                  {r.attachments.map((a, i) => (
+                    <li key={i}>{a}</li>
+                  ))}
+                </ul>
+              )}
               <div className="meta">Link: {r.linkExplanation.length ? r.linkExplanation.join(" → ") : "not yet linked"}</div>
             </div>
             <div className="amt">{r.amount}</div>

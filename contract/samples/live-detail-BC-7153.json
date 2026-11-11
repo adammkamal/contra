@@ -1,0 +1,78 @@
+{
+  "ref": "BC-7153",
+  "description": "Floor protection",
+  "amount": "$640.00",
+  "status": {
+    "label": "Held: amount read from a photo or scanned page, which can't be checked word for word; a person must confirm it",
+    "tone": "danger"
+  },
+  "vendorAsWritten": "Ridgeline Interiors LLC",
+  "jobRef": "Summit",
+  "email": {
+    "id": "gmail-18c2f0a1b2c3d4f6",
+    "subject": "Summit - two back-charges, estimate and ticket photo attached",
+    "from": "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+    "body": "Hi,\n\nEstimate for the corridor wall and a photo of the floor protection ticket attached.\n\nDana Ortiz\nProject Manager, Apex Builders",
+    "attachments": [
+      "attachment estimate.pdf: PDF, 2 pages, text read",
+      "attachment IMG_2041.jpg: photo, read by the model as an image (not verifiable word for word)",
+      "attachment IMG_2042.heic skipped: image/heic is not an image type the model reads (JPEG, PNG, GIF or WebP); send the photo as a JPEG"
+    ],
+    "attachmentText": [
+      {
+        "where": "attachment estimate.pdf, page 1",
+        "text": "APEX BUILDERS - REPAIR ESTIMATE\nJob: Summit Medical Office\nSubcontractor: Ridgeline Interiors LLC"
+      },
+      {
+        "where": "attachment estimate.pdf, page 2",
+        "text": "Scope: patch and repaint corridor wall, L3.\nBC-7152: corridor wall repair, L3, $1,250.00 per our painter's quote."
+      }
+    ]
+  },
+  "sourceSentence": "BC-7153 FLOOR PROTECTION $640.00",
+  "sourceLocation": "attachment IMG_2041.jpg",
+  "disputeSentence": null,
+  "link": {
+    "subcontractId": null,
+    "explanation": []
+  },
+  "clause": null,
+  "eligibility": {
+    "status": "held",
+    "holdReasons": [
+      "not linked to a subcontract",
+      "amount not found in the source email",
+      "no back-charge clause",
+      "sub not mapped to a Ramp vendor"
+    ],
+    "waitingFor": [],
+    "trace": [
+      "HOLD linked to a subcontract",
+      "HOLD all evidence verbatim in source",
+      "PASS no dispute noted in source",
+      "HOLD subcontract has a back-charge clause",
+      "HOLD subcontract party mapped to a payments vendor"
+    ]
+  },
+  "history": [
+    {
+      "seq": 5,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Sample extractions (hand-written)",
+      "what": "extracted $640.00 (new → extracted)",
+      "evidence": [
+        "BC-7153 FLOOR PROTECTION $640.00",
+        "in attachment IMG_2041.jpg"
+      ]
+    },
+    {
+      "seq": 6,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Contra",
+      "what": "held: amount_only_in_image (extracted → held)",
+      "evidence": [
+        "evidence is read from an image (attachment IMG_2041.jpg); nothing in an image can be verified word for word"
+      ]
+    }
+  ]
+}

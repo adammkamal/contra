@@ -39,6 +39,12 @@ export function ambiguousWith(name: string, party: string, parties: readonly str
   return null;
 }
 
+/** The jobs whose id, name or an alias normalizes to `jobRef`. Exactly one means the job resolved. */
+export function matchJobs(jobRef: string, jobs: readonly Job[]): Job[] {
+  const jr = normName(jobRef);
+  return jobs.filter((j) => [j.id, j.name, ...j.aliases].some((n) => normName(n) === jr));
+}
+
 /**
  * Deterministic linkage: job -> subcontracts on that job -> party name or confirmed alias.
  * Inputs are deliberately limited to party names and aliases: remit-to, payee and lockbox
@@ -47,8 +53,7 @@ export function ambiguousWith(name: string, party: string, parties: readonly str
 export function resolve(x: Pick<ExtractedBackCharge, "jobRef" | "vendorNameAsWritten">, data: ResolverData): Resolution {
   const explanation: string[] = [];
 
-  const jr = normName(x.jobRef);
-  const jobs = data.jobs.filter((j) => [j.id, j.name, ...j.aliases].some((n) => normName(n) === jr));
+  const jobs = matchJobs(x.jobRef, data.jobs);
   if (jobs.length !== 1) {
     return {
       kind: "review",

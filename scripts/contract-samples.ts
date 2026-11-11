@@ -99,7 +99,39 @@ cmd.ingestInboxEmail(
   SAMPLE_EXTRACTIONS,
 );
 write("live-01-after-an-email-arrives.screens.json", buildScreens(live));
+
+// An email with attachments (made up, extraction hand-written): an estimate PDF read as text, whose page 2
+// states BC-7152 (it verifies and links); a photo of a ticket for BC-7153 (held: amount only in an image,
+// with the confirmImageAmount button); and a HEIC photo, skipped with its reason.
+const pdfSentence = "BC-7152: corridor wall repair, L3, $1,250.00 per our painter's quote.";
+const photoSentence = "BC-7153 FLOOR PROTECTION $640.00";
+const attEmail = {
+  id: "gmail-18c2f0a1b2c3d4f6",
+  from: "Dana Ortiz <dana.ortiz@apexbuilders.example>",
+  to: "contra.demo+backcharges@example.com",
+  subject: "Summit - two back-charges, estimate and ticket photo attached",
+  receivedAt: new Date("2026-11-07T15:20:00Z"),
+  body: "Hi,\n\nEstimate for the corridor wall and a photo of the floor protection ticket attached.\n\nDana Ortiz\nProject Manager, Apex Builders",
+  messageId: "<sample-live-2@apexbuilders.example>",
+  attachmentCount: 3,
+  attachments: [
+    { n: 1, filename: "estimate.pdf", mediaType: "application/pdf", read: "text" as const, pages: ["APEX BUILDERS - REPAIR ESTIMATE\nJob: Summit Medical Office\nSubcontractor: Ridgeline Interiors LLC", `Scope: patch and repaint corridor wall, L3.\n${pdfSentence}`] },
+    { n: 2, filename: "IMG_2041.jpg", mediaType: "image/jpeg", read: "image" as const },
+    { n: 3, filename: "IMG_2042.heic", mediaType: "image/heic", read: "skipped" as const, reason: "image/heic is not an image type the model reads (JPEG, PNG, GIF or WebP); send the photo as a JPEG" },
+  ],
+};
+cmd.ingestInboxEmail(
+  live,
+  attEmail,
+  [
+    { ref: "BC-7152", description: "Corridor wall repair, L3", amountCents: cents(125_000), amountEvidence: { emailId: attEmail.id, sentence: pdfSentence, at: { attachment: 1, page: 2 } }, vendorNameAsWritten: "Ridgeline Interiors LLC", jobRef: "Summit", disputeNoted: false },
+    { ref: "BC-7153", description: "Floor protection", amountCents: cents(64_000), amountEvidence: { emailId: attEmail.id, sentence: photoSentence, at: { attachment: 2, page: 1 } }, vendorNameAsWritten: "Ridgeline Interiors LLC", jobRef: "Summit", disputeNoted: false },
+  ],
+  SAMPLE_EXTRACTIONS,
+);
+write("live-02-after-an-email-with-attachments-arrives.screens.json", buildScreens(live));
+write("live-detail-BC-7153.json", backChargeDetail(live, "BC-7153"));
 live.close();
 
 rmSync(tmp, { recursive: true, force: true });
-console.log(`Wrote ${i + 1} screen states + 3 details + 1 memo + ${trySamples.length} try samples + 2 live-workspace screens to contract/samples/`);
+console.log(`Wrote ${i + 1} screen states + 3 details + 1 memo + ${trySamples.length} try samples + 3 live-workspace screens + 1 live detail to contract/samples/`);

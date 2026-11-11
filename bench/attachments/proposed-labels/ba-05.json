@@ -1,0 +1,9 @@
+{
+  "id": "ba-05",
+  "labeledBy": "Claude (proposed, not reviewed by a person)",
+  "link": "review",
+  "disputed": false,
+  "amountCents": 187500,
+  "expectedHold": "amount_only_in_image",
+  "why": "$1,875.00 appears only in a scanned PDF with no text layer. After a person confirms it, it would link to SC-SUM-0700 (Harbor Mechanical Co on Summit)."
+}

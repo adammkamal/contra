@@ -12,9 +12,12 @@
     "id": "E-2",
     "subject": "RE: Summit corridor patch",
     "from": "dana.ortiz@apexbuilders.example",
-    "body": "BC-4470: re-patch corridor wall after MEP rework, $2,750.00. Ridgeline disputes\nthis one, holding until we sort out who caused it.\n\nDana"
+    "body": "BC-4470: re-patch corridor wall after MEP rework, $2,750.00. Ridgeline disputes\nthis one, holding until we sort out who caused it.\n\nDana",
+    "attachments": [],
+    "attachmentText": []
   },
   "sourceSentence": "BC-4470: re-patch corridor wall after MEP rework, $2,750.00.",
+  "sourceLocation": "email body",
   "disputeSentence": "Ridgeline disputes this one, holding until we sort out who caused it.",
   "link": {
     "subcontractId": "SC-SUM-0912",

@@ -84,9 +84,9 @@ Show the message; don't retry.
 | `now` | The workspace's clock. Demo: simulated, starting at the demo's start time. Live: the real time plus an offset. "Advance a week" adds 7 days in either workspace and nothing else changes the live offset. |
 | `extractionSource` | `"model"`, `"sample"`, `"mixed"` or `null`. When it is `"sample"`, the Inbox must say **"Sample extractions (hand-written), not model output"**. |
 | `emailSource` | `"eml"`, `"builtin"`, `"gmail"`, `"mixed"` or `null` (before ingest). Where the Inbox's PM emails were read from. Show it in the Inbox beside the extraction note: **"Emails: .eml files"** for `"eml"`, **"Emails: built-in sample"** for `"builtin"`, **"Emails: Gmail inbox"** for `"gmail"`, **"Emails: more than one source"** for `"mixed"`. |
-| `nextStep` | `{ text, action }` for the presenter bar. Highlight `action`'s button. In `demo`, `action` is `null` only at "Demo complete". In `live`, it is also `null` while waiting for mail ("Waiting for back-charge emails from the live inbox") and while the PM must choose a subcontract in an Inbox row; show the text without a button. |
+| `nextStep` | `{ text, action }` for the presenter bar. Highlight `action`'s button. In `demo`, `action` is `null` only at "Demo complete". In `live`, it is also `null` while waiting for mail ("Waiting for back-charge emails from the live inbox") while the PM must choose a subcontract in an Inbox row, and while the PM must confirm an amount read from an image in an Inbox row; show the text without a button. |
 | `opener` | The missed back-charges screen. Always show **"Sample data"**. Totals are already formatted; rows carry `ref`, `status`, `amount` and `evidence`. |
-| `inbox[]` | `ref`, `emailSubject`, `vendorAsWritten`, `amount`, `sourceSentence` (show beside the amount), `linkExplanation[]`, `status`, `actions[]`. |
+| `inbox[]` | `ref`, `emailSubject`, `vendorAsWritten`, `amount`, `sourceSentence` (show beside the amount), `sourceLocation` (where that sentence is: `"email body"`, `"attachment estimate.pdf, page 2"`, or `"attachment IMG_2041.jpg"` for a photo; show it with the sentence), `attachments[]` (what became of each of the email's attachments, in words; show them all, skipped ones included, as written), `linkExplanation[]`, `status`, `actions[]`. |
 | `outbox[]` | Notices: `id`, `total`, `refs`, `body` (shown as written, preformatted), `status`, `actions[]`. |
 | `credits[]` | `id`, `amount`, `job`, `refs`, `status`, `actions[]`, `hasMemo` (when true, offer "View memo"), `memo`: the memo's delivery to the AP inbox as a `Status` (e.g. "Memo not sent", "Memo sent to …", "Memo not sent: … You can send it again."), or `null` when there is no memo yet. Show `memo.label` as written. |
 | `bills[]` | Always show **"Simulated Ramp"**. `vendor`, `job`, `amount`, `creditsOn`, `status`, `paid`, plus `check`: `status`, `actions[]` (sentences), `warnings[]`, `wouldPay`. Also has `actions[]` (buttons). |
@@ -107,6 +107,7 @@ Render each `actions[]` entry as a button, and when clicked send exactly that ob
 | `ingestPmEmails` | none | Ingest PM emails |
 | `confirmLink` | `ref` | Confirm link |
 | `chooseSubcontract` | `ref`, `options[]` | A picker plus Confirm. Send `input.choice` as one of `options`. |
+| `confirmImageAmount` | `ref`, `options[]` | Only on an item held just because its amount was read from a photo or scanned page. An amount field ("Type the amount you see in the image"), a picker of `options` (often one) and Confirm. Send `input.amount` (what the person typed, e.g. `"$640.00"` or `"640.00"`) and `input.choice`. If the typed amount isn't the amount read, it is refused (409) and the item stays held. Don't prefill the amount field. Contra doesn't keep the image: the person checks it in the original email (`sourceLocation` names the file). |
 | `draftNotice` | `subcontractId` | Draft notice |
 | `approveNotice` | `noticeId` | Approve notice |
 | `sendNotice` | `noticeId` | Send notice |
@@ -167,8 +168,10 @@ Addressing a workspace:
 - **In process:** use the App you opened (`new App("data/live.db", { workspace: "live" })` for live). A
   database opens only as the workspace it was made for.
 - `POST /api/try` always reads the demo's seed and changes neither workspace.
-- Samples: `contract/samples/live-00-waiting-for-mail.screens.json` and `live-01-after-an-email-arrives.screens.json`
-  (a made-up email with a hand-written extraction).
+- Samples: `contract/samples/live-00-waiting-for-mail.screens.json`, `live-01-after-an-email-arrives.screens.json`
+  (a made-up email with a hand-written extraction) and `live-02-after-an-email-with-attachments-arrives.screens.json`
+  (a made-up email with a PDF read as text, a photo and a skipped HEIC; BC-7153 shows `confirmImageAmount`), with
+  `live-detail-BC-7153.json`.
 
 ## Live inbox and memos
 
@@ -193,12 +196,56 @@ empty means nothing is ingested) whose domain passed Gmail's own DKIM or SPF che
 `npm run inbox:check` lists each message's skip reason ("no allowed senders configured", "sender not
 allowed (…)", "sender not authenticated", …), so a wrong allow-list shows on every message.
 
+## Attachments
+
+Attachments of PM emails (live Gmail and `.eml` files) are read when the email is ingested:
+
+- **A PDF with a text layer on every page** is read as text, page by page, on the server. The model gets
+  that text, and every sentence it cites from it is checked word for word against that page, like the body.
+  The Inbox shows `sourceLocation` `"attachment <name>, page <n>"`.
+- **A photo (JPEG, PNG, GIF, WebP) or a PDF with any page that has no text layer (a scan)** is shown to the
+  model as an image. Nothing read from an image can be checked word for word, so an item whose amount comes
+  from one is always held (`amount only in image`, below) until a person types the amount they see and
+  confirms it (`confirmImageAmount`). It never proceeds on its own.
+- **Limits:** at most 5 PDFs and photos per email, each at most 10 MB; a PDF at most 20 pages; a photo at most
+  about 7.1 MB and 8000×8000 px (the Claude API's limits). A whole message over 25 MB isn't read at all
+  (`npm run inbox:check` shows it as "larger than 25 MB"). Anything else is listed as skipped, with the reason,
+  in the row's `attachments[]` and in the email's audit entry: over a limit, HEIC or another image type the
+  model can't read, password-protected or damaged PDFs, files that aren't PDFs or photos, and small images
+  embedded in the email's HTML (logos and signatures).
+- Text in an attachment counts as the email's own text for the hold rules: text aimed at an AI (in a PDF's
+  text or a file name), a back-charge number no item accounts for, a dispute, and an amount for the same
+  back-charge that differs between the body and an attachment (`conflicting amounts`).
+
+## Hold reasons
+
+`status.label` for a held item is `Held: ` and then its reasons, joined by `; `. Each reason is one of these
+(`HOLD_WORDS` in `src/view.ts`). Show them as written; never reword them.
+
+| Reason | Words |
+|---|---|
+| `dispute_noted_in_source` | dispute noted in the PM's email |
+| `disputed_by_sub` | disputed by the sub |
+| `no_clause` | no back-charge clause |
+| `clause_forbids_deduction` | clause does not allow deduction |
+| `no_notice_evidence` | no notice was sent |
+| `no_payments_vendor` | sub not mapped to a Ramp vendor |
+| `unverified_evidence` | amount not found in the source email |
+| `conflicting_amounts` | different amounts for the same back-charge (in two emails, or in an email and its attachment) |
+| `unresolved_link` | not linked to a subcontract |
+| `only_in_quoted_text` | found only in quoted or forwarded text (may already have been sent or credited) |
+| `suspicious_instructions` | email contains instructions aimed at an AI or automated system |
+| `unaccounted_reference` | the email mentions a back-charge number that wasn't extracted |
+| `amount_only_in_image` | amount read from a photo or scanned page, which can't be checked word for word; a person must confirm it |
+
+Only `amount_only_in_image`, when it is an item's only reason, has a button (`confirmImageAmount`).
+
 ## Detail screen: `BackChargeDetail`
 
 | Field | Contents |
 |---|---|
 | Identity | `ref`, `description`, `amount`, `status` |
-| Source | `vendorAsWritten`, `jobRef`, `email` (`{ id, subject, from, body }`), `sourceSentence` (highlight it inside `email.body`), `disputeSentence`. A sentence can cross a line break in `body` (an .eml's HTML part is re-wrapped), so match it with runs of whitespace treated as equal. |
+| Source | `vendorAsWritten`, `jobRef`, `email` (`{ id, subject, from, body, attachments, attachmentText }`), `sourceSentence`, `sourceLocation`, `disputeSentence`. Highlight `sourceSentence` inside `email.body` when `sourceLocation` is `"email body"`, else inside the `attachmentText` entry whose `where` equals `sourceLocation` (`attachmentText` is `{ where, text }[]`, one per page of each PDF read as text; a photo has none). `email.attachments` is the same list of words as the Inbox row's. A sentence can cross a line break in `body` (an .eml's HTML part is re-wrapped), so match it with runs of whitespace treated as equal. |
 | `link` | `subcontractId` and `explanation[]`, e.g. alias, then party, then job |
 | `clause` | `section`, `text` (quote it), `responseWindow` (e.g. "5 working days"), `deductionAllowed`, `noticeRequired`. Can be `null`. |
 | `eligibility` | `status`, `holdReasons[]` (already in words), `waitingFor[]`, `trace[]` (lines beginning PASS, HOLD or WAIT) |

@@ -1,0 +1,9 @@
+{
+  "id": "ba-02",
+  "labeledBy": "Claude (proposed, not reviewed by a person)",
+  "link": "review",
+  "disputed": false,
+  "amountCents": null,
+  "expectedHold": "conflicting_amounts",
+  "why": "The body says $1,200.00 and the attached backup says $1,250.00 for BC-5602. A careful person would not link or credit either amount without asking, so review with no amount."
+}

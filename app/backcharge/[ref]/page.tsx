@@ -19,7 +19,10 @@ export default async function Detail({ params }: { params: Promise<{ ref: string
     );
   }
   const d = r.data;
-  const range = d.email ? findSentence(d.email.body, d.sourceSentence) : null;
+  const inBody = d.sourceLocation === "email body";
+  const pageText = d.email?.attachmentText.find((t) => t.where === d.sourceLocation);
+  const range = d.email ? findSentence(inBody ? d.email.body : (pageText?.text ?? ""), d.sourceSentence) : null;
+  const fromImage = !inBody && !pageText;
   return (
     <>
       <p>
@@ -40,6 +43,9 @@ export default async function Detail({ params }: { params: Promise<{ ref: string
 
       <h2>Source</h2>
       <div className="quote">“{d.sourceSentence}”</div>
+      <p className="meta" data-testid="source-location">
+        Source: {d.sourceLocation}
+      </p>
       {d.disputeSentence && (
         <p>
           <strong>Dispute noted:</strong> “{d.disputeSentence}”
@@ -51,9 +57,33 @@ export default async function Detail({ params }: { params: Promise<{ ref: string
             {d.email.from} · {d.email.subject}
           </div>
           <pre className="body">
-            <Marked text={d.email.body} range={range} />
+            <Marked text={d.email.body} range={inBody ? range : null} />
           </pre>
-          {!range && <p className="status warn">Source sentence not found in the email</p>}
+          {inBody && !range && <p className="status warn">Source sentence not found in the email</p>}
+          {d.email.attachments.length > 0 && (
+            <>
+              <h3>Attachments</h3>
+              <ul className="plain" data-testid="detail-attachments">
+                {d.email.attachments.map((a, i) => (
+                  <li key={i}>{a}</li>
+                ))}
+              </ul>
+            </>
+          )}
+          {d.email.attachmentText.map((t) => (
+            <div key={t.where} data-testid="attachment-text">
+              <div className="meta">{t.where}</div>
+              <pre className="body">
+                <Marked text={t.text} range={t.where === d.sourceLocation ? range : null} />
+              </pre>
+            </div>
+          ))}
+          {fromImage && (
+            <p className="status warn" data-testid="image-source-note">
+              This amount was read from an image, which can’t be checked word for word. Check it against {d.sourceLocation} in the original email.
+            </p>
+          )}
+          {!inBody && pageText && !range && <p className="status warn">Source sentence not found in {d.sourceLocation}</p>}
         </div>
       )}
 

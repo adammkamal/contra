@@ -2,7 +2,9 @@ import type { AuditEvent } from "./audit.ts";
 import type { App, Workspace } from "./app.ts";
 import { DEMO_BILL, DEMO_SC } from "./commands.ts";
 import { formatUsd } from "./money.ts";
-import { EMAIL_INGESTED, type Actor, type BackCharge, type Credit, type EmailOrigin, type HoldReason, type Notice } from "./types.ts";
+import { matchJobs, resolve, type Resolution } from "./resolver.ts";
+import { attachmentPages, describeAt, describeAttachment } from "./span.ts";
+import { EMAIL_INGESTED, type Actor, type BackCharge, type Credit, type EmailOrigin, type HoldReason, type Job, type Notice, type Subcontract } from "./types.ts";
 import { Contra } from "./workflow.ts";
 
 /**
@@ -20,6 +22,7 @@ export type Action =
   | { command: "ingestPmEmails" }
   | { command: "confirmLink"; ref: string }
   | { command: "chooseSubcontract"; ref: string; options: string[] }
+  | { command: "confirmImageAmount"; ref: string; options: string[] }
   | { command: "draftNotice"; subcontractId: string }
   | { command: "approveNotice"; noticeId: string }
   | { command: "sendNotice"; noticeId: string }
@@ -42,11 +45,12 @@ export const HOLD_WORDS: Record<HoldReason, string> = {
   no_notice_evidence: "no notice was sent",
   no_payments_vendor: "sub not mapped to a Ramp vendor",
   unverified_evidence: "amount not found in the source email",
-  conflicting_amounts: "two emails give different amounts",
+  conflicting_amounts: "different amounts for the same back-charge (in two emails, or in an email and its attachment)",
   unresolved_link: "not linked to a subcontract",
   only_in_quoted_text: "found only in quoted or forwarded text (may already have been sent or credited)",
   suspicious_instructions: "email contains instructions aimed at an AI or automated system",
   unaccounted_reference: "the email mentions a back-charge number that wasn't extracted",
+  amount_only_in_image: "amount read from a photo or scanned page, which can't be checked word for word; a person must confirm it",
 };
 
 export function backChargeStatus(b: Readonly<BackCharge>): Status {
@@ -111,6 +115,10 @@ export interface InboxRow {
   vendorAsWritten: string;
   amount: string;
   sourceSentence: string;
+  /** Where sourceSentence is: "email body", "attachment <name>, page <n>", or "attachment <name>" for a photo. */
+  sourceLocation: string;
+  /** What became of each of the email's attachments, in words (read as text, read as an image, or skipped and why). */
+  attachments: string[];
   linkExplanation: string[];
   status: Status;
   actions: Action[];
@@ -148,6 +156,18 @@ export interface Screens {
 
 const when = (d: Date) => d.toISOString().slice(0, 16).replace("T", " ") + " UTC";
 
+/**
+ * The picker for a needs_review item never crosses jobs. When the job resolved: the resolver's hints on
+ * that job, or else every subcontract on that job. Every subcontract only when no single job resolved.
+ */
+export function subcontractOptions(jobRef: string, proposal: Resolution | undefined, jobs: readonly Job[], subcontracts: readonly Subcontract[]): string[] {
+  const matched = matchJobs(jobRef, jobs);
+  if (matched.length !== 1) return subcontracts.map((s) => s.id);
+  const onJob = subcontracts.filter((s) => s.jobId === matched[0]!.id).map((s) => s.id);
+  const hinted = proposal?.kind === "review" ? proposal.hints.map((h) => h.split(" ")[0]!).filter((id) => onJob.includes(id)) : [];
+  return hinted.length ? hinted : onJob;
+}
+
 export function buildScreens(app: App): Screens {
   const { contra, ramp, erp, clock } = app.ctx;
   const bcs = [...contra.backCharges.values()];
@@ -160,8 +180,13 @@ export function buildScreens(app: App): Screens {
     const actions: Action[] = [];
     if (b.state === "extracted" && proposal?.kind === "linked") actions.push({ command: "confirmLink", ref: b.ref });
     if (b.state === "needs_review") {
-      const options = proposal?.kind === "review" ? proposal.hints.map((h) => h.split(" ")[0]!) : [];
-      actions.push({ command: "chooseSubcontract", ref: b.ref, options: options.length ? options : erp.subcontracts.map((s) => s.id) });
+      actions.push({ command: "chooseSubcontract", ref: b.ref, options: subcontractOptions(b.extracted.jobRef, proposal, erp.jobs, erp.subcontracts) });
+    }
+    // Held only because the amount was read from an image: the PM types the amount they see and picks the
+    // subcontract (the resolver's link when it finds one, else the same choices as chooseSubcontract).
+    if (b.state === "held" && b.holdReasons.length === 1 && b.holdReasons[0] === "amount_only_in_image") {
+      const r = resolve(b.extracted, erp);
+      actions.push({ command: "confirmImageAmount", ref: b.ref, options: r.kind === "linked" ? [r.subcontractId] : subcontractOptions(b.extracted.jobRef, r, erp.jobs, erp.subcontracts) });
     }
     return {
       ref: b.ref,
@@ -169,6 +194,8 @@ export function buildScreens(app: App): Screens {
       vendorAsWritten: b.extracted.vendorNameAsWritten,
       amount: formatUsd(b.extracted.amountCents),
       sourceSentence: b.extracted.amountEvidence.sentence,
+      sourceLocation: email ? describeAt(email, b.extracted.amountEvidence.at) : "email body",
+      attachments: email?.attachments?.map(describeAttachment) ?? [],
       linkExplanation: b.linkExplanation.length ? b.linkExplanation : proposal?.kind === "review" ? proposal.reasons : [],
       status: backChargeStatus(b),
       actions,
@@ -341,6 +368,8 @@ function liveNextStep(app: App): { text: string; action: Action | null } {
   if (toConfirm) return { text: `PM confirms the link for ${toConfirm.ref}`, action: { command: "confirmLink", ref: toConfirm.ref } };
   const toChoose = bcs.find((b) => b.state === "needs_review");
   if (toChoose) return { text: `PM chooses the subcontract for ${toChoose.ref} (in its Inbox row)`, action: null };
+  const toConfirmAmount = bcs.find((b) => b.state === "held" && b.holdReasons.length === 1 && b.holdReasons[0] === "amount_only_in_image");
+  if (toConfirmAmount) return { text: `PM checks the amount of ${toConfirmAmount.ref} against its image and confirms it (in its Inbox row)`, action: null };
   const notices = [...contra.notices.values()];
   const drafted = notices.find((n) => n.state === "drafted");
   if (drafted) return { text: `Controller approves notice ${drafted.id}`, action: { command: "approveNotice", noticeId: drafted.id } };
@@ -372,8 +401,11 @@ export interface BackChargeDetail {
   status: Status;
   vendorAsWritten: string;
   jobRef: string;
-  email: { id: string; subject: string; from: string; body: string } | null;
+  /** attachments: each attachment in words; attachmentText: the text of each page read from a PDF, to show and highlight in. */
+  email: { id: string; subject: string; from: string; body: string; attachments: string[]; attachmentText: { where: string; text: string }[] } | null;
   sourceSentence: string;
+  /** Where sourceSentence is: "email body", "attachment <name>, page <n>", or "attachment <name>" for a photo. */
+  sourceLocation: string;
   disputeSentence: string | null;
   link: { subcontractId: string | null; explanation: string[] };
   /** The subcontract's back-charge clause, quoted, or null if not linked / no clause. */
@@ -401,8 +433,18 @@ export function backChargeDetail(app: App, ref: string): BackChargeDetail {
     status: backChargeStatus(b),
     vendorAsWritten: b.extracted.vendorNameAsWritten,
     jobRef: b.extracted.jobRef,
-    email: email ? { id: email.id, subject: email.subject, from: email.from, body: email.body } : null,
+    email: email
+      ? {
+          id: email.id,
+          subject: email.subject,
+          from: email.from,
+          body: email.body,
+          attachments: email.attachments?.map(describeAttachment) ?? [],
+          attachmentText: attachmentPages(email).map((p) => ({ where: p.where, text: p.text })),
+        }
+      : null,
     sourceSentence: b.extracted.amountEvidence.sentence,
+    sourceLocation: email ? describeAt(email, b.extracted.amountEvidence.at) : "email body",
     disputeSentence: b.extracted.disputeEvidence?.sentence || null,
     link: { subcontractId: b.subcontractId, explanation: b.linkExplanation.length ? b.linkExplanation : proposal?.kind === "review" ? proposal.reasons : proposal?.kind === "linked" ? proposal.explanation : [] },
     clause: sc?.clause

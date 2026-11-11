@@ -8,7 +8,7 @@ import { apiDownMessage, apiPost, chosenWorkspace, WORKSPACE_COOKIE, type Worksp
 export type Result = { error?: string };
 
 /** One button = one POST /api/action to the chosen workspace, with exactly the Action the screens offered. */
-export async function runAction(action: Action, input: { choice?: string; reason?: string } = {}): Promise<Result> {
+export async function runAction(action: Action, input: { choice?: string; reason?: string; amount?: string } = {}): Promise<Result> {
   const ws = await chosenWorkspace();
   const r = await apiPost(`/api/action?workspace=${ws}`, { action, input });
   revalidatePath("/", "layout");

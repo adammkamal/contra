@@ -6,7 +6,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { simpleParser, type AddressObject } from "mailparser";
 import type { PmEmailSource } from "../src/commands.ts";
-import type { Email } from "../src/types.ts";
+import type { AttachmentMedia, Email } from "../src/types.ts";
+import { readAttachments } from "./attachments.ts";
 
 export class EmlError extends Error {}
 
@@ -22,16 +23,25 @@ function address(h: AddressObject | AddressObject[] | undefined, header: string)
  * Parses one RFC 822 message. Body: the text/plain part when there is one, else mailparser's text
  * rendering of the HTML part. Line endings are normalized to \n. The Date header is required: an
  * email with no date can't be placed on the timeline, so it is rejected rather than guessed.
- * messageId (the Message-ID header) and attachmentCount are set when present; attachments aren't read.
+ * messageId (the Message-ID header) and attachmentCount are set when present. Attachments are read by
+ * ingest/attachments.ts: `attachments` records each one (text read, image, or skipped and why).
  */
 export async function parseEml(bytes: Buffer | Uint8Array, id: string): Promise<Email> {
+  return (await parseEmlWithMedia(bytes, id)).email;
+}
+
+/** parseEml, plus the bytes of the photos and scans for the model call (never stored). */
+export async function parseEmlWithMedia(bytes: Buffer | Uint8Array, id: string): Promise<{ email: Email; media: AttachmentMedia[] }> {
   const m = await simpleParser(Buffer.from(bytes), { skipImageLinks: true });
   if (!m.date || !m.headers.has("date")) throw new EmlError(`${id}: missing Date header`);
   if (Number.isNaN(m.date.getTime())) throw new EmlError(`${id}: unreadable Date header`);
   const text = typeof m.text === "string" && m.text.trim() !== "" ? m.text : "";
   if (!text) throw new EmlError(`${id}: no text/plain or HTML body`);
   const attachments = m.attachments?.length ?? 0;
-  return {
+  const read = attachments
+    ? await readAttachments(m.attachments.map((a) => ({ ...(a.filename ? { filename: a.filename } : {}), contentType: a.contentType, content: a.content, related: a.related === true })))
+    : null;
+  const email: Email = {
     id,
     from: address(m.from, "From"),
     to: address(m.to, "To"),
@@ -41,7 +51,9 @@ export async function parseEml(bytes: Buffer | Uint8Array, id: string): Promise<
     // Only when present, so emails without them keep their exact shape.
     ...(m.messageId ? { messageId: m.messageId } : {}),
     ...(attachments ? { attachmentCount: attachments } : {}),
+    ...(read ? { attachments: read.attachments } : {}),
   };
+  return { email, media: read?.media ?? [] };
 }
 
 /**

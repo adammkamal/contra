@@ -43,12 +43,12 @@ test("gmail config: addresses come from CONTRA_GMAIL_ADDRESS (+backcharges, +ram
   for (const bad of ["9", "0", "2.5", "soon"]) assert.throws(() => pollSecondsFromEnv({ CONTRA_GMAIL_POLL_SECONDS: bad }), /at least 10/, bad);
 });
 
-test("poll: the query targets only the intake address; ramp-ap mail, X-Contra-Generated mail and mail over 5 MB are skipped unread", async () => {
+test("poll: the query targets only the intake address; ramp-ap mail, X-Contra-Generated mail and mail over 25 MB is skipped unread", async () => {
   const messages: FakeMessage[] = [
     intakeMsg("m01"),
     { id: "m02", raw: rfc822({ messageId: "m02@pm.example", deliveredTo: CONFIG.apInbox, subject: "for AP", body: "BC-7102: x, $5.00." }) },
     { id: "m03", raw: rfc822({ messageId: "m03@contra.example", deliveredTo: CONFIG.intake, subject: "memo", body: "BC-7103: x, $5.00.", extraHeaders: ["X-Contra-Generated: memo"] }) },
-    { ...intakeMsg("m04"), size: 6 * 1024 * 1024 },
+    { ...intakeMsg("m04"), size: 26 * 1024 * 1024 },
   ];
   const g = fakeGmail({ messages });
   const x = fakeExtract();
@@ -67,7 +67,7 @@ test("poll: the query targets only the intake address; ramp-ap mail, X-Contra-Ge
       ["m01", "already ingested"],
       ["m02", `not delivered to ${CONFIG.intake}`],
       ["m03", "sent by Contra (X-Contra-Generated)"],
-      ["m04", "larger than 5 MB"],
+      ["m04", "larger than 25 MB"],
     ]);
   } finally {
     app.close();
@@ -86,7 +86,7 @@ test("skipReason: a message is ingested only when delivered to the intake addres
   assert.equal(skipReason(m, CONFIG, (k) => k === "<a@x>"), "already ingested");
 });
 
-test("raw: base64url format=raw round-trips through parseEml, keeping the Message-ID; attachments are counted, not read", async () => {
+test("raw: base64url format=raw round-trips through parseEml, keeping the Message-ID; each attachment is listed with what became of it", async () => {
   const body = "Hi,\r\n\r\nBC-7105: replace the damaged door closer, Summit, $1,240.00.\r\n\r\nDana";
   const raw = rfc822({ messageId: "rt-1@pm.example", deliveredTo: CONFIG.intake, subject: "Closer", body });
   const g = fakeGmail({ messages: [{ id: "r1", raw }] });
@@ -116,7 +116,8 @@ test("raw: base64url format=raw round-trips through parseEml, keeping the Messag
     assert.equal(stored.attachmentCount, 1);
     const ev = [...app.ctx.contra.audit.all()].find((e) => e.entity === "email" && e.entityId === "gmail-a1")!;
     assert.equal(ev.action, "ingested from Gmail");
-    assert.ok(ev.evidence.includes("1 attachment(s), not read"));
+    // A PNG signature with no image behind it: listed as skipped, with the reason, never dropped silently.
+    assert.ok(ev.evidence.includes("attachment photo.png skipped: the image could not be read"), ev.evidence.join(" | "));
   } finally {
     app.close();
   }

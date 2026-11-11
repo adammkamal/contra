@@ -15,7 +15,8 @@ import { GmailClient, InboxPoller, type Extract } from "../server/gmail.ts";
 import type { MemoSender } from "../src/memo.ts";
 import { cents } from "../src/money.ts";
 import type { Actor } from "../src/types.ts";
-import { CONFIG, fakeGmail, rfc822 } from "../test/gmail-fakes.ts";
+import { eml, png, textPdf } from "../test/attachment-fakes.ts";
+import { CONFIG, fakeGmail, gmailAuthPass, rfc822 } from "../test/gmail-fakes.ts";
 
 const PORT = Number(process.env.E2E_API_PORT ?? 4310);
 const UI_ORIGIN = process.env.E2E_UI_ORIGIN ?? "http://localhost:3310";
@@ -29,14 +30,45 @@ const live = (id: string, sub: string, line: string) => ({
   id,
   raw: rfc822({ messageId: `${id}@pm.example`, deliveredTo: CONFIG.intake, subject: `Summit MOB back-charge ${id}`, body: `Hi,\r\n\r\nSub: ${sub}\r\n\r\n${line}\r\n\r\nDana` }),
 });
+
+// A third made-up email carries a text PDF (page 2 states BC-7611) and a photo (BC-7612, which a fake model
+// "reads" from the image). Both files are generated here; nothing real.
+const PDF_SENTENCE = "BC-7611: corridor wall repair, Summit, $1,250.00.";
+const PHOTO_TEXT = "BC-7612 FLOOR PROTECTION $640.00";
+const attachmentRaw = eml({
+  id: "e2e03",
+  subject: "Summit - estimate and ticket photo attached",
+  body: "Hi,\n\nEstimate and a photo of the floor protection ticket attached.\n\nDana",
+  parts: [
+    { filename: "estimate.pdf", contentType: "application/pdf", data: await textPdf([["APEX BUILDERS - REPAIR ESTIMATE", "Subcontractor: Ridgeline Drywall"], ["Scope: patch corridor wall.", PDF_SENTENCE]]) },
+    { filename: "IMG_2041.png", contentType: "image/png", data: png(40, 20) },
+    { filename: "IMG_2042.heic", contentType: "image/heic", data: Buffer.from("not really a heic") },
+  ],
+}).toString("utf8");
+const withGmailHeaders = (m: string) => [`Authentication-Results: ${gmailAuthPass("apexbuilders.example")}`, `Delivered-To: ${CONFIG.intake}`, m].join("\r\n");
 const gmail = fakeGmail({
   messages: [
+    { id: "e2e03", raw: withGmailHeaders(attachmentRaw) },
     live("e2e02", "Ridgeline", "BC-7402: clear framing debris from the level 2 corridor, Summit, $650.00."),
     live("e2e01", "Ridgeline Drywall", "BC-7401: patch the stair core drywall, Summit, $900.00."),
   ],
 });
 const LIVE_EXTRACTOR: Actor = { kind: "llm", id: "extractor", model: "e2e-fake-extractor" };
-const extract: Extract = async (email) => {
+const extract: Extract = async (email, media) => {
+  if (email.attachments?.length) {
+    // Text PDF: cite the sentence from its page. Photo: the fake model "reads" the amount from the image.
+    const items = [];
+    for (const a of email.attachments) {
+      if (a.read === "text") {
+        const page = a.pages?.findIndex((p) => SENTENCE.test(p)) ?? -1;
+        const m = page >= 0 ? SENTENCE.exec(a.pages![page]!) : null;
+        if (m) items.push({ ref: m[1]!.slice(0, 7), description: "Corridor wall repair", amountCents: centsOf(m[2]!, m[3]!), amountEvidence: { emailId: email.id, sentence: m[1]!, at: { attachment: a.n, page: page + 1 } }, vendorNameAsWritten: "Ridgeline Drywall", jobRef: "Summit", disputeNoted: false });
+      } else if (a.read === "image" && media.some((x) => x.n === a.n)) {
+        items.push({ ref: "BC-7612", description: "Floor protection", amountCents: cents(64_000), amountEvidence: { emailId: email.id, sentence: PHOTO_TEXT, at: { attachment: a.n, page: 1 } }, vendorNameAsWritten: "Ridgeline Drywall", jobRef: "Summit", disputeNoted: false });
+      }
+    }
+    return { ok: true, items, actor: LIVE_EXTRACTOR };
+  }
   const m = SENTENCE.exec(email.body);
   const sub = /^Sub: (.+)$/m.exec(email.body)?.[1]?.trim() ?? "Unknown";
   if (!m) return { ok: true, items: [], actor: LIVE_EXTRACTOR };

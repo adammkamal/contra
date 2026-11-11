@@ -47,6 +47,7 @@ src/app.ts           App: the ONLY entry point for UI and scripts
 src/commands.ts      one function per UI button (each inside app.run) + runAction(app, action, input) dispatcher
 server/api.ts        JSON API over the same functions (npm run api); node:http, plus ingest/ for .eml
 ingest/eml.ts        parseEml / loadPmEmails: .eml files -> Email (mailparser; outside src/ on purpose)
+ingest/attachments.ts  PDF text (pdfjs-dist) and photo checks for PM email attachments, with the limits
 scripts/make-eml.ts  writes fixtures/emails/E-1..E-3.eml from the seed (QP, HTML-only, 7bit)
 FRONTEND_CONTRACT.md what the frontend may rely on; contract/samples/ = real JSON per demo step
 INTEGRATION.md       how Contra maps onto real Ramp (public docs only)
@@ -56,6 +57,7 @@ src/extract/         AI extraction: prompt, Anthropic adapter, strict validation
 scripts/extract-live.ts  live acceptance run for extraction; writes fixtures only if all runs pass
 src/seed.ts          demo seed + history seed, dates relative to the clock
 bench/               benchmark harness, baseline matcher, cases, labels (protected)
+bench/attachments/   attachment cases (.eml, from scripts/make-attachment-cases.ts) and proposed labels; not scored yet
 test/                node:test suites
 ```
 

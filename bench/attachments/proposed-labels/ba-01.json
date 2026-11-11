@@ -1,0 +1,9 @@
+{
+  "id": "ba-01",
+  "labeledBy": "Claude (proposed, not reviewed by a person)",
+  "link": "SC-SUM-0912",
+  "disputed": false,
+  "amountCents": 125000,
+  "expectedHold": null,
+  "why": "The amount is on page 2 of a PDF with a text layer, so it verifies word for word; Ridgeline Interiors LLC on Summit is SC-SUM-0912 by legal name; no dispute."
+}

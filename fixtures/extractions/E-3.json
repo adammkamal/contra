@@ -3,7 +3,7 @@
   "items": [
     {
       "ref": "BC-4471",
-      "description": "Overtime for missed inspection",
+      "description": "Overtime paid to framing crew for missed drywall inspection",
       "amountCents": 400000,
       "amountEvidence": {
         "emailId": "E-3",
@@ -14,5 +14,5 @@
       "disputeNoted": false
     }
   ],
-  "recordedAt": "2026-11-10T08:05:46.556Z"
+  "recordedAt": "2026-11-11T00:42:31.152Z"
 }

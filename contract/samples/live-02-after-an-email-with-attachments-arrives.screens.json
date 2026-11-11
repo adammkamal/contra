@@ -1,0 +1,207 @@
+{
+  "workspace": "live",
+  "now": "2026-11-07 15:00 UTC",
+  "extractionSource": "sample",
+  "emailSource": "gmail",
+  "nextStep": {
+    "text": "PM confirms the link for BC-7151",
+    "action": {
+      "command": "confirmLink",
+      "ref": "BC-7151"
+    }
+  },
+  "inbox": [
+    {
+      "ref": "BC-7151",
+      "emailSubject": "Summit MOB - back-charge for stair core drywall",
+      "vendorAsWritten": "Ridgeline Drywall",
+      "amount": "$900.00",
+      "sourceSentence": "BC-7151: patch the stair core drywall damaged during framing, Summit, $900.00.",
+      "sourceLocation": "email body",
+      "attachments": [],
+      "linkExplanation": [
+        "job: \"Summit\" -> SUM-01 Summit Medical Office",
+        "alias: \"Ridgeline Drywall\" -> Ridgeline Interiors LLC (seed)",
+        "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
+      ],
+      "status": {
+        "label": "Waiting for PM to confirm the link",
+        "tone": "warn"
+      },
+      "actions": [
+        {
+          "command": "confirmLink",
+          "ref": "BC-7151"
+        }
+      ]
+    },
+    {
+      "ref": "BC-7152",
+      "emailSubject": "Summit - two back-charges, estimate and ticket photo attached",
+      "vendorAsWritten": "Ridgeline Interiors LLC",
+      "amount": "$1,250.00",
+      "sourceSentence": "BC-7152: corridor wall repair, L3, $1,250.00 per our painter's quote.",
+      "sourceLocation": "attachment estimate.pdf, page 2",
+      "attachments": [
+        "attachment estimate.pdf: PDF, 2 pages, text read",
+        "attachment IMG_2041.jpg: photo, read by the model as an image (not verifiable word for word)",
+        "attachment IMG_2042.heic skipped: image/heic is not an image type the model reads (JPEG, PNG, GIF or WebP); send the photo as a JPEG"
+      ],
+      "linkExplanation": [
+        "job: \"Summit\" -> SUM-01 Summit Medical Office",
+        "party: \"Ridgeline Interiors LLC\" = legal name Ridgeline Interiors LLC",
+        "subcontract: SC-SUM-0912 (Drywall & framing) on SUM-01"
+      ],
+      "status": {
+        "label": "Waiting for PM to confirm the link",
+        "tone": "warn"
+      },
+      "actions": [
+        {
+          "command": "confirmLink",
+          "ref": "BC-7152"
+        }
+      ]
+    },
+    {
+      "ref": "BC-7153",
+      "emailSubject": "Summit - two back-charges, estimate and ticket photo attached",
+      "vendorAsWritten": "Ridgeline Interiors LLC",
+      "amount": "$640.00",
+      "sourceSentence": "BC-7153 FLOOR PROTECTION $640.00",
+      "sourceLocation": "attachment IMG_2041.jpg",
+      "attachments": [
+        "attachment estimate.pdf: PDF, 2 pages, text read",
+        "attachment IMG_2041.jpg: photo, read by the model as an image (not verifiable word for word)",
+        "attachment IMG_2042.heic skipped: image/heic is not an image type the model reads (JPEG, PNG, GIF or WebP); send the photo as a JPEG"
+      ],
+      "linkExplanation": [],
+      "status": {
+        "label": "Held: amount read from a photo or scanned page, which can't be checked word for word; a person must confirm it",
+        "tone": "danger"
+      },
+      "actions": [
+        {
+          "command": "confirmImageAmount",
+          "ref": "BC-7153",
+          "options": [
+            "SC-SUM-0912"
+          ]
+        }
+      ]
+    }
+  ],
+  "outbox": [],
+  "credits": [],
+  "bills": [],
+  "pmQueue": [
+    {
+      "ref": "BC-7153",
+      "status": {
+        "label": "Held: amount read from a photo or scanned page, which can't be checked word for word; a person must confirm it",
+        "tone": "danger"
+      }
+    }
+  ],
+  "opener": {
+    "sampleData": true,
+    "notDeducted": "$12,850.00",
+    "possible": "$1,850.00",
+    "deducted": "$5,500.00",
+    "rows": [
+      {
+        "ref": "BC-4391",
+        "status": "deducted",
+        "amount": "$3,100.00",
+        "evidence": "credit VC-OLD-1: \"Backcharge BC-4391 cleanup Lakeview\""
+      },
+      {
+        "ref": "BC-4415",
+        "status": "deducted",
+        "amount": "$2,400.00",
+        "evidence": "short-paid bill B-OLD-1: \"Pay app 3 less BC-4415 glass breakage\""
+      },
+      {
+        "ref": "BC-4402",
+        "status": "possible match",
+        "amount": "$1,850.00",
+        "evidence": "same vendor and amount, no ref: VC-OLD-2"
+      },
+      {
+        "ref": "BC-4410",
+        "status": "not deducted",
+        "amount": "$5,600.00",
+        "evidence": "no credit or short-pay for V-RIDGE names BC-4410 or equals $5,600.00"
+      },
+      {
+        "ref": "BC-4420",
+        "status": "not deducted",
+        "amount": "$7,250.00",
+        "evidence": "no credit or short-pay for V-HARBOR names BC-4420 or equals $7,250.00"
+      }
+    ]
+  },
+  "audit": [
+    {
+      "seq": 6,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Contra",
+      "what": "backcharge BC-7153: held: amount_only_in_image (extracted → held)",
+      "evidence": [
+        "evidence is read from an image (attachment IMG_2041.jpg); nothing in an image can be verified word for word"
+      ]
+    },
+    {
+      "seq": 5,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Sample extractions (hand-written)",
+      "what": "backcharge BC-7153: extracted $640.00 (new → extracted)",
+      "evidence": [
+        "BC-7153 FLOOR PROTECTION $640.00",
+        "in attachment IMG_2041.jpg"
+      ]
+    },
+    {
+      "seq": 4,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Sample extractions (hand-written)",
+      "what": "backcharge BC-7152: extracted $1,250.00 (new → extracted)",
+      "evidence": [
+        "BC-7152: corridor wall repair, L3, $1,250.00 per our painter's quote.",
+        "in attachment estimate.pdf, page 2"
+      ]
+    },
+    {
+      "seq": 3,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Contra",
+      "what": "email gmail-18c2f0a1b2c3d4f6: ingested from Gmail",
+      "evidence": [
+        "Summit - two back-charges, estimate and ticket photo attached",
+        "received 2026-11-07T15:20:00.000Z",
+        "attachment estimate.pdf: PDF, 2 pages, text read",
+        "attachment IMG_2041.jpg: photo, read by the model as an image (not verifiable word for word)",
+        "attachment IMG_2042.heic skipped: image/heic is not an image type the model reads (JPEG, PNG, GIF or WebP); send the photo as a JPEG"
+      ]
+    },
+    {
+      "seq": 2,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Sample extractions (hand-written)",
+      "what": "backcharge BC-7151: extracted $900.00 (new → extracted)",
+      "evidence": [
+        "BC-7151: patch the stair core drywall damaged during framing, Summit, $900.00."
+      ]
+    },
+    {
+      "seq": 1,
+      "at": "2026-11-07 15:00 UTC",
+      "actor": "Contra",
+      "what": "email gmail-18c2f0a1b2c3d4e5: ingested from Gmail",
+      "evidence": [
+        "Summit MOB - back-charge for stair core drywall",
+        "received 2026-11-07T15:00:00.000Z"
+      ]
+    }
+  ]
+}

@@ -17,6 +17,8 @@
       "vendorAsWritten": "Ridgeline Drywall",
       "amount": "$900.00",
       "sourceSentence": "BC-7151: patch the stair core drywall damaged during framing, Summit, $900.00.",
+      "sourceLocation": "email body",
+      "attachments": [],
       "linkExplanation": [
         "job: \"Summit\" -> SUM-01 Summit Medical Office",
         "alias: \"Ridgeline Drywall\" -> Ridgeline Interiors LLC (seed)",

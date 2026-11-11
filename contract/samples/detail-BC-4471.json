@@ -12,9 +12,12 @@
     "id": "E-3",
     "subject": "Summit MOB - missed inspection",
     "from": "dana.ortiz@apexbuilders.example",
-    "body": "Ridgeline Drywall - your crew wasn't ready for the drywall inspection, so we paid the framing crew overtime to hold the schedule. BC-4471: overtime for missed inspection, $4,000.00. Please acknowledge.\n\nDana"
+    "body": "Ridgeline Drywall - your crew wasn't ready for the drywall inspection, so we paid the framing crew overtime to hold the schedule. BC-4471: overtime for missed inspection, $4,000.00. Please acknowledge.\n\nDana",
+    "attachments": [],
+    "attachmentText": []
   },
   "sourceSentence": "BC-4471: overtime for missed inspection, $4,000.00.",
+  "sourceLocation": "email body",
   "disputeSentence": null,
   "link": {
     "subcontractId": "SC-SUM-0912",

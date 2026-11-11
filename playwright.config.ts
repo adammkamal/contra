@@ -14,9 +14,9 @@ export default defineConfig({
   timeout: 90_000,
   expect: { timeout: 15_000 },
   reporter: [["list"]],
-  // Installed Google Chrome by default: on this machine Windows Application Control blocks Playwright's
-  // downloaded (unsigned) Chromium. PW_CHANNEL=chromium uses the bundled one where that's allowed.
-  use: { baseURL: UI, ...devices["Desktop Chrome"], channel: process.env.PW_CHANNEL ?? "chrome", viewport: { width: 1400, height: 900 } },
+  // Playwright's bundled Chromium by default. Set PW_CHANNEL=chrome (PowerShell: $env:PW_CHANNEL = "chrome")
+  // to use the installed Google Chrome instead, where Windows blocks the bundled one.
+  use: { baseURL: UI, ...devices["Desktop Chrome"], ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}), viewport: { width: 1400, height: 900 } },
   webServer: [
     {
       command: "npx tsx e2e/api-harness.ts",
