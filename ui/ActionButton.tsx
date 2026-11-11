@@ -9,6 +9,8 @@ const LABELS: Record<Action["command"], string> = {
   confirmLink: "Confirm link",
   chooseSubcontract: "Confirm",
   confirmImageAmount: "Confirm",
+  sameCharge: "Same charge (merge)",
+  differentCharge: "Different charge",
   draftNotice: "Draft notice",
   approveNotice: "Approve notice",
   sendNotice: "Send notice",
@@ -30,6 +32,8 @@ function idOf(a: Action): string | undefined {
     case "confirmLink":
     case "chooseSubcontract":
     case "confirmImageAmount":
+    case "sameCharge":
+    case "differentCharge":
       return a.ref;
     case "draftNotice":
     case "proposeCredit":

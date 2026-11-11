@@ -6,7 +6,8 @@ import { renderCreditMemo } from "./memo.ts";
 import { formatUsd, sub as subCents, sum, type Cents } from "./money.ts";
 import { assessExtractedItem, conflictingStatements } from "./intake.ts";
 import { ambiguousWith, matchJobs, resolve, type Resolution } from "./resolver.ts";
-import { describeAt, describeAttachment, disputeSentencesFor, normalize, verifySpan } from "./span.ts";
+import { describeAt, describeAttachment, disputeSentencesFor, normalize, readFromImage, verifySpan } from "./span.ts";
+import { duplicateReason, type DuplicateView } from "./duplicates.ts";
 import { IllegalTransition, transitionBackCharge, transitionCredit, transitionMemo, transitionNotice } from "./state.ts";
 import type { MockERP } from "./mocks/erp.ts";
 import { planApplication, type PaymentsPlatform, type PlannedApplication } from "./mocks/ramp.ts";
@@ -90,6 +91,8 @@ export interface ContraState {
   sourceDispute: [string, boolean][];
   /** Absent in snapshots written before rejected extractions were kept. */
   rejected?: RejectedItem[];
+  /** Pairs of refs the PM said are different charges (never asked again). Absent in older snapshots. */
+  distinct?: [string, string][];
   /** contraRef: Contra references handed out (CONTRA-0001 ...). Absent in older snapshots: 0. */
   seq: { notice: number; credit: number; contraRef?: number };
 }
@@ -103,6 +106,8 @@ export class Contra {
   readonly lateDisputes: { ref: string; emailId: string }[] = [];
   /** What validation refused from each email's extraction. Each is a held row in the Inbox, never dropped. */
   readonly rejected: RejectedItem[] = [];
+  /** Pairs of refs the PM said are different charges: never held as possible duplicates of each other again. */
+  readonly distinct: [string, string][] = [];
   readonly #evidenceOk = new Map<string, boolean>();
   readonly #sourceDispute = new Map<string, boolean>();
   #seq = { notice: 0, credit: 0, contraRef: 0 };
@@ -122,6 +127,7 @@ export class Contra {
       evidenceOk: [...this.#evidenceOk.entries()],
       sourceDispute: [...this.#sourceDispute.entries()],
       rejected: [...this.rejected],
+      distinct: [...this.distinct],
       seq: { ...this.#seq },
     });
   }
@@ -138,6 +144,7 @@ export class Contra {
     for (const [k, v] of s2.evidenceOk) c.#evidenceOk.set(k, v);
     for (const [k, v] of s2.sourceDispute) c.#sourceDispute.set(k, v);
     c.rejected.push(...(s2.rejected ?? []));
+    c.distinct.push(...(s2.distinct ?? []));
     c.#seq = { contraRef: 0, ...s2.seq };
     return c;
   }
@@ -189,12 +196,12 @@ export class Contra {
     const out: BackCharge[] = [];
 
     for (const x of extracted) {
+      // A BC number Contra already has (as an item's ref, or attached to it when the PM merged a duplicate):
+      // the same charge again, never a second one.
       const existing = x.ref === null ? undefined : this.byBcNumber(x.ref);
       if (existing) {
-        if (backChargeAmount(existing) !== x.amountCents && existing.state !== "held") {
-          // Logged as read, also when read from an image; the views withhold an image reading (src/view.ts shownEvent).
-          this.#hold(existing, ["conflicting_amounts"], [`${email.id}: ${x.amountEvidence.sentence}`]);
-        }
+        const again = assessExtractedItem(email, x, this.d.erp, extracted.map((e) => e.ref));
+        this.#sameChargeAgain(existing, email, x, again, raisedBy ? [raisedBy] : []);
         continue;
       }
 
@@ -250,6 +257,8 @@ export class Contra {
         if (r.kind === "linked") bc.linkExplanation = r.explanation;
         else transitionBackCharge(this.d.log, bc, "needs_review", SYSTEM, "resolver could not link", r.reasons);
       }
+      // Plausibly a charge Contra already has under another reference: held for the PM, never merged on its own.
+      this.#holdIfDuplicate(bc);
       out.push(bc);
     }
     return out;
@@ -278,6 +287,77 @@ export class Contra {
     }
     bc.subcontractId = sc.id;
     transitionBackCharge(this.d.log, bc, "linked", pm, "link confirmed", bc.linkExplanation);
+    // With its subcontract known, it may turn out to be a charge Contra already has.
+    this.#holdIfDuplicate(bc);
+  }
+
+  // ---- Possible duplicates -----------------------------------------------------------------
+
+  /**
+   * The PM confirms a possible duplicate is the same charge as the item it was held against: one charge,
+   * both emails as evidence. This item becomes "merged" (final); the other carries the charge on, gets this
+   * one's BC number if it had none, and takes over whatever this email says that makes it less certain (a
+   * dispute, a different amount) and who raised it. Only for an item held just as a possible duplicate.
+   */
+  confirmSameCharge(ref: string, pm: Actor): void {
+    const b = this.#bc(ref);
+    requireRole(pm, "pm", `deciding whether ${ref} is a duplicate`);
+    if (b.state !== "held" || !b.duplicate || b.holdReasons.length !== 1 || b.holdReasons[0] !== "possible_duplicate") {
+      throw new Error(`${ref}: only an item held just as a possible duplicate can be merged`);
+    }
+    const o = this.#survivor(b.duplicate.of);
+    if (o === b) throw new Error(`${ref}: it can't be merged into itself`);
+    const email = this.emails.get(b.extracted.amountEvidence.emailId);
+    if (!email) throw new Error(`${ref}: its email is missing`);
+    const mine = bcNumberOf(b);
+    const attach = mine !== null && bcNumberOf(o) === null;
+    b.holdReasons = [];
+    b.mergedInto = o.ref;
+    transitionBackCharge(this.d.log, b, "merged", pm, `merged into ${o.ref}: the PM confirmed it is the same charge`, [b.duplicate.why]);
+    if (attach) o.bcNumber = mine;
+    this.d.log.append({
+      actor: pm,
+      entity: "backcharge",
+      entityId: o.ref,
+      action: `same charge as ${b.ref}, confirmed by ${pm.id} (PM)${attach ? `; BC number ${mine} attached` : ""}`,
+      from: null,
+      to: null,
+      evidence: [`${email.id}: ${b.extracted.amountEvidence.sentence}`, b.duplicate.why],
+    });
+    // Whoever raised the merged item raised this charge too (separation of duties, src/roles.ts).
+    const raisers = this.d.log.forEntity("backcharge", b.ref).flatMap((e) => (e.actor.kind === "human" && e.action.startsWith("raised by ") ? [e.actor] : []));
+    o.alsoIn = [...(o.alsoIn ?? []), ...(b.alsoIn ?? [])];
+    this.#sameChargeAgain(o, email, b.extracted, { evidenceOk: this.#evidenceOk.get(b.ref) ?? false, disputeInSource: this.#sourceDispute.get(b.ref) ?? true, backstop: [] }, raisers);
+  }
+
+  /**
+   * The PM says a possible duplicate is a different charge. The pair is never asked about again. Without
+   * another hold reason the item goes back where it was: linked, or waiting for its link (it may then match
+   * a third item, and is held again).
+   */
+  confirmDifferentCharge(ref: string, pm: Actor): void {
+    const b = this.#bc(ref);
+    requireRole(pm, "pm", `deciding whether ${ref} is a duplicate`);
+    if (b.state !== "held" || !b.duplicate || !b.holdReasons.includes("possible_duplicate")) throw new Error(`${ref}: is not held as a possible duplicate`);
+    const of = b.duplicate.of;
+    this.distinct.push([b.ref, of]);
+    b.holdReasons = b.holdReasons.filter((r) => r !== "possible_duplicate");
+    const action = `different charge from ${of}: confirmed by ${pm.id} (PM)`;
+    if (b.holdReasons.length) {
+      this.d.log.append({ actor: pm, entity: "backcharge", entityId: ref, action: `${action}; still held: ${b.holdReasons.join(", ")}`, from: null, to: null, evidence: [b.duplicate.why] });
+      return;
+    }
+    if (b.subcontractId) {
+      transitionBackCharge(this.d.log, b, "linked", pm, action, [b.duplicate.why]);
+    } else {
+      const r = resolve(b.extracted, this.d.erp);
+      this.proposals.set(ref, r);
+      if (r.kind === "linked") {
+        b.linkExplanation = r.explanation;
+        transitionBackCharge(this.d.log, b, "extracted", pm, `${action}; waiting for the PM to confirm the link`, [b.duplicate.why]);
+      } else transitionBackCharge(this.d.log, b, "needs_review", pm, `${action}; the PM must choose the subcontract`, [b.duplicate.why, ...r.reasons]);
+    }
+    this.#holdIfDuplicate(b);
   }
 
   /**
@@ -339,6 +419,8 @@ export class Contra {
 
     const include: BackCharge[] = [];
     for (const b of candidates) {
+      // Never two items of an open duplicate question on a notice: the later one checked is held.
+      if (this.#holdIfDuplicate(b)) continue;
       const r = this.#evaluate(b, "pre_notice");
       if (r.status === "held") this.#hold(b, r.holdReasons, r.trace);
       else include.push(b);
@@ -421,12 +503,13 @@ export class Contra {
 
     const own = normalize(email.body, { excludeQuoted: true });
     for (const b of live) {
-      const num = b.ref.replace(/^\D+/, "");
-      const mentioned = new RegExp(`\\b(?:BC-?)?${num}\\b`).test(own);
+      // An item may be named by its reference or by the BC number a later email supplied for it.
+      const names = [...new Set([b.ref, bcNumberOf(b)].filter((r): r is string => r !== null))];
+      const mentioned = names.some((n) => new RegExp(`\\b(?:BC-?)?${n.replace(/^\D+/, "")}\\b`).test(own));
       const disputed =
-        x.disputedRefs.includes(b.ref) ||
+        names.some((n) => x.disputedRefs.includes(n)) ||
         (mentioned && !x.acceptedRefs.includes(b.ref)) ||
-        disputeSentencesFor(email.body, b.ref, { excludeQuoted: true }).length > 0;
+        names.some((n) => disputeSentencesFor(email.body, n, { excludeQuoted: true }).length > 0);
       b.subResponse = disputed ? "disputed" : x.acceptedRefs.includes(b.ref) ? "accepted" : null;
       if (disputed) this.#hold(b, ["disputed_by_sub"], [x.evidence.sentence]);
     }
@@ -614,9 +697,13 @@ export class Contra {
 
   // ---- Read-only views ---------------------------------------------------------------------
 
-  /** The item that carries this accounting BC number (as its ref, or supplied later), if any. */
+  /**
+   * The item that carries this accounting BC number (as its ref, or supplied later), if any. An item merged
+   * into another is never it: the one it was merged into is.
+   */
   byBcNumber(bcNumber: string): BackCharge | undefined {
-    for (const b of this.backCharges.values()) if (bcNumberOf(b) === bcNumber) return b;
+    for (const b of this.backCharges.values()) if (b.state !== "merged" && bcNumberOf(b) === bcNumber) return b;
+    for (const b of this.backCharges.values()) if (bcNumberOf(b) === bcNumber) return this.#survivor(b.ref);
     return undefined;
   }
 
@@ -647,6 +734,100 @@ export class Contra {
       now: this.d.clock.now(),
       phase,
     });
+  }
+
+  /** The item that carries `ref`'s charge: itself, or the item it was merged into (followed to the end). */
+  #survivor(ref: string): BackCharge {
+    let b = this.#bc(ref);
+    for (let i = 0; b.state === "merged" && b.mergedInto && i < 100; i++) b = this.#bc(b.mergedInto);
+    return b;
+  }
+
+  /**
+   * Another email states a charge Contra already has: it cites the item's BC number, or the PM confirmed it
+   * is the same charge. Never a second charge. Its sentence is added to the item's evidence, the people who
+   * raised it are recorded on the item, and what it says that makes the item less certain is carried over:
+   * - a different amount holds the item for conflicting amounts (an item already held keeps its reasons);
+   * - a dispute (the model's or the code backstop's) holds it for a dispute noted in the source.
+   * On an item already credited, neither can be undone here: it is flagged for a person (lateDisputes).
+   */
+  #sameChargeAgain(o: BackCharge, email: Email, x: ExtractedBackCharge, a: { evidenceOk: boolean; disputeInSource: boolean; backstop: string[] }, raisers: Human[]): void {
+    const settled = o.state === "credited" || o.state === "applied";
+    if (a.evidenceOk) o.alsoIn = [...(o.alsoIn ?? []), x.amountEvidence];
+    for (const h of raisers) {
+      this.d.log.append({ actor: { kind: "human", id: h.id, role: h.role }, entity: "backcharge", entityId: o.ref, action: `raised by ${h.id} (${ROLE_WORDS[h.role]}): the email came from their address`, from: null, to: null, evidence: [`From: ${email.from}`] });
+    }
+    const flag = (why: string, evidence: string) => {
+      this.lateDisputes.push({ ref: o.ref, emailId: email.id });
+      this.d.log.append({ actor: SYSTEM, entity: "backcharge", entityId: o.ref, action: `${why} after the credit; needs human review`, from: null, to: null, evidence: [evidence] });
+    };
+    if (backChargeAmount(o) !== x.amountCents) {
+      // Logged as read, also when read from an image; the views withhold an image reading (src/view.ts shownEvent).
+      const ev = `${email.id}: ${x.amountEvidence.sentence}`;
+      if (settled) flag("another email gives a different amount", ev);
+      else this.#addHold(o, "conflicting_amounts", [ev]);
+    }
+    if (a.disputeInSource) {
+      this.#sourceDispute.set(o.ref, true);
+      const ev = `${email.id}: ${x.disputeEvidence?.sentence || a.backstop[0] || "the extractor noted a dispute"}`;
+      if (settled) flag("another email notes a dispute", ev);
+      else this.#addHold(o, "dispute_noted_in_source", [ev]);
+    }
+  }
+
+  /** Holds `b` for `reason`; an item already held gets the reason added, logged as "also held: <reason>". */
+  #addHold(b: BackCharge, reason: HoldReason, evidence: string[]): void {
+    if (b.state !== "held") return this.#hold(b, [reason], evidence);
+    if (b.holdReasons.includes(reason)) return;
+    b.holdReasons = [...b.holdReasons, reason];
+    this.d.log.append({ actor: SYSTEM, entity: "backcharge", entityId: b.ref, action: `also held: ${reason}`, from: null, to: null, evidence });
+  }
+
+  /** True while the item's amount is the model's unconfirmed reading of an image (never compared or shown). */
+  #imageUnconfirmed(b: Readonly<BackCharge>): boolean {
+    const email = this.emails.get(b.extracted.amountEvidence.emailId);
+    return !b.amountConfirmation && !!email && readFromImage(email, b.extracted.amountEvidence.at);
+  }
+
+  /** The item's subcontract: linked, else the resolver's proposed link, else none. */
+  #subcontractOf(b: Readonly<BackCharge>): string | null {
+    if (b.subcontractId) return b.subcontractId;
+    const p = this.proposals.get(b.ref) ?? resolve(b.extracted, this.d.erp);
+    return p.kind === "linked" ? p.subcontractId : null;
+  }
+
+  #duplicateView(b: Readonly<BackCharge>): DuplicateView {
+    const sc = this.#subcontractOf(b);
+    return { ref: b.ref, bcNumber: bcNumberOf(b), subcontractId: sc, jobId: sc ? (this.d.erp.subcontract(sc)?.jobId ?? null) : null, amountCents: backChargeAmount(b), description: b.extracted.description };
+  }
+
+  /**
+   * Another item `b` may be the same charge as (src/duplicates.ts), or null. Skips merged items, pairs the PM
+   * already said are different, a question already open the other way round, and amounts that are an
+   * unconfirmed reading of an image (compared once a person confirms them).
+   */
+  #possibleDuplicate(b: Readonly<BackCharge>): { of: BackCharge; why: string } | null {
+    if (b.state === "merged" || this.#imageUnconfirmed(b)) return null;
+    const mine = this.#duplicateView(b);
+    if (!mine.subcontractId) return null;
+    for (const o of this.backCharges.values()) {
+      if (o === b || o.state === "merged" || this.#imageUnconfirmed(o)) continue;
+      if (this.distinct.some(([p, q]) => (p === b.ref && q === o.ref) || (p === o.ref && q === b.ref))) continue;
+      if (o.duplicate?.of === b.ref && o.holdReasons.includes("possible_duplicate")) continue;
+      const why = duplicateReason(mine, this.#duplicateView(o));
+      if (why) return { of: o, why };
+    }
+    return null;
+  }
+
+  /** Holds `b` as a possible duplicate when it plausibly is one. True when it is (or already was) held as one. */
+  #holdIfDuplicate(b: BackCharge): boolean {
+    if (b.holdReasons.includes("possible_duplicate")) return true;
+    const d = this.#possibleDuplicate(b);
+    if (!d) return false;
+    b.duplicate = { of: d.of.ref, why: d.why };
+    this.#addHold(b, "possible_duplicate", [`possible duplicate of ${refLabel(d.of)}: ${d.why}`]);
+    return true;
   }
 
   /** The next unused Contra reference. Never reuses one, also after restoring a snapshot without the counter. */

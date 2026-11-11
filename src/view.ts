@@ -25,6 +25,8 @@ export type Action =
   | { command: "confirmLink"; ref: string }
   | { command: "chooseSubcontract"; ref: string; options: string[] }
   | { command: "confirmImageAmount"; ref: string; options: string[] }
+  | { command: "sameCharge"; ref: string; duplicateOf: string }
+  | { command: "differentCharge"; ref: string; duplicateOf: string }
   | { command: "draftNotice"; subcontractId: string }
   | { command: "approveNotice"; noticeId: string }
   | { command: "sendNotice"; noticeId: string }
@@ -53,7 +55,13 @@ export const HOLD_WORDS: Record<HoldReason, string> = {
   suspicious_instructions: "email contains instructions aimed at an AI or automated system",
   unaccounted_reference: "the email mentions a back-charge number that wasn't extracted",
   amount_only_in_image: "amount read from a photo or scanned page, which can't be checked word for word; a person must confirm it",
+  possible_duplicate: "possible duplicate of another back-charge; the PM decides: same charge or different charge",
 };
+
+/** A hold reason in words for this item: a possible duplicate names the item it may duplicate. */
+function holdWords(b: Readonly<BackCharge>, r: HoldReason): string {
+  return r === "possible_duplicate" && b.duplicate ? `possible duplicate of ${b.duplicate.of}` : HOLD_WORDS[r];
+}
 
 export function backChargeStatus(b: Readonly<BackCharge>): Status {
   switch (b.state) {
@@ -66,13 +74,15 @@ export function backChargeStatus(b: Readonly<BackCharge>): Status {
     case "noticed":
       return { label: "Notice sent, response window open", tone: "info" };
     case "held":
-      return { label: `Held: ${b.holdReasons.map((r) => HOLD_WORDS[r]).join("; ")}`, tone: "danger" };
+      return { label: `Held: ${b.holdReasons.map((r) => holdWords(b, r)).join("; ")}`, tone: "danger" };
     case "eligible":
       return { label: "Eligible to deduct", tone: "ok" };
     case "credited":
       return { label: `On credit ${b.creditId}`, tone: "ok" };
     case "applied":
       return { label: `Deducted (credit ${b.creditId})`, tone: "ok" };
+    case "merged":
+      return { label: `Merged into ${b.mergedInto}: the PM confirmed it is the same charge`, tone: "idle" };
   }
 }
 
@@ -217,7 +227,7 @@ function shownEvent(contra: Contra, e: AuditEvent): { action: string; evidence: 
       return { action: e.action, evidence: stored.evidence.map((v) => (full.includes(v) ? shown[full.indexOf(v)]! : v)) };
     }
   }
-  if (e.action === "held: conflicting_amounts") {
+  if (e.action === "held: conflicting_amounts" || e.action === "also held: conflicting_amounts") {
     const evidence = stored.evidence.map((v) => {
       const m = /^([^\s:]+): ([\s\S]*)$/.exec(v);
       const other = m ? contra.emails.get(m[1]!) : undefined;
@@ -299,6 +309,11 @@ export function buildScreens(app: App): Screens {
     if (b.state === "held" && b.holdReasons.length === 1 && b.holdReasons[0] === "amount_only_in_image") {
       const r = resolve(b.extracted, erp);
       actions.push({ command: "confirmImageAmount", ref: b.ref, options: r.kind === "linked" ? [r.subcontractId] : subcontractOptions(b.extracted.jobRef, r, erp.jobs, erp.subcontracts) });
+    }
+    // A possible duplicate: the PM says same charge (only when that is its only hold) or different charge.
+    if (b.state === "held" && b.duplicate && b.holdReasons.includes("possible_duplicate")) {
+      if (b.holdReasons.length === 1) actions.push({ command: "sameCharge", ref: b.ref, duplicateOf: b.duplicate.of });
+      actions.push({ command: "differentCharge", ref: b.ref, duplicateOf: b.duplicate.of });
     }
     const withheld = readingWithheld(b, email);
     return {
@@ -510,6 +525,8 @@ export function nextStep(app: App): { text: string; action: Action | null } {
 function liveNextStep(app: App): { text: string; action: Action | null } {
   const { contra } = app.ctx;
   const bcs = [...contra.backCharges.values()];
+  const duplicate = bcs.find((b) => b.state === "held" && b.duplicate && b.holdReasons.includes("possible_duplicate"));
+  if (duplicate) return { text: `PM decides whether ${duplicate.ref} is the same charge as ${duplicate.duplicate!.of} (in its Inbox row)`, action: null };
   const toConfirm = bcs.find((b) => b.state === "extracted" && contra.proposals.get(b.ref)?.kind === "linked");
   if (toConfirm) return { text: `PM confirms the link for ${toConfirm.ref}`, action: { command: "confirmLink", ref: toConfirm.ref } };
   const toChoose = bcs.find((b) => b.state === "needs_review");
@@ -563,6 +580,15 @@ export interface BackChargeDetail {
   /** null when there is none; while the amount is withheld, a sentence read from an image has its dollar amounts taken out. */
   disputeSentence: string | null;
   link: { subcontractId: string | null; explanation: string[] };
+  /**
+   * Set when the item was held as a possible duplicate (kept after the PM decides): the item it may be the
+   * same charge as (`of`, its ref; `ofLabel`, as shown) and why, in words.
+   */
+  duplicate: { of: string; ofLabel: string; why: string } | null;
+  /** Set when the PM confirmed it is the same charge as another item: that item's ref. */
+  mergedInto: string | null;
+  /** Other emails that state this same charge: each email's id, subject and sender, and the sentence. */
+  alsoIn: { emailId: string; subject: string; from: string; sentence: string }[];
   /** The subcontract's back-charge clause, quoted, or null if not linked / no clause. */
   clause: { section: string; text: string; responseWindow: string; deductionAllowed: boolean; noticeRequired: boolean } | null;
   eligibility: { status: "eligible" | "pending" | "held"; holdReasons: string[]; waitingFor: string[]; trace: string[] };
@@ -570,6 +596,12 @@ export interface BackChargeDetail {
 }
 
 const WINDOW_WORDS = { hours: "hours", calendar_days: "calendar days", working_days: "working days" } as const;
+
+/** An item's reference as shown (refLabel), or the ref itself when there is no such item. */
+const labelOf = (contra: Contra, ref: string) => {
+  const o = contra.backCharges.get(ref);
+  return o ? refLabel(o) : ref;
+};
 
 /** Everything the back-charge detail screen shows. Read-only. Throws for an unknown ref. */
 export function backChargeDetail(app: App, ref: string): BackChargeDetail {
@@ -608,6 +640,12 @@ export function backChargeDetail(app: App, ref: string): BackChargeDetail {
     sourceLocation: email ? describeAt(email, b.extracted.amountEvidence.at) : "email body",
     disputeSentence: disputeSentence && withheld && email && readFromImage(email, dispute!.at) ? withoutAmounts(disputeSentence) : disputeSentence,
     link: { subcontractId: b.subcontractId, explanation: b.linkExplanation.length ? b.linkExplanation : proposal?.kind === "review" ? proposal.reasons : proposal?.kind === "linked" ? proposal.explanation : [] },
+    duplicate: b.duplicate ? { of: b.duplicate.of, ofLabel: labelOf(contra, b.duplicate.of), why: b.duplicate.why } : null,
+    mergedInto: b.mergedInto ?? null,
+    alsoIn: (b.alsoIn ?? []).map((ev) => {
+      const e = contra.emails.get(ev.emailId);
+      return { emailId: ev.emailId, subject: e?.subject ?? "", from: e?.from ?? "", sentence: ev.sentence };
+    }),
     clause: sc?.clause
       ? {
           section: sc.clause.section,

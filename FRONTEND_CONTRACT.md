@@ -194,6 +194,8 @@ Render each `actions[]` entry as a button, and when clicked send exactly that ob
 | `ingestPmEmails` | none | Ingest PM emails |
 | `confirmLink` | `ref` | Confirm link |
 | `chooseSubcontract` | `ref`, `options[]` | A picker plus Confirm. Send `input.choice` as one of `options`. |
+| `sameCharge` | `ref`, `duplicateOf` | Same charge (merge). Only on an item held just as a possible duplicate (see [Possible duplicates](#possible-duplicates)). A PM's step. |
+| `differentCharge` | `ref`, `duplicateOf` | Different charge. On an item held as a possible duplicate (also with other hold reasons, which stay). A PM's step. |
 | `confirmImageAmount` | `ref`, `options[]` | Only on an item held just because its amount was read from a photo or scanned page. An amount field ("Type the amount you see in the image"), a picker of `options` (often one) and Confirm. Send `input.amount` (what the person typed, e.g. `"$640.00"` or `"640.00"`) and `input.choice`. The typed amount may differ from the model's reading (a misread photo): it becomes the item's amount, both are recorded, and the credit shows both in `amountNotes`. It is refused (409, the item stays held) when it isn't more than $0.00, or when the email's text (body or a PDF page) gives the back-charge a different amount; the message says which. Don't prefill the amount field: the server sends nothing to prefill it with (see [Amounts read from an image](#amounts-read-from-an-image)). Contra doesn't keep the image: the person checks it in the original email (`sourceLocation` names the file). |
 | `draftNotice` | `subcontractId` | Draft notice |
 | `approveNotice` | `noticeId` | Approve notice (a PM's step; see [Who may do what](#who-may-do-what)) |
@@ -357,8 +359,35 @@ being anchored on the model's figure:
 | `suspicious_instructions` | email contains instructions aimed at an AI or automated system |
 | `unaccounted_reference` | the email mentions a back-charge number that wasn't extracted |
 | `amount_only_in_image` | amount read from a photo or scanned page, which can't be checked word for word; a person must confirm it |
+| `possible_duplicate` | possible duplicate of another back-charge; the PM decides: same charge or different charge |
 
-Only `amount_only_in_image`, when it is an item's only reason, has a button (`confirmImageAmount`).
+In `status.label`, a possible duplicate names the other item: `Held: possible duplicate of CONTRA-0001`. The detail
+screen's `eligibility.holdReasons` uses the words in the table.
+
+Only `amount_only_in_image`, when it is an item's only reason, has a button (`confirmImageAmount`). An item held
+as `possible_duplicate` has `sameCharge` (when it is its only reason) and `differentCharge`.
+
+## Possible duplicates
+
+The same charge can arrive twice under two references: a first email without a BC number (`CONTRA-0001`),
+then a follow-up citing the number accounting assigned (`BC-4480`); or the same charge sent twice without a
+number. It is never charged twice, and Contra never merges on its own. The newer item is **held** as
+`possible duplicate of <ref>` when, on the same subcontract and job, the two have the same amount, or one
+has a BC number and the other doesn't and their descriptions overlap (an initial amount is often an
+estimate). Two different BC numbers are never duplicates. While the question is open, the two are never on
+one notice.
+
+- **Same charge** (`sameCharge`): the held item becomes `Merged into <ref>: the PM confirmed it is the same
+  charge` (final, no buttons). The other item carries the charge: it takes the BC number if it had none
+  (`refLabel` `"CONTRA-0001 (BC-4480)"`), lists the held item's email in its detail's `alsoIn[]`, and is held
+  too if that email gives a different amount (`conflicting_amounts`) or notes a dispute. A later email citing
+  that BC number is the same charge again: no new item.
+- **Different charge** (`differentCharge`): the pair is never asked about again, and the item goes back to
+  where it was (linked, or waiting for its link).
+
+`nextStep` in `live` says `PM decides whether <ref> is the same charge as <ref> (in its Inbox row)` with
+`action: null`. Samples: `live-05-after-a-possible-duplicate-arrives.screens.json`,
+`live-06-after-the-pm-confirms-the-same-charge.screens.json` and `live-detail-CONTRA-0001.json`.
 
 ## Back-charges without a BC number
 
@@ -395,6 +424,7 @@ in the wrong form, ...), it is never a back-charge, but it is an Inbox row with 
 | Identity | `ref`, `bcNumber`, `refLabel` (as in the Inbox row), `description`, `amount`, `photoAmount` (as in the Inbox row), `status`. `amount` is `""` while it is an unconfirmed reading of an image ([Amounts read from an image](#amounts-read-from-an-image)). |
 | Source | `vendorAsWritten`, `jobRef`, `email` (`{ id, subject, from, body, attachments, attachmentText }`), `sourceSentence`, `sourceLocation`, `disputeSentence`. Highlight `sourceSentence` inside `email.body` when `sourceLocation` is `"email body"`, else inside the `attachmentText` entry whose `where` equals `sourceLocation` (`attachmentText` is `{ where, text }[]`, one per page of each PDF read as text; a photo has none). `email.attachments` is the same list of words as the Inbox row's. A sentence can cross a line break in `body` (an .eml's HTML part is re-wrapped), so match it with runs of whitespace treated as equal. |
 | `link` | `subcontractId` and `explanation[]`, e.g. alias, then party, then job |
+| `duplicate`, `mergedInto`, `alsoIn[]` | `duplicate`: `{ of, ofLabel, why }` when the item was held as a possible duplicate (kept after the PM decides), else `null`. `mergedInto`: the ref it was merged into, or `null`. `alsoIn[]`: other emails that state this same charge, `{ emailId, subject, from, sentence }`. |
 | `clause` | `section`, `text` (quote it), `responseWindow` (e.g. "5 working days"), `deductionAllowed`, `noticeRequired`. Can be `null`. |
 | `eligibility` | `status`, `holdReasons[]` (already in words), `waitingFor[]`, `trace[]` (lines beginning PASS, HOLD or WAIT). For an amount a person confirmed from an image, the evidence line is `PASS amount confirmed by <who> from <attachment>`, never "verbatim". |
 | `history[]` | This item's audit events |

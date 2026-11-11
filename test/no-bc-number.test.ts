@@ -2,36 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { normalizeRef } from "../src/extract/validate.ts";
 import { unaccountedRefs } from "../src/intake.ts";
-import { cents } from "../src/money.ts";
-import type { Email, ExtractedBackCharge } from "../src/types.ts";
 import { CONTRA_REF, Contra } from "../src/workflow.ts";
-import { CONTROLLER, LLM, PM, setup } from "./helpers.ts";
-
-/** A first back-charge email with no BC number, as a PM writes one before accounting assigns it. */
-export function noNumberEmail(id: string, sentence: string, extra = ""): Email {
-  return {
-    id,
-    from: "Dana Ortiz <dana.ortiz@apexbuilders.example>",
-    to: "Ridgeline Drywall <office@ridgeline.example>",
-    subject: "Summit - stairwell debris",
-    receivedAt: new Date("2026-11-05T15:00:00Z"),
-    body: `Hi,\n\nRidgeline Drywall left debris in stair 2 at Summit again.\n\n${sentence}\n\n${extra}Thanks,\nDana Ortiz`,
-    messageId: `<${id}@apexbuilders.example>`,
-  };
-}
-
-export function item(email: Email, sentence: string, amount: number, o: Partial<ExtractedBackCharge> = {}): ExtractedBackCharge {
-  return {
-    ref: null,
-    description: "Stairwell debris removal",
-    amountCents: cents(amount),
-    amountEvidence: { emailId: email.id, sentence },
-    vendorNameAsWritten: "Ridgeline Drywall",
-    jobRef: "Summit",
-    disputeNoted: false,
-    ...o,
-  };
-}
+import { CONTROLLER, item, LLM, noNumberEmail, PM, setup } from "./helpers.ts";
 
 const S1 = "Please back-charge Ridgeline Drywall $360.00 for the cleanup.";
 

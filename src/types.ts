@@ -161,7 +161,9 @@ export type BackChargeState =
   | "held"
   | "eligible"
   | "credited"
-  | "applied";
+  | "applied"
+  /** The PM confirmed this is the same charge as another item (mergedInto): that item carries it from here on. Final. */
+  | "merged";
 
 export type HoldReason =
   | "dispute_noted_in_source"
@@ -176,7 +178,9 @@ export type HoldReason =
   | "only_in_quoted_text"
   | "suspicious_instructions"
   | "unaccounted_reference"
-  | "amount_only_in_image";
+  | "amount_only_in_image"
+  /** Plausibly the same charge as another item (BackCharge.duplicate): the PM says same charge or different charge. */
+  | "possible_duplicate";
 
 export interface BackCharge {
   /**
@@ -191,6 +195,15 @@ export interface BackCharge {
    * snapshots): `ref` is the BC number. Read it with bcNumberOf (src/workflow.ts).
    */
   bcNumber?: string | null;
+  /**
+   * Set when the item was held as a possible duplicate: the item it may be the same charge as, and why, in
+   * words. Kept after the PM decides, as history.
+   */
+  duplicate?: { of: string; why: string };
+  /** State "merged": the item this one was merged into. */
+  mergedInto?: string;
+  /** Other emails that state this same charge (merged on the PM's confirmation, or citing its BC number). */
+  alsoIn?: Evidence[];
   extracted: ExtractedBackCharge;
   state: BackChargeState;
   subcontractId: string | null;

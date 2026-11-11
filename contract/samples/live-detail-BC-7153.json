@@ -39,6 +39,9 @@
     "subcontractId": null,
     "explanation": []
   },
+  "duplicate": null,
+  "mergedInto": null,
+  "alsoIn": [],
   "clause": null,
   "eligibility": {
     "status": "held",

@@ -152,6 +152,18 @@ export function confirmImageAmount(app: App, ref: string, amount: string, subcon
   app.run(({ contra }) => contra.confirmImageAmount(ref, actor, typed, subcontractId));
 }
 
+/** The PM confirms a possible duplicate is the same charge as the item it was held against (one charge, both emails as evidence). */
+export function sameCharge(app: App, ref: string, by?: Human) {
+  const actor = actorFor(app, PM, by);
+  app.run(({ contra }) => contra.confirmSameCharge(ref, actor));
+}
+
+/** The PM says a possible duplicate is a different charge. */
+export function differentCharge(app: App, ref: string, by?: Human) {
+  const actor = actorFor(app, PM, by);
+  app.run(({ contra }) => contra.confirmDifferentCharge(ref, actor));
+}
+
 export function draftNotice(app: App, subcontractId = DEMO_SC) {
   return app.run(({ contra }) => contra.draftNotice(subcontractId)?.id ?? null);
 }
@@ -262,6 +274,10 @@ export async function runAction(
       if (!input.amount?.trim()) throw new Error("type the amount you see in the image");
       return confirmImageAmount(app, action.ref, input.amount, input.choice, by);
     }
+    case "sameCharge":
+      return sameCharge(app, action.ref, by);
+    case "differentCharge":
+      return differentCharge(app, action.ref, by);
     case "draftNotice":
       draftNotice(app, action.subcontractId);
       return;

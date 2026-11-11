@@ -206,6 +206,8 @@ const COMMANDS: Record<Action["command"], Record<string, "string" | "number" | "
   confirmLink: { ref: "string" },
   chooseSubcontract: { ref: "string", options: "string[]" },
   confirmImageAmount: { ref: "string", options: "string[]" },
+  sameCharge: { ref: "string", duplicateOf: "string" },
+  differentCharge: { ref: "string", duplicateOf: "string" },
   draftNotice: { subcontractId: "string" },
   approveNotice: { noticeId: "string" },
   sendNotice: { noticeId: "string" },
