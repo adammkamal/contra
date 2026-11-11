@@ -1,15 +1,76 @@
 import type { InboxStatus } from "../server/gmail.ts";
 import type { Screens, Status } from "../src/view.ts";
 
-/** The label carries the meaning; tone only decorates. */
+/** The label carries the meaning; tone only decorates (a colour and a small shape before the word). */
 export const StatusWord = ({ s }: { s: Status }) => <span className={`status ${s.tone}`}>{s.label}</span>;
-export const Badge = ({ children, testId }: { children: React.ReactNode; testId?: string }) => (
-  <span className="badge" data-testid={testId}>
+export const Badge = ({ children, testId, live = false }: { children: React.ReactNode; testId?: string; live?: boolean }) => (
+  <span className={live ? "badge live" : "badge"} data-testid={testId}>
     {children}
   </span>
 );
 export const SimRamp = () => <Badge testId="simulated-ramp">Simulated Ramp</Badge>;
 export const SampleData = () => <Badge testId="sample-data">Sample data</Badge>;
+
+/** The Contra mark: two equal bars, the lower one shifted, overlapping where the amounts cancel. */
+export const Mark = () => (
+  <svg className="brand-mark" viewBox="0 0 34 34" aria-hidden="true" focusable="false">
+    <rect className="bar-a" x="2" y="6" width="22" height="10" rx="3" />
+    <rect className="bar-b" x="10" y="18" width="22" height="10" rx="3" />
+  </svg>
+);
+
+/** A sentence that was checked word for word against its source: the only text that gets the highlighter. */
+export const Quote = ({ children }: { children: React.ReactNode }) => (
+  <div className="quote">
+    <span className="hl">“{children}”</span>
+  </div>
+);
+
+/** How the PM's words were linked to a subcontract, one step per line, as the backend wrote them. */
+export function Chain({ steps, empty }: { steps: readonly string[]; empty: string }) {
+  if (steps.length === 0) return <p className="meta">{empty}</p>;
+  return (
+    <ol className="chain">
+      {steps.map((x, i) => (
+        <li key={i}>{x}</li>
+      ))}
+    </ol>
+  );
+}
+
+/** Each attachment in the backend's own words, skipped ones included. */
+export function Files({ items, testId }: { items: readonly string[]; testId?: string }) {
+  if (items.length === 0) return null;
+  return (
+    <ul className="files" data-testid={testId}>
+      {items.map((a, i) => (
+        <li key={i}>{a}</li>
+      ))}
+    </ul>
+  );
+}
+
+const VERDICT = /^(PASS|HOLD|WAIT) (.*)$/s;
+/** Eligibility trace lines begin PASS, HOLD or WAIT. The word stays; it only gets its own column and a colour. */
+export function Trace({ lines }: { lines: readonly string[] }) {
+  return (
+    <ul className="trace">
+      {lines.map((t, i) => {
+        const m = VERDICT.exec(t);
+        return m ? (
+          <li key={i} className={m[1]!.toLowerCase()}>
+            <span className="verdict">{m[1]}</span> <span>{m[2]}</span>
+          </li>
+        ) : (
+          <li key={i}>
+            <span />
+            <span>{t}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 /** Offsets of `sentence` in `body`, with runs of whitespace treated as equal (an .eml's HTML part is re-wrapped). */
 export function findSentence(body: string, sentence: string): [number, number] | null {

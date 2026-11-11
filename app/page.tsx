@@ -3,6 +3,9 @@ import { SampleData } from "../ui/Bits.tsx";
 
 export const dynamic = "force-dynamic";
 
+/** Decoration only: the status word is shown as written, and an unknown word simply gets no colour. */
+const ROW_TONE: Record<string, string> = { "not deducted": "danger", "possible match": "warn", deducted: "ok" };
+
 export default async function Opener() {
   const c = await currentScreens();
   if (!c) return null;
@@ -10,26 +13,32 @@ export default async function Opener() {
   return (
     <>
       {/* The opener is always the sample history, in both workspaces. */}
-      <h1>
-        Missed back-charges
-        <SampleData />
-      </h1>
-      <p className="sub">Older PM emails compared with Ramp credits and paid bills. Read-only.</p>
-      <div className="totals">
-        <div className="card danger">
-          <div className="status danger">Never deducted</div>
-          <div className="big">{o.notDeducted}</div>
+      <section className="shell opener">
+        <div className="core opener-lead">
+          <h1>
+            Missed back-charges
+            <SampleData />
+          </h1>
+          <div className="stack">
+            <p className="figure">{o.notDeducted}</p>
+            <p className="figure-claim">in past back-charges was never deducted from a sub's bill.</p>
+          </div>
+          <p className="sub">Older PM emails compared with Ramp credits and paid bills. Read-only.</p>
         </div>
-        <div className="card warn">
-          <div className="status warn">Possible match (amount only)</div>
-          <div className="big">{o.possible}</div>
+        <div className="opener-side">
+          <div className="tally">
+            <span className="status warn">Possible match (amount only)</span>
+            <span className="tally-figure">{o.possible}</span>
+          </div>
+          <div className="tally">
+            <span className="status ok">Deducted</span>
+            <span className="tally-figure">{o.deducted}</span>
+          </div>
         </div>
-        <div className="card ok">
-          <div className="status ok">Deducted</div>
-          <div className="big">{o.deducted}</div>
-        </div>
-      </div>
-      <table>
+      </section>
+
+      <h2>Back-charge by back-charge</h2>
+      <table className="rows">
         <thead>
           <tr>
             <th>Back-charge</th>
@@ -41,9 +50,9 @@ export default async function Opener() {
         <tbody>
           {o.rows.map((r) => (
             <tr key={r.ref}>
-              <td>{r.ref}</td>
-              <td>
-                <strong>{r.status}</strong>
+              <td className="strong nowrap">{r.ref}</td>
+              <td className="nowrap">
+                <span className={`status ${ROW_TONE[r.status] ?? "plain"}`}>{r.status}</span>
               </td>
               <td>{r.evidence}</td>
               <td className="num">{r.amount}</td>
