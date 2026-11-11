@@ -6,12 +6,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { allowedOriginsFromEnv, createApiServer, DEFAULT_ALLOWED_ORIGINS } from "../server/api.ts";
+import { testAuth } from "./auth-fakes.ts";
 
 const ALLOWED = "https://demo.contra.example";
 const OTHER = "https://evil.example";
 
 async function withApi(fn: (port: number) => Promise<void>) {
-  const api = createApiServer({ dbPath: join(mkdtempSync(join(tmpdir(), "contra-cors-")), "d.db"), start: new Date("2026-11-07T15:00:00Z"), emlDir: null, allowedOrigins: [ALLOWED] });
+  const api = createApiServer({ auth: testAuth(), dbPath: join(mkdtempSync(join(tmpdir(), "contra-cors-")), "d.db"), start: new Date("2026-11-07T15:00:00Z"), emlDir: null, allowedOrigins: [ALLOWED] });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
   try {
     await fn((api.server.address() as AddressInfo).port);

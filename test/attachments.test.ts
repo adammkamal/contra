@@ -20,6 +20,7 @@ import { backChargeDetail, buildScreens, HOLD_WORDS, type InboxRow, type Screens
 import { eml, png, scannedPdf, textPdf, type Part } from "./attachment-fakes.ts";
 import { CONFIG, fakeGmail, gmailAuthPass } from "./gmail-fakes.ts";
 import { LLM, PM, setup } from "./helpers.ts";
+import { testAuth } from "./auth-fakes.ts";
 
 // Made-up emails for these tests. Ridgeline Interiors LLC on Summit is SC-SUM-0912 in the demo seed, so an
 // unheld item links on its own and a held one shows the hold.
@@ -563,7 +564,7 @@ test("attachments: media for an attachment the email doesn't list as an image is
 
 test("attachments: before a PM confirms an image amount, no API response carries the model's reading; after, the row has both as fields", async () => {
   const dir = mkdtempSync(join(tmpdir(), "contra-"));
-  const api = createApiServer({ dbPath: join(dir, "d.db"), liveDbPath: join(dir, "live.db"), start: LIVE_START, realClock: { now: () => LIVE_START }, emlDir: null });
+  const api = createApiServer({ auth: testAuth(), dbPath: join(dir, "d.db"), liveDbPath: join(dir, "live.db"), start: LIVE_START, realClock: { now: () => LIVE_START }, emlDir: null });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
   const base = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
   // The model's readings below, in any form a response could carry them.

@@ -17,6 +17,7 @@ import type { ExtractOptions } from "../src/extract/index.ts";
 import { tryEmail, TryUnavailable, type TryInput, type TrySettings } from "./try.ts";
 import { SAMPLE_INBOX, type InboxPoller, type InboxStatus } from "./gmail.ts";
 import type { MemoSender } from "../src/memo.ts";
+import { loginLimiter, sessionCookie, sessionIdFrom, SESSION_TTL_MS, type AuthStore, type Session, type User } from "./auth.ts";
 
 /** POST /api/try: the model call is paid for with the demo's key, so it is capped and rate-limited. */
 export interface TryApiOptions {
@@ -142,8 +143,35 @@ export function isJsonContentType(header: string | undefined): boolean {
   return params.every((p) => /^\s*charset\s*=\s*"?[A-Za-z0-9._-]+"?\s*$/i.test(p));
 }
 
+/** Accounts and sessions (server/auth.ts). Every route but POST /api/login and GET /api/health needs a session. */
+export interface AuthOptions {
+  store: AuthStore;
+  /** Adds Secure to the session cookie (CONTRA_SECURE_COOKIES=1, for HTTPS). */
+  secureCookies?: boolean;
+  /** Session lifetime in ms. Default 12 hours. */
+  sessionTtlMs?: number;
+  /** Failed sign-ins allowed per client IP / per username in a rolling 15 minutes. Default 20 / 5. */
+  loginLimits?: { perIp: number; perUser: number };
+  /** The clock sessions and the sign-in limits read (epoch ms). Default Date.now. */
+  now?: () => number;
+}
+
+/** Strict shape check for POST /api/login. */
+export function parseLogin(x: unknown): { username: string; password: string } | string {
+  if (!x || typeof x !== "object" || Array.isArray(x)) return "send { username, password } as JSON";
+  const o = x as Record<string, unknown>;
+  if (Object.keys(o).some((k) => k !== "username" && k !== "password")) return "send only { username, password }";
+  if (typeof o.username !== "string" || !o.username.trim() || o.username.length > 64) return "username must be a non-empty string";
+  if (typeof o.password !== "string" || !o.password || o.password.length > 1024) return "password must be a non-empty string";
+  return { username: o.username.trim().toLowerCase(), password: o.password };
+}
+
+/** What GET /api/me and POST /api/login return about the signed-in person. Never the session id. */
+const meBody = (s: Session, workspaces: Workspace[]) => ({ ok: true, user: { username: s.user.username, role: s.user.role, live: s.user.live }, expiresAt: s.expiresAt.toISOString(), workspaces });
+
 export interface ApiOptions {
   dbPath: string;
+  auth: AuthOptions;
   start?: Date;
   /** Origins that get CORS headers (exact match). Default DEFAULT_ALLOWED_ORIGINS. Other origins get none. */
   allowedOrigins?: readonly string[];
@@ -298,16 +326,31 @@ export function createApiServer(opts: ApiOptions): {
     res.setHeader("access-control-allow-origin", origin);
     res.setHeader("access-control-allow-methods", "GET, POST, OPTIONS");
     res.setHeader("access-control-allow-headers", "content-type");
+    // The session cookie goes with cross-origin requests only from an allowed origin (never with "*").
+    res.setHeader("access-control-allow-credentials", "true");
   };
 
-  const send = (res: ServerResponse, status: number, body: unknown) => {
+  const send = (res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) => {
     const json = JSON.stringify(body);
     res.writeHead(status, {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
+      ...headers,
     });
     res.end(json);
   };
+
+  // ---- Sessions (server/auth.ts).
+  const auth = opts.auth;
+  const authNow = auth.now ?? Date.now;
+  const ttl = auth.sessionTtlMs ?? SESSION_TTL_MS;
+  const logins = loginLimiter(auth.loginLimits ?? { perIp: 20, perUser: 5 }, authNow);
+  const sessionOf = (req: IncomingMessage): Session | null => {
+    const id = sessionIdFrom(req.headers.cookie);
+    return id ? auth.store.session(id, authNow()) : null;
+  };
+  /** The workspaces this person may open. */
+  const workspacesFor = (u: User): Workspace[] => [...apps.keys()].filter((ws) => ws === "demo" || u.live);
 
   const limiter = tryLimiter({ maxPerHour: opts.try?.maxPerHour ?? 30, dailyCap: opts.try?.dailyCap ?? DEFAULT_TRY_DAILY_CAP }, opts.try?.now ?? Date.now);
 
@@ -365,6 +408,32 @@ export function createApiServer(opts: ApiOptions): {
       const url = new URL(req.url ?? "/", "http://localhost");
       const path = url.pathname.replace(/\/+$/, "") || "/";
       if (req.method === "OPTIONS") return send(res, 204, null);
+
+      if (req.method === "POST" && path === "/api/login") {
+        const input = parseLogin(await readJson(req, 4096));
+        if (typeof input === "string") return send(res, 400, { ok: false, error: input });
+        const ip = req.socket.remoteAddress ?? "unknown"; // the socket address, never X-Forwarded-For (a client can set it)
+        const blocked = logins.blocked(ip, input.username);
+        if (blocked) return send(res, 429, { ok: false, error: blocked });
+        const user = await auth.store.verify(input.username, input.password);
+        if (!user) {
+          logins.failed(ip, input.username);
+          return send(res, 401, { ok: false, error: "wrong username or password" });
+        }
+        const s = auth.store.createSession(user.username, authNow(), ttl);
+        return send(res, 200, meBody({ user, expiresAt: s.expiresAt }, workspacesFor(user)), { "set-cookie": sessionCookie(s.id, Math.floor(ttl / 1000), !!auth.secureCookies) });
+      }
+      if (req.method === "POST" && path === "/api/logout") {
+        const id = sessionIdFrom(req.headers.cookie);
+        if (!id || !auth.store.session(id, authNow())) return send(res, 401, { ok: false, error: "sign in first" });
+        auth.store.endSession(id);
+        return send(res, 200, { ok: true }, { "set-cookie": sessionCookie("", 0, !!auth.secureCookies) });
+      }
+      if (req.method === "GET" && path === "/api/me") {
+        const s = sessionOf(req);
+        if (!s) return send(res, 401, { ok: false, error: "sign in first" });
+        return send(res, 200, meBody(s, workspacesFor(s.user)));
+      }
 
       if (req.method === "GET" && path === "/api/health") return send(res, 200, { ok: true, workspaces: [...apps.keys()], inbox: inboxStatus() });
       if (req.method === "GET" && path === "/api/events") {

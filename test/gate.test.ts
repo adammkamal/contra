@@ -8,6 +8,7 @@ import { test } from "node:test";
 import { createApiServer, isJsonContentType, type TryApiOptions } from "../server/api.ts";
 import { MODEL_ERROR_MESSAGES, type TryInput } from "../server/try.ts";
 import type { App } from "../src/app.ts";
+import { testAuth } from "./auth-fakes.ts";
 
 // Every POST must be JSON, and a disallowed Origin is refused on every method, before anything runs.
 // Emails here are made up for these tests; the model fetcher is fake.
@@ -25,7 +26,7 @@ const countingFetcher = (async () => {
 }) as unknown as typeof fetch;
 
 async function withApi(fn: (port: number, app: () => App) => Promise<void>, tryOpts?: TryApiOptions) {
-  const api = createApiServer({
+  const api = createApiServer({ auth: testAuth(),
     dbPath: join(mkdtempSync(join(tmpdir(), "contra-gate-")), "d.db"),
     start: new Date("2026-11-07T15:00:00Z"),
     emlDir: null,

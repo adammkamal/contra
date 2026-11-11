@@ -6,11 +6,12 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { createApiServer, parseAction } from "../server/api.ts";
 import type { Screens } from "../src/view.ts";
+import { testAuth } from "./auth-fakes.ts";
 
 const START = new Date("2026-11-07T15:00:00Z");
 
 async function withApi(fn: (base: string) => Promise<void>) {
-  const api = createApiServer({ dbPath: join(mkdtempSync(join(tmpdir(), "contra-")), "d.db"), start: START });
+  const api = createApiServer({ auth: testAuth(), dbPath: join(mkdtempSync(join(tmpdir(), "contra-")), "d.db"), start: START });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
   const base = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
   try {

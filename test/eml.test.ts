@@ -15,6 +15,7 @@ import { demoSeed } from "../src/seed.ts";
 import { normalize, verifyAmountEvidence, verifySpan } from "../src/span.ts";
 import type { Email } from "../src/types.ts";
 import { buildScreens, nextStep, type Screens } from "../src/view.ts";
+import { testAuth } from "./auth-fakes.ts";
 
 const START = new Date("2026-11-07T15:00:00Z");
 const seed = demoSeed(START);
@@ -135,7 +136,7 @@ test("eml: emailSource is null before ingest, and provided emails must say where
 
 test("API: ingest reads fixtures/emails/*.eml when present, the built-in sample when emlDir is null", async () => {
   for (const [emlDir, want] of [[undefined, "eml"], [null, "builtin"]] as const) {
-    const api = createApiServer({ dbPath: join(tmp(), "d.db"), start: START, ...(emlDir === null ? { emlDir } : {}) });
+    const api = createApiServer({ auth: testAuth(), dbPath: join(tmp(), "d.db"), start: START, ...(emlDir === null ? { emlDir } : {}) });
     await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
     const base = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
     try {

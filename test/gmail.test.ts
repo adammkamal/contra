@@ -11,6 +11,7 @@ import { App } from "../src/app.ts";
 import { billArrives, ingestInboxEmail, ingestPmEmails, runAction, WrongWorkspace } from "../src/commands.ts";
 import { buildScreens } from "../src/view.ts";
 import { CONFIG, fakeExtract, fakeGmail, gmailAuthPass, rfc822, sseClient, until, type FakeMessage } from "./gmail-fakes.ts";
+import { testAuth } from "./auth-fakes.ts";
 
 // Every email and address here is made up. No network: Gmail and Google's token endpoint are faked.
 
@@ -185,7 +186,7 @@ test("poll: polls never overlap; a second poll while one runs returns at once", 
 test("invalid_grant: the inbox reports expired, the poll doesn't throw, and the server keeps serving screens", async () => {
   const g = fakeGmail({ token: "invalid_grant", messages: [intakeMsg("m41")] });
   const poller = new InboxPoller({ client: new GmailClient(CONFIG, g.transport, now), extract: fakeExtract().extract, now });
-  const api = createApiServer({ dbPath: tmpDb("d.db"), liveDbPath: tmpDb("live.db"), start: START, emlDir: null, inbox: { poller, intervalMs: 60_000 } });
+  const api = createApiServer({ auth: testAuth(), dbPath: tmpDb("d.db"), liveDbPath: tmpDb("live.db"), start: START, emlDir: null, inbox: { poller, intervalMs: 60_000 } });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
   const base = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
   try {
@@ -209,7 +210,7 @@ test("invalid_grant: the inbox reports expired, the poll doesn't throw, and the 
 });
 
 test("health: without the live inbox it reports sample mode and no address", async () => {
-  const api = createApiServer({ dbPath: join(mkdtempSync(join(tmpdir(), "contra-gmail-")), "d.db"), start: START, emlDir: null });
+  const api = createApiServer({ auth: testAuth(), dbPath: join(mkdtempSync(join(tmpdir(), "contra-gmail-")), "d.db"), start: START, emlDir: null });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
   try {
     const h = await (await fetch(`http://127.0.0.1:${(api.server.address() as AddressInfo).port}/api/health`)).json();
@@ -254,7 +255,7 @@ test("isolation: a live email for Ridgeline on Summit lands in the live workspac
   const poller = new InboxPoller({ client: new GmailClient(CONFIG, g.transport, now), extract: fakeExtract("Ridgeline Drywall", "Summit").extract, now });
   const sent: string[] = [];
   const memoSender = { destination: CONFIG.apInbox, send: async (m: { creditId: string }) => (sent.push(m.creditId), { messageId: `m-${sent.length}` }) };
-  const api = createApiServer({ dbPath: tmpDb("demo.db"), liveDbPath: tmpDb("live.db"), realClock: { now: () => new Date(now()) }, start: START, emlDir: null, memoSender, inbox: { poller, intervalMs: 60_000 } });
+  const api = createApiServer({ auth: testAuth(), dbPath: tmpDb("demo.db"), liveDbPath: tmpDb("live.db"), realClock: { now: () => new Date(now()) }, start: START, emlDir: null, memoSender, inbox: { poller, intervalMs: 60_000 } });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
   const base = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
   type S = ReturnType<typeof buildScreens>;
@@ -321,7 +322,7 @@ test("isolation: a live email for Ridgeline on Summit lands in the live workspac
 });
 
 test("workspaces: without a live inbox there is no live workspace (404), and a live inbox needs its own database", async () => {
-  const api = createApiServer({ dbPath: tmpDb("d.db"), start: START, emlDir: null });
+  const api = createApiServer({ auth: testAuth(), dbPath: tmpDb("d.db"), start: START, emlDir: null });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
   try {
     const r = await fetch(`http://127.0.0.1:${(api.server.address() as AddressInfo).port}/api/screens?workspace=live`);
@@ -331,15 +332,15 @@ test("workspaces: without a live inbox there is no live workspace (404), and a l
     await api.close();
   }
   const poller = new InboxPoller({ client: null, extract: fakeExtract().extract, now });
-  assert.throws(() => createApiServer({ dbPath: tmpDb("d.db"), start: START, emlDir: null, inbox: { poller, intervalMs: 60_000 } }), /needs liveDbPath/);
+  assert.throws(() => createApiServer({ auth: testAuth(), dbPath: tmpDb("d.db"), start: START, emlDir: null, inbox: { poller, intervalMs: 60_000 } }), /needs liveDbPath/);
   const same = tmpDb("d.db");
-  assert.throws(() => createApiServer({ dbPath: same, liveDbPath: same, start: START, emlDir: null }), /its own database/);
+  assert.throws(() => createApiServer({ auth: testAuth(), dbPath: same, liveDbPath: same, start: START, emlDir: null }), /its own database/);
 });
 
 test("SSE: screens-changed after an action, a reset and a poll that ingested, plus heartbeats", async () => {
   const g = fakeGmail({ messages: [intakeMsg("m61")] });
   const poller = new InboxPoller({ client: new GmailClient(CONFIG, g.transport, now), extract: fakeExtract().extract, now });
-  const api = createApiServer({ dbPath: tmpDb("d.db"), liveDbPath: tmpDb("live.db"), start: START, emlDir: null, heartbeatMs: 30, inbox: { poller, intervalMs: 60_000 } });
+  const api = createApiServer({ auth: testAuth(), dbPath: tmpDb("d.db"), liveDbPath: tmpDb("live.db"), start: START, emlDir: null, heartbeatMs: 30, inbox: { poller, intervalMs: 60_000 } });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
   const port = (api.server.address() as AddressInfo).port;
   const base = `http://127.0.0.1:${port}`;

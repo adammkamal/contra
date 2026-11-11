@@ -16,6 +16,7 @@ import type { MemoSender } from "../src/memo.ts";
 import { IllegalTransition, transitionMemo } from "../src/state.ts";
 import { buildScreens, isOffered, nextStep } from "../src/view.ts";
 import { CONFIG, fakeExtract, fakeGmail, rfc822, SECRETS, sseClient, until } from "./gmail-fakes.ts";
+import { testAuth } from "./auth-fakes.ts";
 
 // Made-up addresses only. No network: the memo sender, Gmail and Google are fakes.
 
@@ -40,7 +41,7 @@ function fakeSender(failures = 0) {
 }
 
 async function withApi(sender: MemoSender | null, fn: (base: string, port: number, app: () => App) => Promise<void>) {
-  const api = createApiServer({ dbPath: join(mkdtempSync(join(tmpdir(), "contra-memo-")), "d.db"), start: START, emlDir: null, memoSender: sender, allowedOrigins: [ALLOWED] });
+  const api = createApiServer({ auth: testAuth(), dbPath: join(mkdtempSync(join(tmpdir(), "contra-memo-")), "d.db"), start: START, emlDir: null, memoSender: sender, allowedOrigins: [ALLOWED] });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
   const port = (api.server.address() as AddressInfo).port;
   try {
@@ -199,7 +200,7 @@ test("secrets: the refresh token, client secret and access token never appear in
       const now = () => Date.UTC(2026, 10, 10, 16);
       const client = new GmailClient(CONFIG, g.transport, now);
       const poller = new InboxPoller({ client, extract: fakeExtract().extract, now });
-      const api = createApiServer({ dbPath: join(mkdtempSync(join(tmpdir(), "contra-sec-")), "d.db"), liveDbPath: join(mkdtempSync(join(tmpdir(), "contra-sec-")), "live.db"), start: START, emlDir: null, heartbeatMs: 20, memoSender: new GmailMemoSender(client, now), inbox: { poller, intervalMs: 60_000 } });
+      const api = createApiServer({ auth: testAuth(), dbPath: join(mkdtempSync(join(tmpdir(), "contra-sec-")), "d.db"), liveDbPath: join(mkdtempSync(join(tmpdir(), "contra-sec-")), "live.db"), start: START, emlDir: null, heartbeatMs: 20, memoSender: new GmailMemoSender(client, now), inbox: { poller, intervalMs: 60_000 } });
       await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
       const port = (api.server.address() as AddressInfo).port;
       const base = `http://127.0.0.1:${port}`;

@@ -18,6 +18,7 @@
     "hooks": "node scripts/install-hooks.mjs",
     "api": "tsx scripts/serve.ts",
     "contract:samples": "tsx scripts/contract-samples.ts",
+    "user:add": "tsx scripts/user-add.ts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

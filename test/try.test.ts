@@ -10,6 +10,7 @@ import { App } from "../src/app.ts";
 import { runAction } from "../src/commands.ts";
 import { normalize } from "../src/span.ts";
 import { buildScreens, HOLD_WORDS } from "../src/view.ts";
+import { testAuth } from "./auth-fakes.ts";
 
 // Every email here is made up for these tests. No live model calls: the fetcher is fake.
 
@@ -192,7 +193,7 @@ test("try: read-only: audit log's last seq and buildScreens are byte-identical b
 // ---- POST /api/try ----
 
 async function withApi(tryOpts: TryApiOptions | undefined, fn: (base: string, app: () => App) => Promise<void>) {
-  const api = createApiServer({ dbPath: join(mkdtempSync(join(tmpdir(), "contra-try-")), "d.db"), start: START, emlDir: null, ...(tryOpts ? { try: tryOpts } : {}) });
+  const api = createApiServer({ auth: testAuth(), dbPath: join(mkdtempSync(join(tmpdir(), "contra-try-")), "d.db"), start: START, emlDir: null, ...(tryOpts ? { try: tryOpts } : {}) });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
   try {
     await fn(`http://127.0.0.1:${(api.server.address() as AddressInfo).port}`, api.app);
@@ -414,7 +415,7 @@ test("privacy: /api/try never logs, persists or echoes the email text, subject o
   let boundary: (() => string) | undefined;
   const callOptions = { maxRetries: 0, sleep: async () => {}, get fetcher() { return fetcher; }, get boundary() { return boundary; } };
   const errorBodies: string[] = [];
-  const api = createApiServer({ dbPath: join(dir, "d.db"), start: START, emlDir: null, try: { settings: () => OK, callOptions } });
+  const api = createApiServer({ auth: testAuth(), dbPath: join(dir, "d.db"), start: START, emlDir: null, try: { settings: () => OK, callOptions } });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
   const base = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
   let output = "";
