@@ -6,11 +6,12 @@ import { renderCreditMemo } from "./memo.ts";
 import { formatUsd, sub as subCents, sum, type Cents } from "./money.ts";
 import { assessExtractedItem, conflictingStatements } from "./intake.ts";
 import { ambiguousWith, matchJobs, resolve, type Resolution } from "./resolver.ts";
-import { describeAt, describeAttachment, disputeSentencesFor, normalize, readFromImage, verifySpan } from "./span.ts";
+import { describeAt, describeAttachment, disputeSentencesFor, normalize, verifySpan } from "./span.ts";
 import { IllegalTransition, transitionBackCharge, transitionCredit, transitionMemo, transitionNotice } from "./state.ts";
 import type { MockERP } from "./mocks/erp.ts";
 import { planApplication, type PaymentsPlatform, type PlannedApplication } from "./mocks/ramp.ts";
-import { EMAIL_INGESTED, type EmailOrigin } from "./types.ts";
+import { requireRole, requireSeparateFrom } from "./roles.ts";
+import { EMAIL_INGESTED, ROLE_WORDS, type EmailOrigin } from "./types.ts";
 import type {
   Actor,
   AmountConfirmation,
@@ -20,15 +21,13 @@ import type {
   ExtractedBackCharge,
   ExtractedResponse,
   HoldReason,
+  Human,
   Notice,
   RejectedExtraction,
   RejectedItem,
 } from "./types.ts";
 
 const SYSTEM: Actor = { kind: "system", id: "contra" };
-/** In place of the model's reading of an image amount, until a person confirms the amount (confirmImageAmount). */
-const WITHHELD = "withheld until a person confirms the amount from the image";
-const ROLE_WORDS = { pm: "PM", controller: "Controller", ap: "AP" } as const;
 
 /** Both readings of a confirmed image amount: "PM entered $640.00; model read $604.00". */
 export function confirmationNote(c: Readonly<AmountConfirmation>): string {
@@ -136,8 +135,18 @@ export class Contra {
    * messageId was already ingested changes nothing (no back-charge, notice or audit entry) and returns [].
    * `rejected` is what validation refused from the same extraction: each is kept (an Inbox row, held) and
    * logged with its reason, so nothing the PM sent vanishes. It never becomes a back-charge.
+   * `raisedBy`: the person whose account's email is the sender's address (matched by the host). Each new
+   * back-charge logs them as its raiser, so separation of duties (src/roles.ts) keeps them from approving
+   * a credit for it.
    */
-  ingestBackChargeEmail(email: Email, extracted: ExtractedBackCharge[], extractor: Actor, origin: EmailOrigin = "builtin", rejected: readonly RejectedExtraction[] = []): BackCharge[] {
+  ingestBackChargeEmail(
+    email: Email,
+    extracted: ExtractedBackCharge[],
+    extractor: Actor,
+    origin: EmailOrigin = "builtin",
+    rejected: readonly RejectedExtraction[] = [],
+    raisedBy: Human | null = null,
+  ): BackCharge[] {
     if (email.messageId && this.hasMessage(email.messageId)) return [];
     this.emails.set(email.id, email);
     // One line per attachment: read as text, read as an image, or skipped and why. Never dropped silently.
@@ -163,11 +172,8 @@ export class Contra {
       const existing = this.backCharges.get(x.ref);
       if (existing) {
         if (backChargeAmount(existing) !== x.amountCents && existing.state !== "held") {
-          // A reading of an image is never logged unconfirmed (see below): say where it is, not what the model read.
-          const other = readFromImage(email, x.amountEvidence.at)
-            ? `another amount, read by the model from ${describeAt(email, x.amountEvidence.at)} (the model's reading isn't shown; a person must read the image)`
-            : x.amountEvidence.sentence;
-          this.#hold(existing, ["conflicting_amounts"], [`${email.id}: ${other}`]);
+          // Logged as read, also when read from an image; the views withhold an image reading (src/view.ts shownEvent).
+          this.#hold(existing, ["conflicting_amounts"], [`${email.id}: ${x.amountEvidence.sentence}`]);
         }
         continue;
       }
@@ -188,30 +194,28 @@ export class Contra {
         creditId: null,
       };
       this.backCharges.set(x.ref, bc);
-      // An amount read from an image is the model's reading, which nothing can check. It is not logged here,
-      // so no screen, detail or audit view shows it before a person types the amount they see without being
-      // anchored on it; confirmImageAmount then logs both readings. bc.extracted keeps it.
-      const imageAmount = readFromImage(email, x.amountEvidence.at);
-      const dispute = !x.disputeEvidence
-        ? []
-        : imageAmount && readFromImage(email, x.disputeEvidence.at)
-          ? [`dispute sentence read by the model from ${describeAt(email, x.disputeEvidence.at)}: ${WITHHELD}`]
-          : [x.disputeEvidence.sentence];
+      // An amount read from an image is logged like any other (the log keeps the evidence, I6). Until a
+      // person confirms it, the views leave the reading out (src/view.ts shownEvent), so the person types the
+      // amount they see without being anchored on it; confirmImageAmount then logs both readings.
       this.d.log.append({
         actor: extractor,
         entity: "backcharge",
         entityId: x.ref,
-        action: imageAmount ? `extracted (amount read from an image: ${WITHHELD})` : `extracted ${formatUsd(x.amountCents)}`,
+        action: `extracted ${formatUsd(x.amountCents)}`,
         from: null,
         to: "extracted",
         evidence: [
-          ...(imageAmount ? [] : [x.amountEvidence.sentence]),
+          x.amountEvidence.sentence,
           // Where it is, when not in the body: "in attachment estimate.pdf, page 2".
           ...(x.amountEvidence.at ? [`in ${describeAt(email, x.amountEvidence.at)}`] : []),
-          ...dispute,
+          ...(x.disputeEvidence ? [x.disputeEvidence.sentence] : []),
           ...a.backstop,
         ],
       });
+
+      if (raisedBy) {
+        this.d.log.append({ actor: { kind: "human", id: raisedBy.id, role: raisedBy.role }, entity: "backcharge", entityId: x.ref, action: `raised by ${raisedBy.id} (${ROLE_WORDS[raisedBy.role]}): the email came from their address`, from: null, to: null, evidence: [`From: ${email.from}`] });
+      }
 
       if (a.holdReasons.length) {
         this.#hold(bc, a.holdReasons, a.holdEvidence);
@@ -245,7 +249,7 @@ export class Contra {
         this.d.erp.addAlias({ alias: name, partyLegalName: sc.partyLegalName, source: "pm_confirmed", confirmedBy: pm.id });
         this.d.log.append({ actor: pm, entity: "alias", entityId: name, action: `alias -> ${sc.partyLegalName}`, from: null, to: null, evidence: [ref] });
       }
-      bc.linkExplanation = [`PM ${pm.id} linked "${bc.extracted.vendorNameAsWritten}" to ${sc.id} ${sc.partyLegalName}`];
+      bc.linkExplanation = [`${pm.kind === "human" ? ROLE_WORDS[pm.role] : pm.kind} ${pm.id} linked "${bc.extracted.vendorNameAsWritten}" to ${sc.id} ${sc.partyLegalName}`];
     }
     bc.subcontractId = sc.id;
     transitionBackCharge(this.d.log, bc, "linked", pm, "link confirmed", bc.linkExplanation);
@@ -348,8 +352,10 @@ export class Contra {
     return n;
   }
 
+  /** Only a PM approves a notice (also in the state table). */
   approveNotice(id: string, human: Actor): void {
     const n = this.#notice(id);
+    requireRole(human, "pm", `approving notice ${id}`);
     transitionNotice(this.d.log, n, "approved", human, "notice approved", [n.body]);
     n.approvedBy = human.id;
   }
@@ -441,6 +447,9 @@ export class Contra {
     // Re-check at approval time: items may have changed since the proposal.
     const items = c.backChargeRefs.map((r) => this.#bc(r));
     creditAmountFor(items);
+    // Only a controller (also in the state table), and never one who raised or linked one of its back-charges.
+    requireRole(human, "controller", `approving credit ${id}`);
+    requireSeparateFrom(this.d.log, c.backChargeRefs, human, `approve credit ${id}`);
     // The approval record carries what the controller saw: amounts a person entered from an image, with the model's reading.
     transitionCredit(this.d.log, c, "approved", human, `approved ${formatUsd(c.amountCents)}`, [...c.backChargeRefs, ...amountNotes(items)]);
     c.approvedBy = human.id;
@@ -499,6 +508,14 @@ export class Contra {
   }
 
   // ---- Step 5: bill and payment ------------------------------------------------------------
+
+  /** AP turns on "apply credits" for a bill (in Ramp, a person does this on the bill). Audited with who did it. */
+  turnOnCredits(billId: string, human: Actor): void {
+    requireRole(human, "ap", `turning on credits for bill ${billId}`);
+    this.d.ramp.setApplyCredits(billId, true);
+    const plan = this.d.ramp.previewApplication(billId);
+    this.d.log.append({ actor: human, entity: "bill", entityId: billId, action: "credits turned on", from: null, to: null, evidence: plan.map((p) => `${p.creditId} would apply ${formatUsd(p.cents)}`) });
+  }
 
   /** Shows where credits would land BEFORE anyone turns credits on for a bill. */
   previewBill(billId: string): { plan: PlannedApplication[]; warnings: string[] } {

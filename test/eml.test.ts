@@ -15,6 +15,9 @@ import { demoSeed } from "../src/seed.ts";
 import { normalize, verifyAmountEvidence, verifySpan } from "../src/span.ts";
 import type { Email } from "../src/types.ts";
 import { buildScreens, nextStep, type Screens } from "../src/view.ts";
+import { sessionFetch, signIn, testAuth } from "./auth-fakes.ts";
+
+const http = sessionFetch();
 
 const START = new Date("2026-11-07T15:00:00Z");
 const seed = demoSeed(START);
@@ -135,11 +138,12 @@ test("eml: emailSource is null before ingest, and provided emails must say where
 
 test("API: ingest reads fixtures/emails/*.eml when present, the built-in sample when emlDir is null", async () => {
   for (const [emlDir, want] of [[undefined, "eml"], [null, "builtin"]] as const) {
-    const api = createApiServer({ dbPath: join(tmp(), "d.db"), start: START, ...(emlDir === null ? { emlDir } : {}) });
+    const api = createApiServer({ auth: testAuth(), dbPath: join(tmp(), "d.db"), start: START, ...(emlDir === null ? { emlDir } : {}) });
     await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
+    http.use(await signIn(`http://127.0.0.1:${(api.server.address() as AddressInfo).port}`, api.authStore));
     const base = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
     try {
-      const r = await fetch(`${base}/api/action`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: { command: "ingestPmEmails" } }) });
+      const r = await http.fetch(`${base}/api/action`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: { command: "ingestPmEmails" } }) });
       const body = (await r.json()) as { ok: boolean; screens: Screens };
       assert.equal(r.status, 200);
       assert.equal(body.screens.emailSource, want);

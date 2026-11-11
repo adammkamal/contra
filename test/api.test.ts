@@ -6,12 +6,16 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { createApiServer, parseAction } from "../server/api.ts";
 import type { Screens } from "../src/view.ts";
+import { sessionFetch, signIn, testAuth } from "./auth-fakes.ts";
+
+const http = sessionFetch();
 
 const START = new Date("2026-11-07T15:00:00Z");
 
 async function withApi(fn: (base: string) => Promise<void>) {
-  const api = createApiServer({ dbPath: join(mkdtempSync(join(tmpdir(), "contra-")), "d.db"), start: START });
+  const api = createApiServer({ auth: testAuth(), dbPath: join(mkdtempSync(join(tmpdir(), "contra-")), "d.db"), start: START });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
+  http.use(await signIn(`http://127.0.0.1:${(api.server.address() as AddressInfo).port}`, api.authStore));
   const base = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
   try {
     await fn(base);
@@ -20,11 +24,11 @@ async function withApi(fn: (base: string) => Promise<void>) {
   }
 }
 const getJson = async (url: string) => {
-  const r = await fetch(url);
+  const r = await http.fetch(url);
   return { status: r.status, body: (await r.json()) as any };
 };
 const post = async (url: string, body: unknown) => {
-  const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const r = await http.fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   return { status: r.status, body: (await r.json()) as any };
 };
 
@@ -59,7 +63,7 @@ test("API: bad input is rejected with 400, unknown things with 404, illegal move
     assert.equal((await post(`${base}/api/action`, { action: { command: "approveCredit" } })).status, 400); // missing creditId
     assert.equal((await post(`${base}/api/action`, { action: { command: "deleteEverything" } })).status, 400);
     assert.equal((await post(`${base}/api/action`, { action: { command: "evaluateAll", extra: 1 } })).status, 400);
-    const r = await fetch(`${base}/api/action`, { method: "POST", headers: { "content-type": "application/json" }, body: "{not json" });
+    const r = await http.fetch(`${base}/api/action`, { method: "POST", headers: { "content-type": "application/json" }, body: "{not json" });
     assert.equal(r.status, 400);
     assert.equal((await getJson(`${base}/api/backcharge/BC-0000`)).status, 404);
     assert.equal((await getJson(`${base}/api/credit/VC-9/memo`)).status, 404);
@@ -72,7 +76,7 @@ test("API: bad input is rejected with 400, unknown things with 404, illegal move
     assert.equal(illegal.status, 409);
     assert.match(illegal.body.error, /not available right now/);
     const s = (await getJson(`${base}/api/screens`)).body as Screens;
-    assert.equal(s.outbox[0]!.status.label, "Draft, needs controller approval");
+    assert.equal(s.outbox[0]!.status.label, "Draft, needs PM approval");
   });
 });
 
@@ -93,12 +97,12 @@ test("API: two-part actions need their input; reset starts clean; CORS preflight
     const reset = await post(`${base}/api/reset`, {});
     assert.equal(reset.status, 200);
     assert.equal(reset.body.screens.inbox.length, 0);
-    const pre = await fetch(`${base}/api/action`, { method: "OPTIONS" });
+    const pre = await http.fetch(`${base}/api/action`, { method: "OPTIONS" });
     assert.equal(pre.status, 204);
     assert.equal(pre.headers.get("access-control-allow-origin"), null); // no Origin, no CORS headers (never "*")
-    const local = await fetch(`${base}/api/action`, { method: "OPTIONS", headers: { origin: "http://localhost:3000" } });
+    const local = await http.fetch(`${base}/api/action`, { method: "OPTIONS", headers: { origin: "http://localhost:3000" } });
     assert.equal(local.headers.get("access-control-allow-origin"), "http://localhost:3000");
-    const big = await fetch(`${base}/api/action`, { method: "POST", headers: { "content-type": "application/json" }, body: "x".repeat(70_000) });
+    const big = await http.fetch(`${base}/api/action`, { method: "POST", headers: { "content-type": "application/json" }, body: "x".repeat(70_000) });
     assert.equal(big.status, 413); // a real response, not a dropped connection
   });
 });

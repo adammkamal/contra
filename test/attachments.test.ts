@@ -15,10 +15,14 @@ import { backChargeInput, extractBackCharges, wrap } from "../src/extract/index.
 import { parseBackCharges } from "../src/extract/validate.ts";
 import { assessExtractedItem } from "../src/intake.ts";
 import type { AttachmentMedia, Email } from "../src/types.ts";
-import { buildScreens, HOLD_WORDS, type InboxRow, type Screens } from "../src/view.ts";
+import { SqliteStore } from "../src/store/sqlite.ts";
+import { backChargeDetail, buildScreens, HOLD_WORDS, type InboxRow, type Screens } from "../src/view.ts";
 import { eml, png, scannedPdf, textPdf, type Part } from "./attachment-fakes.ts";
 import { CONFIG, fakeGmail, gmailAuthPass } from "./gmail-fakes.ts";
-import { LLM, PM, setup } from "./helpers.ts";
+import { CONTROLLER, LLM, PM, setup } from "./helpers.ts";
+import { sessionFetch, signIn, testAuth } from "./auth-fakes.ts";
+
+const http = sessionFetch();
 
 // Made-up emails for these tests. Ridgeline Interiors LLC on Summit is SC-SUM-0912 in the demo seed, so an
 // unheld item links on its own and a held one shows the hold.
@@ -222,11 +226,11 @@ test("attachments: a person clears amount_only_in_image only by typing the amoun
     const action = row().actions.find((a) => a.command === "confirmImageAmount")!;
     assert.deepEqual(action, { command: "confirmImageAmount", ref: "BC-7403", options: ["SC-SUM-0912"] });
     assert.deepEqual(parseAction(action), action);
-    await assert.rejects(cmd.runAction(app, action, { choice: "SC-SUM-0912", amount: "$0.00" }), /must be more than \$0\.00; nothing changed and BC-7403 stays held/);
-    await assert.rejects(cmd.runAction(app, action, { choice: "SC-SUM-0912" }), /type the amount/);
-    await assert.rejects(cmd.runAction(app, action, { choice: "SC-LAK-0301", amount: "$640.00" }), /choose one of/);
+    await assert.rejects(cmd.runAction(app, action, { choice: "SC-SUM-0912", amount: "$0.00" }, { by: PM }), /must be more than \$0\.00; nothing changed and BC-7403 stays held/);
+    await assert.rejects(cmd.runAction(app, action, { choice: "SC-SUM-0912" }, { by: PM }), /type the amount/);
+    await assert.rejects(cmd.runAction(app, action, { choice: "SC-LAK-0301", amount: "$640.00" }, { by: PM }), /choose one of/);
     assert.equal(app.ctx.contra.backCharges.get("BC-7403")!.state, "held");
-    await cmd.runAction(app, action, { choice: "SC-SUM-0912", amount: "640.00" });
+    await cmd.runAction(app, action, { choice: "SC-SUM-0912", amount: "640.00" }, { by: PM });
     const bc = app.ctx.contra.backCharges.get("BC-7403")!;
     assert.equal(bc.state, "linked");
     assert.deepEqual(bc.holdReasons, []);
@@ -246,11 +250,11 @@ test("attachments: a PM-confirmed image amount is never called verbatim: the tra
     const { email } = await parseEmlWithMedia(eml({ subject: "Summit - BC-7403", body: "Photo attached.", parts: [photo] }), "gmail-h1");
     cmd.ingestInboxEmail(app, email, parseBackCharges({ items: [photoItem()] }, email).items, LLM, "gmail");
     const action = buildScreens(app).inbox.find((r) => r.ref === "BC-7403")!.actions[0]!;
-    await cmd.runAction(app, action, { choice: "SC-SUM-0912", amount: "$640.00" });
+    await cmd.runAction(app, action, { choice: "SC-SUM-0912", amount: "$640.00" }, { by: PM });
     const line = "amount confirmed by dana.ortiz (PM) from attachment IMG_2041.jpg";
     // Through the notice and the response window to eligible, as any item goes.
     const noticeId = cmd.draftNotice(app, "SC-SUM-0912")!;
-    cmd.approveNotice(app, noticeId);
+    cmd.approveNotice(app, noticeId, PM);
     cmd.sendNotice(app, noticeId);
     cmd.advanceDays(app, 14);
     assert.deepEqual(cmd.evaluateAll(app), [{ ref: "BC-7403", status: "eligible" }]);
@@ -281,16 +285,16 @@ async function photoToApprovedCredit(modelRead: string, typed: string) {
   const { email } = await parseEmlWithMedia(eml({ subject: "Summit - BC-7403", body: "Photo of the ticket attached.", parts: [photo] }), "gmail-p1");
   const item = photoItem({ amountText: modelRead, amountSentence: `BC-7403 FLOOR PROTECTION ${modelRead}` });
   cmd.ingestInboxEmail(app, email, parseBackCharges({ items: [item] }, email).items, LLM, "gmail");
-  await cmd.runAction(app, buildScreens(app).inbox.find((r) => r.ref === "BC-7403")!.actions[0]!, { choice: "SC-SUM-0912", amount: typed });
+  await cmd.runAction(app, buildScreens(app).inbox.find((r) => r.ref === "BC-7403")!.actions[0]!, { choice: "SC-SUM-0912", amount: typed }, { by: PM });
   const noticeId = cmd.draftNotice(app, "SC-SUM-0912")!;
   const notice = app.ctx.contra.notices.get(noticeId)!.body;
-  cmd.approveNotice(app, noticeId);
+  cmd.approveNotice(app, noticeId, PM);
   cmd.sendNotice(app, noticeId);
   cmd.advanceDays(app, 14);
   cmd.evaluateAll(app);
   const creditId = cmd.proposeCredit(app, "SC-SUM-0912")!;
   const proposedRow = buildScreens(app).credits.find((c) => c.id === creditId)!;
-  cmd.approveCredit(app, creditId);
+  cmd.approveCredit(app, creditId, CONTROLLER);
   return { app, creditId, notice, proposedRow };
 }
 
@@ -353,14 +357,14 @@ test("attachments: a corrected amount that the email's own text contradicts is r
     const action = buildScreens(app).inbox.find((r) => r.ref === "BC-7403")!.actions[0]!;
     const before = app.ctx.contra.audit.all().length;
     await assert.rejects(
-      cmd.runAction(app, action, { choice: "SC-SUM-0912", amount: "$640.00" }),
+      cmd.runAction(app, action, { choice: "SC-SUM-0912", amount: "$640.00" }, { by: PM }),
       /BC-7403: you typed \$640\.00, but the email body gives BC-7403 \$604\.00, not \$640\.00: BC-7403 is \$604\.00, ticket photo attached\.; nothing changed and BC-7403 stays held/,
     );
     assert.equal(app.ctx.contra.backCharges.get("BC-7403")!.state, "held");
     assert.equal(app.ctx.contra.backCharges.get("BC-7403")!.amountConfirmation, undefined);
     assert.equal(app.ctx.contra.audit.all().length, before);
     // The amount the text agrees with is accepted.
-    await cmd.runAction(app, action, { choice: "SC-SUM-0912", amount: "$604.00" });
+    await cmd.runAction(app, action, { choice: "SC-SUM-0912", amount: "$604.00" }, { by: PM });
     assert.equal(app.ctx.contra.backCharges.get("BC-7403")!.state, "linked");
   } finally {
     app.close();
@@ -562,12 +566,13 @@ test("attachments: media for an attachment the email doesn't list as an image is
 
 test("attachments: before a PM confirms an image amount, no API response carries the model's reading; after, the row has both as fields", async () => {
   const dir = mkdtempSync(join(tmpdir(), "contra-"));
-  const api = createApiServer({ dbPath: join(dir, "d.db"), liveDbPath: join(dir, "live.db"), start: LIVE_START, realClock: { now: () => LIVE_START }, emlDir: null });
+  const api = createApiServer({ auth: testAuth(), dbPath: join(dir, "d.db"), liveDbPath: join(dir, "live.db"), start: LIVE_START, realClock: { now: () => LIVE_START }, emlDir: null });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
+  http.use(await signIn(`http://127.0.0.1:${(api.server.address() as AddressInfo).port}`, api.authStore));
   const base = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
   // The model's readings below, in any form a response could carry them.
   const MODEL_READING = /604\.00|\$604\b|60400|617\.00|\$617\b|61700/;
-  const sse = await fetch(`${base}/api/events`);
+  const sse = await http.fetch(`${base}/api/events`);
   const reader = sse.body!.getReader();
   let events = "";
   const pump = (async () => {
@@ -579,7 +584,7 @@ test("attachments: before a PM confirms an image amount, no API response carries
   })().catch(() => {});
   const responses: string[] = [];
   const call = async (path: string, body?: unknown) => {
-    const r = await fetch(`${base}${path}`, body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const r = await http.fetch(`${base}${path}`, body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     const text = await r.text();
     responses.push(`${path} -> ${r.status}: ${text}`);
     return { status: r.status, body: JSON.parse(text) as any };
@@ -637,5 +642,53 @@ test("attachments: before a PM confirms an image amount, no API response carries
     await reader.cancel().catch(() => {});
     await pump;
     await api.close();
+  }
+});
+
+test("attachments: the stored audit log keeps the model's reading of an image amount; only the audit views withhold it", async () => {
+  const db = join(mkdtempSync(join(tmpdir(), "contra-")), "d.db");
+  const app = liveApp(db);
+  const photo: Part = { filename: "IMG_2041.jpg", contentType: "image/jpeg", data: png(64, 48) };
+  const ingest = async (id: string, body: string, parts: Part[], item: Record<string, unknown>) => {
+    const { email } = await parseEmlWithMedia(eml({ id, subject: `Summit - ${String(item.ref)}`, body, parts }), `gmail-${id}`);
+    const { items } = parseBackCharges({ items: [item] }, email);
+    assert.equal(items.length, 1);
+    cmd.ingestInboxEmail(app, email, items, LLM, "gmail");
+  };
+  try {
+    // BC-7403: read from a photo as $604.00. BC-7404: read from a photo as $617.00 while the body says $1,111.00.
+    await ingest("s1", "Photo of the ticket attached.", [photo], photoItem({ amountText: "$604.00", amountSentence: "BC-7403 FLOOR PROTECTION $604.00" }));
+    await ingest("s2", "BC-7404 is $1,111.00 per the ticket.", [photo], photoItem({ ref: "BC-7404", amountText: "$617.00", amountSentence: "BC-7404 FLOOR PROTECTION $617.00" }));
+    // BC-7406: stated in a body, then a later email's photo is read as another amount for it ($1,520.00).
+    const sentence = "BC-7406: corridor wall repair, Summit L3, $1,250.00.";
+    await ingest("s3", `Hi,\n\n${sentence}\n\nDana`, [], rawItem({ ref: "BC-7406", amountText: "$1,250.00", amountSentence: sentence, amountAttachment: 0, amountPage: undefined }));
+    await ingest("s4", "Updated ticket attached.", [photo], photoItem({ ref: "BC-7406", amountText: "$1,520.00", amountSentence: "BC-7406 WALL REPAIR $1,520.00" }));
+    assert.deepEqual(app.ctx.contra.backCharges.get("BC-7406")!.holdReasons, ["conflicting_amounts"]);
+
+    // The audit views: none of the three readings, in any form.
+    const READINGS = /604\.00|\$604\b|60400|617\.00|\$617\b|61700|1,520\.00|152000/;
+    const views = [buildScreens(app).audit, ...["BC-7403", "BC-7404", "BC-7406"].map((ref) => backChargeDetail(app, ref).history)];
+    for (const v of views) assert.doesNotMatch(JSON.stringify(v), READINGS);
+    const later = backChargeDetail(app, "BC-7406").history.find((h) => h.what.startsWith("held: conflicting_amounts"))!;
+    assert.match(later.evidence[0]!, /: another amount, read by the model from an image in that email \(the model's reading isn't shown; a person must read the image\)$/);
+  } finally {
+    app.close();
+  }
+
+  // The stored log, read straight from the database: every reading is there, as the model gave it.
+  const store = new SqliteStore(db);
+  try {
+    const log = store.auditLog({ now: () => LIVE_START });
+    const events = (ref: string) => log.forEntity("backcharge", ref);
+    const extracted = events("BC-7403").find((e) => e.to === "extracted")!;
+    assert.equal(extracted.action, "extracted $604.00");
+    assert.deepEqual(extracted.evidence, ["BC-7403 FLOOR PROTECTION $604.00", "in attachment IMG_2041.jpg"]);
+    assert.equal(events("BC-7404").find((e) => e.to === "extracted")!.action, "extracted $617.00");
+    const held = events("BC-7404").find((e) => e.to === "held")!;
+    assert.ok(held.evidence.some((v) => v.startsWith("email body gives BC-7404 $1,111.00, not $617.00: ")), held.evidence.join(" | "));
+    const conflict = events("BC-7406").find((e) => e.to === "held")!;
+    assert.match(conflict.evidence[0]!, /^[^:]+: BC-7406 WALL REPAIR \$1,520\.00$/);
+  } finally {
+    store.close();
   }
 });

@@ -224,8 +224,9 @@
       "seq": 5,
       "at": "2026-11-07 15:00 UTC",
       "actor": "Sample extractions (hand-written)",
-      "what": "backcharge BC-7153: extracted (amount read from an image: withheld until a person confirms the amount from the image) (new → extracted)",
+      "what": "backcharge BC-7153: extracted $604.00 (new → extracted)",
       "evidence": [
+        "BC-7153 FLOOR PROTECTION $604.00",
         "in attachment IMG_2041.jpg"
       ]
     },

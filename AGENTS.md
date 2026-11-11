@@ -32,6 +32,7 @@ src/types.ts         domain records
 src/clock.ts         injectable clock
 src/audit.ts         append-only event log
 src/state.ts         back-charge and credit state machines
+src/roles.ts         who may do what: PM approves notices, controller decides credits, AP turns credits on; separation of duties
 src/span.ts          verbatim source check
 src/intake.ts        per-item ingest checks (span, dispute, link); shared with bench/
 src/resolver.ts      job -> subcontract party -> alias linkage
@@ -46,6 +47,7 @@ src/store/sqlite.ts  append-only event log + snapshots (node:sqlite, built in)
 src/app.ts           App: the ONLY entry point for UI and scripts
 src/commands.ts      one function per UI button (each inside app.run) + runAction(app, action, input) dispatcher
 server/api.ts        JSON API over the same functions (npm run api); node:http, plus ingest/ for .eml
+server/auth.ts       accounts (data/auth.db, scrypt) and sessions; npm run user:add -- <username> <role> [--live] [--email <address>]
 ingest/eml.ts        parseEml / loadPmEmails: .eml files -> Email (mailparser; outside src/ on purpose)
 ingest/attachments.ts  PDF text (pdfjs-dist) and photo checks for PM email attachments, with the limits
 scripts/make-eml.ts  writes fixtures/emails/E-1..E-3.eml from the seed (QP, HTML-only, 7bit)

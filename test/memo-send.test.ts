@@ -16,6 +16,9 @@ import type { MemoSender } from "../src/memo.ts";
 import { IllegalTransition, transitionMemo } from "../src/state.ts";
 import { buildScreens, isOffered, nextStep } from "../src/view.ts";
 import { CONFIG, fakeExtract, fakeGmail, rfc822, SECRETS, sseClient, until } from "./gmail-fakes.ts";
+import { sessionFetch, signIn, testAuth } from "./auth-fakes.ts";
+
+const http = sessionFetch();
 
 // Made-up addresses only. No network: the memo sender, Gmail and Google are fakes.
 
@@ -40,8 +43,9 @@ function fakeSender(failures = 0) {
 }
 
 async function withApi(sender: MemoSender | null, fn: (base: string, port: number, app: () => App) => Promise<void>) {
-  const api = createApiServer({ dbPath: join(mkdtempSync(join(tmpdir(), "contra-memo-")), "d.db"), start: START, emlDir: null, memoSender: sender, allowedOrigins: [ALLOWED] });
+  const api = createApiServer({ auth: testAuth(), dbPath: join(mkdtempSync(join(tmpdir(), "contra-memo-")), "d.db"), start: START, emlDir: null, memoSender: sender, allowedOrigins: [ALLOWED] });
   await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
+  http.use(await signIn(`http://127.0.0.1:${(api.server.address() as AddressInfo).port}`, api.authStore));
   const port = (api.server.address() as AddressInfo).port;
   try {
     await fn(`http://127.0.0.1:${port}`, port, api.app);
@@ -51,7 +55,7 @@ async function withApi(sender: MemoSender | null, fn: (base: string, port: numbe
 }
 
 const post = async (base: string, body: unknown, headers: Record<string, string> = { "content-type": "application/json" }) => {
-  const r = await fetch(`${base}/api/action`, { method: "POST", headers, body: JSON.stringify(body) });
+  const r = await http.fetch(`${base}/api/action`, { method: "POST", headers, body: JSON.stringify(body) });
   return { status: r.status, body: (await r.json()) as any };
 };
 
@@ -145,7 +149,7 @@ test("sendCreditMemo goes through the API gates: a disallowed origin or a non-JS
     const body = JSON.stringify({ action: SEND });
     const raw = (headers: Record<string, string>) =>
       new Promise<number>((resolve, reject) => {
-        const req = request({ host: "127.0.0.1", port, method: "POST", path: "/api/action", headers }, (res) => (res.resume(), resolve(res.statusCode!)));
+        const req = request({ host: "127.0.0.1", port, method: "POST", path: "/api/action", headers: { ...headers, cookie: http.cookie } }, (res) => (res.resume(), resolve(res.statusCode!)));
         req.on("error", reject);
         req.end(body);
       });
@@ -199,14 +203,15 @@ test("secrets: the refresh token, client secret and access token never appear in
       const now = () => Date.UTC(2026, 10, 10, 16);
       const client = new GmailClient(CONFIG, g.transport, now);
       const poller = new InboxPoller({ client, extract: fakeExtract().extract, now });
-      const api = createApiServer({ dbPath: join(mkdtempSync(join(tmpdir(), "contra-sec-")), "d.db"), liveDbPath: join(mkdtempSync(join(tmpdir(), "contra-sec-")), "live.db"), start: START, emlDir: null, heartbeatMs: 20, memoSender: new GmailMemoSender(client, now), inbox: { poller, intervalMs: 60_000 } });
+      const api = createApiServer({ auth: testAuth(), dbPath: join(mkdtempSync(join(tmpdir(), "contra-sec-")), "d.db"), liveDbPath: join(mkdtempSync(join(tmpdir(), "contra-sec-")), "live.db"), start: START, emlDir: null, heartbeatMs: 20, memoSender: new GmailMemoSender(client, now), inbox: { poller, intervalMs: 60_000 } });
       await new Promise<void>((r) => api.server.listen(0, "127.0.0.1", r));
+      http.use(await signIn(`http://127.0.0.1:${(api.server.address() as AddressInfo).port}`, api.authStore));
       const port = (api.server.address() as AddressInfo).port;
       const base = `http://127.0.0.1:${port}`;
-      const sse = await sseClient(port);
+      const sse = await sseClient(port, { cookie: http.cookie });
       try {
         await api.pollNow();
-        seen.push(JSON.stringify(poller.status()), await (await fetch(`${base}/api/health`)).text());
+        seen.push(JSON.stringify(poller.status()), await (await http.fetch(`${base}/api/health`)).text());
         await advance(api.app(), (a) => a.command === "billArrives");
         const r = await post(base, { action: SEND });
         seen.push(JSON.stringify(r.body));

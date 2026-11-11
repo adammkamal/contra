@@ -3,8 +3,9 @@ import type { App, Workspace } from "./app.ts";
 import { DEMO_BILL, DEMO_SC } from "./commands.ts";
 import { formatUsd, scanUsdAmounts } from "./money.ts";
 import { matchJobs, resolve, type Resolution } from "./resolver.ts";
-import { attachmentPages, describeAt, describeAttachment, readFromImage } from "./span.ts";
-import { EMAIL_INGESTED, type Actor, type BackCharge, type Credit, type Email, type EmailOrigin, type HoldReason, type Job, type Notice, type RejectedItem, type Subcontract } from "./types.ts";
+import { attachmentPages, describeAt, describeAttachment, inEmailText, readFromImage } from "./span.ts";
+import { conflictingStatements } from "./intake.ts";
+import { EMAIL_INGESTED, ROLE_WORDS, type Actor, type BackCharge, type Credit, type Email, type EmailOrigin, type HoldReason, type Job, type Notice, type RejectedItem, type Subcontract } from "./types.ts";
 import { amountNotes, Contra } from "./workflow.ts";
 import { backChargeAmount } from "./credits.ts";
 
@@ -76,7 +77,7 @@ export function backChargeStatus(b: Readonly<BackCharge>): Status {
 }
 
 const NOTICE_STATUS: Record<Notice["state"], Status> = {
-  drafted: { label: "Draft, needs controller approval", tone: "warn" },
+  drafted: { label: "Draft, needs PM approval", tone: "warn" },
   approved: { label: "Approved, not sent", tone: "info" },
   sent: { label: "Sent", tone: "ok" },
 };
@@ -104,7 +105,7 @@ export function memoStatus(c: Readonly<Credit>): Status {
 }
 
 export function actorLabel(a: Actor): string {
-  if (a.kind === "human") return `${a.id} (${a.role === "pm" ? "PM" : a.role === "ap" ? "AP" : "Controller"})`;
+  if (a.kind === "human") return `${a.id} (${ROLE_WORDS[a.role]})${a.presentedBy ? `, presented by ${a.presentedBy}` : ""}`;
   if (a.kind === "llm") return `AI extractor (${a.model})`;
   if (a.id === "sample-extractions") return "Sample extractions (hand-written)";
   return "Contra";
@@ -160,7 +161,8 @@ export interface PhotoAmount {
 /**
  * True while the item's amount is the model's reading of an image and no person has confirmed it. Then
  * neither the amount nor the sentence it came from is shown anywhere, so the person who types the amount
- * reads the image without being anchored on the model's figure. (Ingest doesn't log it either: src/workflow.ts.)
+ * reads the image without being anchored on the model's figure. The audit log stores it; the audit views leave
+ * it out too (shownEvent).
  */
 function readingWithheld(b: Readonly<BackCharge>, email: Email | undefined): boolean {
   return !b.amountConfirmation && email !== undefined && readFromImage(email, b.extracted.amountEvidence.at);
@@ -168,6 +170,53 @@ function readingWithheld(b: Readonly<BackCharge>, email: Email | undefined): boo
 
 const photoAmount = (b: Readonly<BackCharge>): PhotoAmount | null =>
   b.amountConfirmation ? { pmEntered: formatUsd(b.amountConfirmation.enteredCents), modelRead: formatUsd(b.amountConfirmation.modelCents) } : null;
+
+/** In an audit view, in place of the model's reading of an image, until a person confirms the amount. */
+const WITHHELD = "withheld until a person confirms the amount from the image";
+
+/**
+ * What an audit view (the screens' audit[] and a detail's history[]) shows of a stored event. The log keeps the
+ * model's reading of an image amount like any other evidence (I6). A back-charge's events leave it out until a
+ * person confirms the item's amount (amountConfirmation):
+ * - its "extracted" entry: the amount and its sentence, and a dispute sentence read from the image too;
+ * - its ingest hold: a conflicting_amounts line says "not the amount read from the image";
+ * - a later email's conflicting amount (a "held: conflicting_amounts" entry citing "<email id>: <sentence>")
+ *   whose sentence is in none of that email's text: a reading of an image, or model text found nowhere in the
+ *   email, withheld either way. For an item with no image amount to confirm, it stays withheld.
+ * Every other event is shown as stored.
+ */
+function shownEvent(contra: Contra, e: AuditEvent): { action: string; evidence: string[] } {
+  const stored = { action: e.action, evidence: [...e.evidence] };
+  const b = e.entity === "backcharge" ? contra.backCharges.get(e.entityId) : undefined;
+  if (!b || b.amountConfirmation) return stored;
+  const x = b.extracted;
+  const email = contra.emails.get(x.amountEvidence.emailId);
+  if (email && readingWithheld(b, email)) {
+    if (e.to === "extracted" && e.from === null && e.action === `extracted ${formatUsd(x.amountCents)}`) {
+      const imageDispute = x.disputeEvidence && readFromImage(email, x.disputeEvidence.at) ? x.disputeEvidence : null;
+      return {
+        action: `extracted (amount read from an image: ${WITHHELD})`,
+        evidence: stored.evidence
+          .filter((v, i) => !(i === 0 && v === x.amountEvidence.sentence))
+          .map((v) => (imageDispute && v === imageDispute.sentence ? `dispute sentence read by the model from ${describeAt(email, imageDispute.at)}: ${WITHHELD}` : v)),
+      };
+    }
+    if (e.to === "held") {
+      const full = conflictingStatements(email, x);
+      const shown = conflictingStatements(email, x, { withholdAmount: true });
+      return { action: e.action, evidence: stored.evidence.map((v) => (full.includes(v) ? shown[full.indexOf(v)]! : v)) };
+    }
+  }
+  if (e.action === "held: conflicting_amounts") {
+    const evidence = stored.evidence.map((v) => {
+      const m = /^([^\s:]+): ([\s\S]*)$/.exec(v);
+      const other = m ? contra.emails.get(m[1]!) : undefined;
+      return other && !inEmailText(other, m![2]!) ? `${other.id}: another amount, read by the model from an image in that email (the model's reading isn't shown; a person must read the image)` : v;
+    });
+    return { action: e.action, evidence };
+  }
+  return stored;
+}
 
 /** The model's own text about a withheld item (its description), with every dollar amount in it taken out. */
 const withoutAmounts = (text: string) => scanUsdAmounts(text).reduce((t, a) => t.split(a.text).join("[amount withheld]"), text);
@@ -352,13 +401,16 @@ export function buildScreens(app: App): Screens {
 
   const audit = [...contra.audit.all()]
     .reverse()
-    .map((e: AuditEvent) => ({
-      seq: e.seq,
-      at: when(e.at),
-      actor: actorLabel(e.actor),
-      what: `${e.entity} ${e.entityId}: ${e.action}${e.from || e.to ? ` (${e.from ?? "new"} → ${e.to ?? e.from})` : ""}`,
-      evidence: [...e.evidence],
-    }));
+    .map((e: AuditEvent) => {
+      const shown = shownEvent(contra, e);
+      return {
+        seq: e.seq,
+        at: when(e.at),
+        actor: actorLabel(e.actor),
+        what: `${e.entity} ${e.entityId}: ${shown.action}${e.from || e.to ? ` (${e.from ?? "new"} → ${e.to ?? e.from})` : ""}`,
+        evidence: shown.evidence,
+      };
+    });
 
   const extractedBy = [...contra.audit.all()].filter((e) => e.entity === "backcharge" && e.to === "extracted").map((e) => e.actor.kind);
   const extractionSource: Screens["extractionSource"] =
@@ -414,7 +466,7 @@ export function nextStep(app: App): { text: string; action: Action | null } {
   if (toConfirm) return { text: `PM confirms the link for ${toConfirm.ref}`, action: { command: "confirmLink", ref: toConfirm.ref } };
   if (notices.length === 0) return { text: "Draft the back-charge notice", action: { command: "draftNotice", subcontractId: DEMO_SC } };
   const n = notices[0]!;
-  if (n.state === "drafted") return { text: "Controller approves the notice", action: { command: "approveNotice", noticeId: n.id } };
+  if (n.state === "drafted") return { text: "PM approves the notice", action: { command: "approveNotice", noticeId: n.id } };
   if (n.state === "approved") return { text: "Send the notice", action: { command: "sendNotice", noticeId: n.id } };
   const replied = bcs.some((b) => b.subResponse !== null);
   if (!replied && bcs.some((b) => b.state === "noticed")) return { text: "Ridgeline replies", action: { command: "ingestSubReply", noticeId: n.id } };
@@ -448,7 +500,7 @@ function liveNextStep(app: App): { text: string; action: Action | null } {
   if (toConfirmAmount) return { text: `PM checks the amount of ${toConfirmAmount.ref} against its image and confirms it (in its Inbox row)`, action: null };
   const notices = [...contra.notices.values()];
   const drafted = notices.find((n) => n.state === "drafted");
-  if (drafted) return { text: `Controller approves notice ${drafted.id}`, action: { command: "approveNotice", noticeId: drafted.id } };
+  if (drafted) return { text: `PM approves notice ${drafted.id}`, action: { command: "approveNotice", noticeId: drafted.id } };
   const approved = notices.find((n) => n.state === "approved");
   if (approved) return { text: `Send notice ${approved.id}`, action: { command: "sendNotice", noticeId: approved.id } };
   // After the unsent notices above: an item stays "linked" until its notice is sent, so drafting must wait
@@ -543,7 +595,10 @@ export function backChargeDetail(app: App, ref: string): BackChargeDetail {
         }
       : null,
     eligibility: { status: r.status, holdReasons: r.holdReasons.map((h) => HOLD_WORDS[h]), waitingFor: r.pendingReasons, trace: r.trace },
-    history: contra.audit.forEntity("backcharge", ref).map((e) => ({ seq: e.seq, at: when(e.at), actor: actorLabel(e.actor), what: e.action + (e.from || e.to ? ` (${e.from ?? "new"} → ${e.to ?? e.from})` : ""), evidence: [...e.evidence] })),
+    history: contra.audit.forEntity("backcharge", ref).map((e) => {
+      const shown = shownEvent(contra, e);
+      return { seq: e.seq, at: when(e.at), actor: actorLabel(e.actor), what: shown.action + (e.from || e.to ? ` (${e.from ?? "new"} → ${e.to ?? e.from})` : ""), evidence: shown.evidence };
+    }),
   };
 }
 

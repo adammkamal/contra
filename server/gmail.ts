@@ -13,7 +13,7 @@ import { ingestInboxEmail } from "../src/commands.ts";
 import type { ModelSettings } from "../src/extract/anthropic.ts";
 import { extractBackCharges, type ExtractOptions } from "../src/extract/index.ts";
 import type { MemoSender } from "../src/memo.ts";
-import type { Actor, AttachmentMedia, Email, ExtractedBackCharge, RejectedExtraction } from "../src/types.ts";
+import type { Actor, AttachmentMedia, Email, ExtractedBackCharge, Human, RejectedExtraction } from "../src/types.ts";
 import { MODEL_ERROR_MESSAGES } from "./try.ts";
 
 export type Transport = (url: string, init?: RequestInit) => Promise<Response>;
@@ -460,7 +460,8 @@ export class InboxPoller {
     return out;
   }
 
-  async poll(app: App): Promise<{ ingested: number; overlapped?: true }> {
+  /** `raisedBy`: the account whose email is a sender's (authenticated, allow-listed) address, or null. */
+  async poll(app: App, raisedBy: (address: string) => Human | null = () => null): Promise<{ ingested: number; overlapped?: true }> {
     if (this.#running) return { ingested: 0, overlapped: true };
     const client = this.opts.client;
     if (!client) return { ingested: 0 };
@@ -511,7 +512,8 @@ export class InboxPoller {
           errors.push(`extraction failed for one message: ${x.reason}`);
           continue;
         }
-        if (ingestInboxEmail(app, email, x.items, x.actor, "gmail", x.rejected ?? []).ingested) ingested++;
+        const raiser = m.fromAddress ? raisedBy(m.fromAddress) : null;
+        if (ingestInboxEmail(app, email, x.items, x.actor, "gmail", x.rejected ?? [], raiser).ingested) ingested++;
       }
       this.#status = { ...this.#status, status: capped ? dailyCapReached(this.#cap) : errors.length ? "error" : "ok", lastError: errors.at(-1) ?? null };
     } catch (e) {

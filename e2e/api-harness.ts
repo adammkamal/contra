@@ -11,6 +11,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApiServer } from "../server/api.ts";
+import { AuthStore } from "../server/auth.ts";
 import { GmailClient, InboxPoller, type Extract } from "../server/gmail.ts";
 import type { MemoSender } from "../src/memo.ts";
 import { cents } from "../src/money.ts";
@@ -107,7 +108,9 @@ const fetcher = (async (_url: string, init?: RequestInit) => {
 }) as unknown as typeof fetch;
 
 const dir = mkdtempSync(join(tmpdir(), "contra-e2e-"));
+// Accounts: in memory; the UI's sign-in page comes with the ui branch (until then the API answers 401).
 const api = createApiServer({
+  auth: { store: new AuthStore(":memory:") },
   dbPath: join(dir, "demo.db"),
   liveDbPath: join(dir, "live.db"),
   start: new Date("2026-11-07T15:00:00Z"),

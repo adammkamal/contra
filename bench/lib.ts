@@ -150,7 +150,10 @@ export interface Score {
   wrongLink: boolean;
   wrongCredit: boolean;
   routedToHuman: boolean;
-  /** A labeled back-charge that no accepted item stands for: in the product nobody ever sees it. */
+  /**
+   * A labeled back-charge that no accepted item stands for, from an email that produced no refused item
+   * either: in the product nothing reaches the Inbox, so nobody ever sees it.
+   */
   missed: boolean;
 }
 
@@ -162,15 +165,20 @@ export interface Score {
  * wrongCredit: would create a credit that a careful human would not (wrong party, disputed, or wrong amount).
  * `extracted` is the extracted amount; it only matters when the system would credit.
  * `accepted` is how many items the extractor accepted in the run (o is REVIEW when it isn't exactly 1).
+ * `refused` is how many items validation refused in the run (BenchRun.rejected). Each is an Inbox row in the
+ * product ("not taken in", held, asking a person to read the email).
  *
- * missed: the label names a back-charge (a subcontract or "review") and the run accepted no item. Nothing
- *   reaches the Inbox, so no person sees it: never matching (even when the label says review) and never
- *   routed to a person.
+ * The label names a back-charge (a subcontract or "review") and the run accepted no item:
+ *   - refused > 0: routed to a person (the refused row sends them to the email), never matching;
+ *   - otherwise missed: nothing reaches the Inbox, so no person sees it: never matching (even when the label
+ *     says review) and never routed to a person.
+ *   Only refused items count. A row saying the email held no back-charge would not send anyone to find one,
+ *   so if the product ever shows such a row, it must not count here.
  *
  * Label "none" (no back-charge): correct only if no item is accepted. An accepted item that would be
  * credited is a wrong credit; any other accepted outcome is routed to a person and not correct.
  */
-export function score(o: Outcome, label: BenchLabel, extracted: number, accepted: number): Score {
+export function score(o: Outcome, label: BenchLabel, extracted: number, accepted: number, refused = 0): Score {
   const linked = o.decision.kind === "link" ? o.decision.subcontractId : null;
   if (label.link === "none") {
     return {
@@ -182,7 +190,10 @@ export function score(o: Outcome, label: BenchLabel, extracted: number, accepted
       missed: false,
     };
   }
-  if (accepted === 0) return { matching: false, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: false, missed: true };
+  if (accepted === 0) {
+    const routed = refused > 0;
+    return { matching: false, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: routed, missed: !routed };
+  }
   const wrongLink = linked !== null && linked !== label.link;
   return {
     matching: label.link === "review" ? linked === null : linked === label.link,
@@ -216,13 +227,14 @@ export interface ItemScore {
  *  1. a labeled item with a ref pairs with the accepted item of that ref;
  *  2. a labeled item without a ref pairs with an unpaired accepted item of exactly its amount; among
  *     several, the one the system linked to the labeled subcontract, else the first in extraction order.
- * A labeled item left unpaired was not extracted: missed (nobody sees it), like a run with no accepted item.
+ * A labeled item left unpaired was not extracted, and is scored like a run with no accepted item: routed to a
+ * person when the run refused at least one item (`refused`, see `score`), else missed (nobody sees it).
  * An accepted item left unpaired matches no labeled charge: scored against label "none" (crediting it is
  * a wrong credit, linking it a wrong link, otherwise routed to a person; never matching).
  * The run: matching only if every labeled item matches and no accepted item is left over; dispute only if
  * every item's (labeled and left over) is; wrongLink, wrongCredit, routedToHuman and missed if any item's is.
  */
-export function scoreItems(decided: readonly DecidedItem[], label: BenchItemsLabel): { score: Score; items: ItemScore[]; extra: number[] } {
+export function scoreItems(decided: readonly DecidedItem[], label: BenchItemsLabel, refused = 0): { score: Score; items: ItemScore[]; extra: number[] } {
   const free = new Set(decided.map((_, i) => i));
   const at: (number | null)[] = label.items.map(() => null);
   const take = (li: number, i: number | undefined) => {
@@ -247,7 +259,7 @@ export function scoreItems(decided: readonly DecidedItem[], label: BenchItemsLab
   const items: ItemScore[] = label.items.map((l, li) => {
     const i = at[li]!;
     const one: BenchLabel = { id: label.id, labeledBy: label.labeledBy, link: l.link, disputed: l.disputed, amountCents: l.amountCents };
-    return { label: l, at: i, score: i === null ? score(REVIEW, one, 0, 0) : score(decided[i]!.o, one, decided[i]!.x.amountCents, 1) };
+    return { label: l, at: i, score: i === null ? score(REVIEW, one, 0, 0, refused) : score(decided[i]!.o, one, decided[i]!.x.amountCents, 1) };
   });
   const extra = [...free].sort((a, b) => a - b);
   const all = [...items.map((s) => s.score), ...extra.map((i) => score(decided[i]!.o, NO_CHARGE, decided[i]!.x.amountCents, 1))];

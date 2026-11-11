@@ -58,8 +58,8 @@ export function unaccountedRefs(email: Email, extractedRefs: readonly string[]):
  * sentence ends, that names the ref and has readable dollar amounts, none equal to the extracted amount.
  * Sections are only compared with each other, never with themselves, so an email without attachments
  * never has any.
- * `withholdAmount`: the message leaves out x's own amount (the model's unconfirmed reading of an image,
- * which no screen or audit entry shows before a person confirms the amount).
+ * `withholdAmount`: the message leaves out x's own amount. The log stores the full message; the views show
+ * this one while x's amount is the model's unconfirmed reading of an image (src/view.ts shownEvent).
  */
 export function conflictingStatements(email: Email, x: ExtractedBackCharge, opts: { withholdAmount?: boolean } = {}): string[] {
   const own = x.amountEvidence.at;
@@ -129,7 +129,7 @@ export function assessExtractedItem(email: Email, x: ExtractedBackCharge, data: 
     holdEvidence.push(...unverified);
   }
   // Another section of the email (the body, or a page of an attachment) gives this back-charge another amount.
-  const conflicts = amountCheck.ok || imageAmount ? conflictingStatements(email, x, { withholdAmount: imageAmount }) : [];
+  const conflicts = amountCheck.ok || imageAmount ? conflictingStatements(email, x) : [];
   if (conflicts.length) {
     holdReasons.push("conflicting_amounts");
     holdEvidence.push(...conflicts);

@@ -5,8 +5,9 @@ import { isOffered } from "./view.ts";
 
 export class NotOffered extends Error {}
 import { cents, parseUsd } from "./money.ts";
+import { NotPermitted } from "./roles.ts";
 import { demoReply } from "./seed.ts";
-import type { Actor, Email, EmailOrigin, ExtractedBackCharge, ExtractedResponse, RejectedExtraction } from "./types.ts";
+import type { Actor, Email, EmailOrigin, ExtractedBackCharge, ExtractedResponse, Human, RejectedExtraction } from "./types.ts";
 
 /**
  * Every button in the UI maps to exactly one of these. Each runs inside app.run (atomic).
@@ -20,6 +21,19 @@ export const DEFAULT_FIXTURES_DIR = "fixtures/extractions";
 
 /** Thrown when a command belongs to the other workspace (scripted demo steps in live, live mail in demo). */
 export class WrongWorkspace extends Error {}
+
+/**
+ * Who a person's step is recorded under. `by` is the signed-in person, injected by the host (the API's
+ * session). Demo: the step keeps its scripted actor (Dana Ortiz PM, Lee Chen Controller, Sam AP), with
+ * `presentedBy` the person who clicked, so the scripted demo reads the same whoever presents it. Live: the
+ * person themselves, with their own role; there is no live step without one. Without a person, the demo
+ * uses the scripted actor (in-process scripts and tests).
+ */
+export function actorFor(app: App, scripted: Human, by: Human | undefined): Human {
+  if (app.ctx.workspace === "demo") return by ? { ...scripted, presentedBy: by.id } : scripted;
+  if (!by) throw new NotPermitted("the live workspace records who takes each step: sign in first");
+  return { kind: "human", id: by.id, role: by.role };
+}
 
 /** The scripted demo's own emails, reply and bill exist only in the demo workspace. */
 function demoOnly(app: App, what: string): void {
@@ -89,6 +103,8 @@ export function ingestInboxEmail(
   extractor: Actor,
   origin: EmailOrigin = "gmail",
   rejected: readonly RejectedExtraction[] = [],
+  /** The account whose email is the sender's address, if any (the host matches it): recorded as the raiser. */
+  raisedBy: Human | null = null,
 ): { ingested: boolean; refs: string[] } {
   // Live mail never reaches the scripted demo: its notice, credit and payment can't change through the inbox.
   if (app.ctx.workspace !== "live") throw new WrongWorkspace("live inbox mail goes only to the live workspace, never to the demo");
@@ -96,7 +112,7 @@ export function ingestInboxEmail(
   if (app.ctx.contra.hasMessage(email.messageId)) return { ingested: false, refs: [] };
   return app.run(({ contra }) => {
     if (contra.hasMessage(email.messageId!)) return { ingested: false, refs: [] };
-    return { ingested: true, refs: contra.ingestBackChargeEmail(email, extracted, extractor, origin, rejected).map((b) => b.ref) };
+    return { ingested: true, refs: contra.ingestBackChargeEmail(email, extracted, extractor, origin, rejected, raisedBy).map((b) => b.ref) };
   });
 }
 
@@ -105,10 +121,11 @@ export function ingestInboxEmail(
  * sender, then record sent or failed (app.run). If the process stops between the send and the record,
  * the memo stays queued and is never re-sent automatically (retry is only from failed).
  */
-export async function sendCreditMemo(app: App, creditId: string): Promise<{ state: "sent" | "failed" }> {
+export async function sendCreditMemo(app: App, creditId: string, by?: Human): Promise<{ state: "sent" | "failed" }> {
   const sender = app.ctx.memoSender;
   if (!sender) throw new Error("no memo sender is configured on this server");
-  const memo = app.run(({ contra }) => contra.queueMemo(creditId, sender.destination, AP));
+  const actor = actorFor(app, AP, by);
+  const memo = app.run(({ contra }) => contra.queueMemo(creditId, sender.destination, actor));
   let messageId: string;
   try {
     ({ messageId } = await sender.send({ creditId, ...memo }));
@@ -121,24 +138,28 @@ export async function sendCreditMemo(app: App, creditId: string): Promise<{ stat
   return { state: "sent" };
 }
 
-export function confirmLink(app: App, ref: string, subcontractId?: string) {
-  app.run(({ contra }) => contra.confirmLink(ref, PM, subcontractId));
+export function confirmLink(app: App, ref: string, subcontractId?: string, by?: Human) {
+  const actor = actorFor(app, PM, by);
+  app.run(({ contra }) => contra.confirmLink(ref, actor, subcontractId));
 }
 
 /** The PM confirms an amount read from a photo or scanned page (typed as they see it, e.g. "$1,250.00") and links the item. */
-export function confirmImageAmount(app: App, ref: string, amount: string, subcontractId: string) {
+export function confirmImageAmount(app: App, ref: string, amount: string, subcontractId: string, by?: Human) {
+  const actor = actorFor(app, PM, by);
   const t = amount.trim();
   // "1,250.00" and "$1,250.00" both read; anything that isn't exactly one readable amount is refused.
   const typed = parseUsd(/^\d/.test(t) ? "$" + t : t);
-  app.run(({ contra }) => contra.confirmImageAmount(ref, PM, typed, subcontractId));
+  app.run(({ contra }) => contra.confirmImageAmount(ref, actor, typed, subcontractId));
 }
 
 export function draftNotice(app: App, subcontractId = DEMO_SC) {
   return app.run(({ contra }) => contra.draftNotice(subcontractId)?.id ?? null);
 }
 
-export function approveNotice(app: App, noticeId: string) {
-  app.run(({ contra }) => contra.approveNotice(noticeId, CONTROLLER));
+/** Only a PM approves a notice (Contra.approveNotice). In the demo the scripted approver is the PM, Dana Ortiz. */
+export function approveNotice(app: App, noticeId: string, by?: Human) {
+  const actor = actorFor(app, PM, by);
+  app.run(({ contra }) => contra.approveNotice(noticeId, actor));
 }
 
 export function sendNotice(app: App, noticeId: string) {
@@ -168,12 +189,14 @@ export function proposeCredit(app: App, subcontractId = DEMO_SC) {
   return app.run(({ contra }) => contra.proposeCredit(subcontractId)?.id ?? null);
 }
 
-export function approveCredit(app: App, creditId: string) {
-  app.run(({ contra }) => contra.approveCredit(creditId, CONTROLLER));
+export function approveCredit(app: App, creditId: string, by?: Human) {
+  const actor = actorFor(app, CONTROLLER, by);
+  app.run(({ contra }) => contra.approveCredit(creditId, actor));
 }
 
-export function rejectCredit(app: App, creditId: string, why: string) {
-  app.run(({ contra }) => contra.rejectCredit(creditId, CONTROLLER, why));
+export function rejectCredit(app: App, creditId: string, why: string, by?: Human) {
+  const actor = actorFor(app, CONTROLLER, by);
+  app.run(({ contra }) => contra.rejectCredit(creditId, actor, why));
 }
 
 /** Simulates Ridgeline's $48,000 Summit bill arriving in (simulated) Ramp. */
@@ -185,12 +208,14 @@ export function billArrives(app: App) {
   });
 }
 
-export function turnOnCredits(app: App, billId = DEMO_BILL) {
-  app.run(({ ramp }) => ramp.setApplyCredits(billId, true));
+export function turnOnCredits(app: App, billId = DEMO_BILL, by?: Human) {
+  const actor = actorFor(app, AP, by);
+  app.run(({ contra }) => contra.turnOnCredits(billId, actor));
 }
 
-export function payBill(app: App, billId = DEMO_BILL) {
-  return app.run(({ contra }) => contra.payBill(billId, AP).paidCents);
+export function payBill(app: App, billId = DEMO_BILL, by?: Human) {
+  const actor = actorFor(app, AP, by);
+  return app.run(({ contra }) => contra.payBill(billId, actor).paidCents);
 }
 
 export interface ActionInput {
@@ -213,30 +238,35 @@ export async function runAction(
   app: App,
   action: import("./view.ts").Action,
   input: ActionInput = {},
-  /** Injected by the host: where "Ingest PM emails" reads from. Absent or null: the built-in sample. */
-  sources: { pmEmails?: PmEmailSource | null } = {},
+  /**
+   * Injected by the host. `pmEmails`: where "Ingest PM emails" reads from (absent or null: the built-in
+   * sample). `by`: the signed-in person (the API's session); see actorFor. The live workspace refuses a
+   * person's step without one.
+   */
+  host: { pmEmails?: PmEmailSource | null; by?: Human } = {},
 ): Promise<void> {
   if (!isOffered(app, action)) throw new NotOffered(`${action.command} is not available right now (refresh the screen)`);
+  const by = host.by;
   switch (action.command) {
     case "ingestPmEmails":
-      ingestPmEmails(app, sources.pmEmails ? { emails: sources.pmEmails.emails, emailOrigin: sources.pmEmails.origin } : {});
+      ingestPmEmails(app, host.pmEmails ? { emails: host.pmEmails.emails, emailOrigin: host.pmEmails.origin } : {});
       return;
     case "confirmLink":
-      return confirmLink(app, action.ref);
+      return confirmLink(app, action.ref, undefined, by);
     case "chooseSubcontract": {
       if (!input.choice || !action.options.includes(input.choice)) throw new Error(`choose one of: ${action.options.join(", ")}`);
-      return confirmLink(app, action.ref, input.choice);
+      return confirmLink(app, action.ref, input.choice, by);
     }
     case "confirmImageAmount": {
       if (!input.choice || !action.options.includes(input.choice)) throw new Error(`choose one of: ${action.options.join(", ")}`);
       if (!input.amount?.trim()) throw new Error("type the amount you see in the image");
-      return confirmImageAmount(app, action.ref, input.amount, input.choice);
+      return confirmImageAmount(app, action.ref, input.amount, input.choice, by);
     }
     case "draftNotice":
       draftNotice(app, action.subcontractId);
       return;
     case "approveNotice":
-      return approveNotice(app, action.noticeId);
+      return approveNotice(app, action.noticeId, by);
     case "sendNotice":
       return sendNotice(app, action.noticeId);
     case "ingestSubReply":
@@ -250,21 +280,21 @@ export async function runAction(
       proposeCredit(app, action.subcontractId);
       return;
     case "approveCredit":
-      return approveCredit(app, action.creditId);
+      return approveCredit(app, action.creditId, by);
     case "rejectCredit": {
       const why = (input.reason ?? "").trim();
       if (!why) throw new Error("a rejection needs a reason");
-      return rejectCredit(app, action.creditId, why.slice(0, 500));
+      return rejectCredit(app, action.creditId, why.slice(0, 500), by);
     }
     case "billArrives":
       return billArrives(app);
     case "turnOnCredits":
-      return turnOnCredits(app, action.billId);
+      return turnOnCredits(app, action.billId, by);
     case "payBill":
-      payBill(app, action.billId);
+      payBill(app, action.billId, by);
       return;
     case "sendCreditMemo":
-      await sendCreditMemo(app, action.creditId);
+      await sendCreditMemo(app, action.creditId, by);
       return;
     default: {
       const never: never = action;

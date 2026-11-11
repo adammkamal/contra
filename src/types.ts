@@ -1,9 +1,17 @@
 import type { Cents } from "./money.ts";
 
+export type Role = "pm" | "controller" | "ap";
+export const ROLE_WORDS: Record<Role, string> = { pm: "PM", controller: "Controller", ap: "AP" };
+
 export type Actor =
   | { kind: "system"; id: string }
   | { kind: "llm"; id: string; model: string }
-  | { kind: "human"; id: string; role: "pm" | "controller" | "ap" };
+  /**
+   * A person. `id` and `role` are who the step is recorded under. `presentedBy`: in the scripted demo, the
+   * signed-in user who clicked, while the step keeps its scripted actor (src/commands.ts actorFor).
+   */
+  | { kind: "human"; id: string; role: Role; presentedBy?: string };
+export type Human = Extract<Actor, { kind: "human" }>;
 
 export interface Job {
   id: string;

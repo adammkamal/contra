@@ -27,8 +27,10 @@ without a label for every case, it exits listing the unlabeled cases.
   The run prints **NOT VALID FOR THE DEMO** while any label for a current case isn't human-written.
 
 Scoring is per run. A run with exactly one accepted item is scored on that item. A run with more than 1
-accepted item counts as "review" for both systems (the item count is shown). A run with 0 accepted items
-is **missed** when the label names a back-charge (shown as "nothing extracted"). A failed call is
+accepted item counts as "review" for both systems (the item count is shown). A run with 0 accepted items,
+when the label names a back-charge, is **routed to human** if validation refused at least one item from
+the email (each refused item is a "not taken in" Inbox row asking a person to read the email; shown as
+"nothing taken in (N refused)"), and otherwise **missed** (shown as "nothing extracted"). A failed call is
 reported and not scored. A case is **stable** if each system's outcome is the same in every run; the run
 lists the unstable cases.
 
@@ -41,10 +43,17 @@ set), so the comparison isolates matching. Columns, per system and per run:
 - **wrong links**, **wrong credits** (would credit something a careful human wouldn't: wrong party,
   disputed, or wrong amount) and **routed to human**. Report wrong credits together with the
   routed-to-human count: "0 wrong credits" means nothing if everything was routed to a human.
-- **missed** — the label names a back-charge (a subcontract or `"review"`) and nothing was extracted for
-  it. In the product nothing reaches the Inbox, so nobody sees it: a missed run is never matching (even
-  when the label says review) and never counted as routed to human. A `"none"` label with nothing
-  extracted is correct, not missed.
+- **missed** — the label names a back-charge (a subcontract or `"review"`), nothing was extracted for
+  it, and validation refused no item from the email. In the product nothing reaches the Inbox, so nobody
+  sees it: a missed run is never matching (even when the label says review) and never counted as routed
+  to human. With at least one refused item it is routed to human instead (still never matching): the
+  refused row sends a person to the email. Only refused items count: a row saying the email holds no
+  back-charge, if the product ever shows one, would not send anyone to look, so it would not count. A
+  `"none"` label with nothing extracted is correct, not missed.
+
+The first runs kept in `results/` are not re-scored under this rule. At those commits the product dropped
+refused items without a row, so a labeled charge with nothing extracted there stays missed (main bc-08
+runs 2-3, held-out ho-04 runs 1-3).
 
 ## Held-out set
 

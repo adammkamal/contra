@@ -1,7 +1,9 @@
 import type { AuditLog } from "./audit.ts";
+import { ROLE_WORDS, type Role } from "./types.ts";
 import type { Actor, BackCharge, BackChargeState, Credit, CreditState, MemoDelivery, MemoState, Notice, NoticeState } from "./types.ts";
 
-type Rule<S extends string> = { to: S; needsHuman: boolean };
+/** `role`: the human must also hold this role (src/roles.ts says who may do what, and why). */
+type Rule<S extends string> = { to: S; needsHuman: boolean; role?: Role };
 
 const BACKCHARGE: Record<BackChargeState, Rule<BackChargeState>[]> = {
   extracted: [
@@ -32,16 +34,18 @@ const BACKCHARGE: Record<BackChargeState, Rule<BackChargeState>[]> = {
   applied: [],
 };
 
+// The PM owns the sub relationship and the notice; the controller approves money (src/roles.ts).
 const NOTICE: Record<NoticeState, Rule<NoticeState>[]> = {
-  drafted: [{ to: "approved", needsHuman: true }],
+  drafted: [{ to: "approved", needsHuman: true, role: "pm" }],
   approved: [{ to: "sent", needsHuman: false }],
   sent: [],
 };
 
 const CREDIT: Record<CreditState, Rule<CreditState>[]> = {
+  // Only a controller decides a credit (src/roles.ts).
   proposed: [
-    { to: "approved", needsHuman: true },
-    { to: "rejected", needsHuman: true },
+    { to: "approved", needsHuman: true, role: "controller" },
+    { to: "rejected", needsHuman: true, role: "controller" },
   ],
   approved: [{ to: "synced", needsHuman: false }],
   synced: [{ to: "applied", needsHuman: false }],
@@ -66,12 +70,17 @@ const MEMO: Record<MemoFrom, Rule<MemoState>[]> = {
 };
 
 export class IllegalTransition extends Error {}
+/** A person whose role or involvement doesn't allow the step (src/roles.ts). The message says why, in words. */
+export class NotPermitted extends IllegalTransition {}
 
 function check<S extends string>(table: Record<S, Rule<S>[]>, kind: string, id: string, from: S, to: S, actor: Actor) {
   const rule = table[from].find((r) => r.to === to);
   if (!rule) throw new IllegalTransition(`${kind} ${id}: ${from} -> ${to} is not allowed`);
   if (rule.needsHuman && actor.kind !== "human") {
     throw new IllegalTransition(`${kind} ${id}: ${from} -> ${to} requires a human, got ${actor.kind}`);
+  }
+  if (rule.role && actor.kind === "human" && actor.role !== rule.role) {
+    throw new NotPermitted(`${kind} ${id}: ${from} -> ${to} needs the ${ROLE_WORDS[rule.role]} role; ${actor.id} is ${ROLE_WORDS[actor.role]}`);
   }
 }
 
