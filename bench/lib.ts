@@ -42,6 +42,8 @@ export interface BenchLabel {
   link: string | "review" | "none";
   disputed: boolean;
   amountCents: number | null;
+  /** fresh2 only (bench/fresh2/LABEL-FORMAT.md): whether the email calls the amount an estimate. Scored on its own, never part of matching. */
+  estimated?: boolean;
 }
 
 /** One back-charge in a multi-item label (see bench/fresh/LABEL-FORMAT.md). */
@@ -52,6 +54,19 @@ export interface BenchLabelItem {
   link: string;
   disputed: boolean;
   amountCents: number;
+  /** fresh2 only: whether the email calls this amount an estimate. Scored on its own, never part of matching. */
+  estimated?: boolean;
+  /** fresh2 only: this is the same charge as an earlier case's labeled item (see bench/fresh2/LABEL-FORMAT.md). */
+  sameAs?: SameAs;
+}
+
+/**
+ * fresh2 only: a labeled item that is the same charge as item `index` (0-based, in that label's `items`; 0
+ * for a single-item label) of the earlier case `case`.
+ */
+export interface SameAs {
+  case: string;
+  index: number;
 }
 
 /**
@@ -70,19 +85,20 @@ export type AnyBenchLabel = BenchLabel | BenchItemsLabel;
 export const isItemsLabel = (l: AnyBenchLabel): l is BenchItemsLabel => "items" in l;
 
 /**
- * Which benchmark: the main set, the held-out set, or the fresh set (written outside the team). Each is
- * scored separately and never merged into another's numbers.
+ * Which benchmark: the main set, the held-out set, or the fresh sets (written outside the team). Each is
+ * scored separately and never merged into another's numbers. fresh2 is scored as one ordered scenario
+ * (bench/scenario.ts); the others case by case.
  */
-export type BenchSet = "main" | "heldout" | "fresh";
-const SETS: readonly string[] = ["main", "heldout", "fresh"];
+export type BenchSet = "main" | "heldout" | "fresh" | "fresh2";
+const SETS: readonly string[] = ["main", "heldout", "fresh", "fresh2"];
 
-/** Reads `--set <main|heldout|fresh>` from argv; main when absent. Throws on any other value. */
+/** Reads `--set <main|heldout|fresh|fresh2>` from argv; main when absent. Throws on any other value. */
 export function parseSet(argv: readonly string[]): BenchSet {
   const i = argv.indexOf("--set");
   if (i < 0) return "main";
   const v = argv[i + 1];
   if (v !== undefined && SETS.includes(v)) return v as BenchSet;
-  throw new Error(`--set must be "main", "heldout" or "fresh", got ${v === undefined ? "nothing" : `"${v}"`}`);
+  throw new Error(`--set must be "main", "heldout", "fresh" or "fresh2", got ${v === undefined ? "nothing" : `"${v}"`}`);
 }
 
 /** Where a set's cases, labels, recordings and results live, from the repo root. */
@@ -234,7 +250,41 @@ export interface ItemScore {
  * The run: matching only if every labeled item matches and no accepted item is left over; dispute only if
  * every item's (labeled and left over) is; wrongLink, wrongCredit, routedToHuman and missed if any item's is.
  */
-export function scoreItems(decided: readonly DecidedItem[], label: BenchItemsLabel, refused = 0): { score: Score; items: ItemScore[]; extra: number[] } {
+export function scoreItems(
+  decided: readonly DecidedItem[],
+  label: BenchItemsLabel,
+  refused = 0,
+  /** fresh2: scores a labeled item itself (sameAs items); undefined falls back to the rules above. */
+  scoreLabeled?: (li: number, at: number | null) => Score | undefined,
+): { score: Score; items: ItemScore[]; extra: number[] } {
+  const { at, extra } = pairItems(decided, label);
+  const items: ItemScore[] = label.items.map((l, li) => {
+    const i = at[li]!;
+    const own = scoreLabeled?.(li, i);
+    if (own) return { label: l, at: i, score: own };
+    const one: BenchLabel = { id: label.id, labeledBy: label.labeledBy, link: l.link, disputed: l.disputed, amountCents: l.amountCents };
+    return { label: l, at: i, score: i === null ? score(REVIEW, one, 0, 0, refused) : score(decided[i]!.o, one, decided[i]!.x.amountCents, 1) };
+  });
+  const all = [...items.map((s) => s.score), ...extra.map((i) => score(decided[i]!.o, NO_CHARGE, decided[i]!.x.amountCents, 1))];
+  return {
+    score: {
+      matching: extra.length === 0 && items.every((s) => s.score.matching),
+      dispute: all.every((s) => s.dispute),
+      wrongLink: all.some((s) => s.wrongLink),
+      wrongCredit: all.some((s) => s.wrongCredit),
+      routedToHuman: all.some((s) => s.routedToHuman),
+      missed: all.some((s) => s.missed),
+    },
+    items,
+    extra,
+  };
+}
+
+/**
+ * Pairs a run's accepted items with an items label (the rules of scoreItems): `at[li]` is the index of the
+ * accepted item paired with labeled item li, or null; `extra` the accepted items paired with nothing.
+ */
+export function pairItems(decided: readonly DecidedItem[], label: BenchItemsLabel): { at: (number | null)[]; extra: number[] } {
   const free = new Set(decided.map((_, i) => i));
   const at: (number | null)[] = label.items.map(() => null);
   const take = (li: number, i: number | undefined) => {
@@ -256,25 +306,7 @@ export function scoreItems(decided: readonly DecidedItem[], label: BenchItemsLab
     };
     take(li, same.find(toLabeled) ?? same[0]);
   });
-  const items: ItemScore[] = label.items.map((l, li) => {
-    const i = at[li]!;
-    const one: BenchLabel = { id: label.id, labeledBy: label.labeledBy, link: l.link, disputed: l.disputed, amountCents: l.amountCents };
-    return { label: l, at: i, score: i === null ? score(REVIEW, one, 0, 0, refused) : score(decided[i]!.o, one, decided[i]!.x.amountCents, 1) };
-  });
-  const extra = [...free].sort((a, b) => a - b);
-  const all = [...items.map((s) => s.score), ...extra.map((i) => score(decided[i]!.o, NO_CHARGE, decided[i]!.x.amountCents, 1))];
-  return {
-    score: {
-      matching: extra.length === 0 && items.every((s) => s.score.matching),
-      dispute: all.every((s) => s.dispute),
-      wrongLink: all.some((s) => s.wrongLink),
-      wrongCredit: all.some((s) => s.wrongCredit),
-      routedToHuman: all.some((s) => s.routedToHuman),
-      missed: all.some((s) => s.missed),
-    },
-    items,
-    extra,
-  };
+  return { at, extra: [...free].sort((a, b) => a - b) };
 }
 
 const reviveDates = (_k: string, v: unknown) => (typeof v === "string" && /^\d{4}-\d\d-\d\dT/.test(v) ? new Date(v) : v);
@@ -321,7 +353,7 @@ export function loadLabels(dir: string): Map<string, AnyBenchLabel> {
   return out;
 }
 
-/** Why a multi-item label can't be scored, or null. Single-item labels are read as before, unchecked. */
+/** Why a multi-item label can't be scored, or null. Single-item labels are read as before, unchecked (fresh2 checks `estimated`, see bench/scenario.ts). */
 export function itemsLabelProblem(l: BenchItemsLabel): string | null {
   for (const k of ["link", "disputed", "amountCents"]) if (k in l) return `an "items" label must not also have "${k}"`;
   if (!Array.isArray(l.items) || l.items.length === 0) return `"items" must list at least one back-charge (an email with none uses link "none")`;
@@ -331,6 +363,14 @@ export function itemsLabelProblem(l: BenchItemsLabel): string | null {
     if (typeof it.link !== "string" || !it.link || it.link === "none") return `${at}.link must be a subcontract ID or "review"`;
     if (typeof it.disputed !== "boolean") return `${at}.disputed must be true or false`;
     if (!Number.isSafeInteger(it.amountCents) || it.amountCents <= 0) return `${at}.amountCents must be a positive whole number of cents`;
+    if (it.estimated !== undefined && typeof it.estimated !== "boolean") return `${at}.estimated must be true or false, or left out`;
+    if (it.sameAs !== undefined) {
+      const s = it.sameAs as Partial<SameAs> | null;
+      if (!s || typeof s !== "object" || typeof s.case !== "string" || !s.case) return `${at}.sameAs.case must be an earlier case's id`;
+      if (s.case === l.id) return `${at}.sameAs.case must be an earlier case, not ${l.id} itself`;
+      if (!Number.isSafeInteger(s.index) || s.index! < 0) return `${at}.sameAs.index must be a whole number, 0 or more`;
+      for (const k of Object.keys(s)) if (!["case", "index"].includes(k)) return `${at}.sameAs has an unknown field "${k}"`;
+    }
     if (it.ref !== undefined) {
       const r = typeof it.ref === "string" ? normalizeRef(it.ref) : null;
       if (!r) return `${at}.ref must be a BC number, or left out`;

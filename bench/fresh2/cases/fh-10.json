@@ -1,0 +1,12 @@
+{
+  "id": "fh-10",
+  "description": "independent held-out case",
+  "email": {
+    "id": "fh-10",
+    "from": "dana.ortiz@apexbuilders.example",
+    "to": "contra.demo+backcharges@example.com",
+    "subject": "Summit — damaged access panel",
+    "receivedAt": "2026-10-28T14:00:00.000Z",
+    "body": "Accounting,\n\nHarbor Mechanical bent the access panel outside the mechanical room at Summit MOB when they were pulling duct sections through. Replacement and paint should run around $950.\n\nPlease log this as a back-charge to Harbor Mechanical. I'll send the invoice once we have it.\n\nDana"
+  }
+}

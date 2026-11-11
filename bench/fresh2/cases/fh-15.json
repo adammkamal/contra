@@ -1,0 +1,12 @@
+{
+  "id": "fh-15",
+  "description": "independent held-out case",
+  "email": {
+    "id": "fh-15",
+    "from": "dana.ortiz@apexbuilders.example",
+    "to": "contra.demo+backcharges@example.com",
+    "subject": "Summit freight elevator trim damage",
+    "receivedAt": "2026-11-02T14:00:00.000Z",
+    "body": "Accounting,\n\nWe've got an estimated $890 in repairs to the freight elevator trim at Summit after material deliveries. I know it was one of the Ridgeline crews, but I can't tell if it was Drywall or Glass & Glazing.\n\nCan someone check the delivery logs with the superintendent before assigning this back-charge? Please don't pick a Ridgeline account yet.\n\nThanks,\nDana"
+  }
+}

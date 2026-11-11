@@ -81,3 +81,30 @@ for (const f of readdirSync(heldoutDir).filter((f) => f.endsWith(".json")).sort(
     assert.deepEqual(keysDeep(raw).filter((k) => FORBIDDEN.has(k)), []);
   });
 }
+
+const fresh2Dir = join(import.meta.dirname, "..", "bench", "fresh2", "cases");
+const fresh2Files = readdirSync(fresh2Dir).filter((f) => f.endsWith(".json")).sort();
+
+test("fresh2 cases: exactly fh-09 ... fh-16, written outside the team, one day apart in file order", () => {
+  assert.deepEqual(fresh2Files, Array.from({ length: 8 }, (_, i) => `fh-${String(9 + i).padStart(2, "0")}.json`));
+  const dates = fresh2Files.map((f) => new Date((JSON.parse(readFileSync(join(fresh2Dir, f), "utf8")) as { email: { receivedAt: string } }).email.receivedAt).getTime());
+  dates.slice(1).forEach((d, i) => assert.equal(d - dates[i]!, 86_400_000, `${fresh2Files[i + 1]} is one day after ${fresh2Files[i]}`));
+});
+
+for (const f of fresh2Files) {
+  const raw = JSON.parse(readFileSync(join(fresh2Dir, f), "utf8")) as Record<string, unknown>;
+  const id = f.replace(/\.json$/, "");
+
+  test(`fresh2 case ${id}: id, the fixed description, a complete email and no answer fields`, () => {
+    assert.deepEqual(Object.keys(raw).sort(), ["description", "email", "id"]);
+    assert.equal(raw.id, id);
+    assert.equal(raw.description, "independent held-out case");
+    const email = raw.email as Record<string, unknown>;
+    assert.deepEqual(Object.keys(email).sort(), [...EMAIL_FIELDS].sort());
+    for (const k of EMAIL_FIELDS) assert.ok(typeof email[k] === "string" && (email[k] as string).trim().length > 0, `email.${k}`);
+    assert.equal(email.id, id);
+    assert.equal(email.from, "dana.ortiz@apexbuilders.example");
+    assert.equal(email.to, "contra.demo+backcharges@example.com");
+    assert.deepEqual(keysDeep(raw).filter((k) => FORBIDDEN.has(k)), []);
+  });
+}

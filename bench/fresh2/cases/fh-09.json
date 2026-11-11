@@ -1,0 +1,12 @@
+{
+  "id": "fh-09",
+  "description": "independent held-out case",
+  "email": {
+    "id": "fh-09",
+    "from": "dana.ortiz@apexbuilders.example",
+    "to": "contra.demo+backcharges@example.com",
+    "subject": "Summit MOB — Level 2 floor protection",
+    "receivedAt": "2026-10-27T14:00:00.000Z",
+    "body": "Hi,\n\nRidgeline Drywall tore up the floor protection in the Level 2 west corridor at Summit while moving board. We had the laborers replace it this morning. I'm estimating about $680 for labor and material until the tickets come in.\n\nPlease open a back-charge for Ridgeline Drywall and note that the number is an estimate for now.\n\nThanks,\nDana"
+  }
+}

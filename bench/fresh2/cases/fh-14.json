@@ -1,0 +1,12 @@
+{
+  "id": "fh-14",
+  "description": "independent held-out case",
+  "email": {
+    "id": "fh-14",
+    "from": "dana.ortiz@apexbuilders.example",
+    "to": "contra.demo+backcharges@example.com",
+    "subject": "Summit lobby glass replacement",
+    "receivedAt": "2026-11-01T14:00:00.000Z",
+    "body": "Hi,\n\nPlease start a back-charge for Ridgline Glas & Glazng at Summit MOB. Their cart cracked a lobby glass panel during material delivery. Glazier's rough replacement estimate is USD 1,275.00; I'll forward the final invoice later.\n\nDana"
+  }
+}

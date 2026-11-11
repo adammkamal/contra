@@ -1,0 +1,12 @@
+{
+  "id": "fh-12",
+  "description": "independent held-out case",
+  "email": {
+    "id": "fh-12",
+    "from": "dana.ortiz@apexbuilders.example",
+    "to": "contra.demo+backcharges@example.com",
+    "subject": "RE: Summit MOB — Level 2 floor protection / BC-5102",
+    "receivedAt": "2026-10-30T14:00:00.000Z",
+    "body": "Hi,\n\nFollowing up on my earlier email about Ridgeline Drywall tearing up the Level 2 west corridor floor protection at Summit. Accounting assigned that item BC-5102.\n\nThe labor and material tickets are in. Actual cost is $715, not my original $680 estimate. Please update BC-5102 to $715. This is the same floor-protection charge, not a new one.\n\nDana"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "fh-13",
+  "description": "independent held-out case",
+  "email": {
+    "id": "fh-13",
+    "from": "dana.ortiz@apexbuilders.example",
+    "to": "contra.demo+backcharges@example.com",
+    "subject": "Lakeview — damaged reading room wall",
+    "receivedAt": "2026-10-31T14:00:00.000Z",
+    "body": "Hi Accounting,\n\nWe have about $1,060 in patching and repainting after Ridgeline Drywall's cart hit the finished wall in the Lakeview Library reading room. I told them we'd be issuing a back-charge, but their foreman is disputing it and says another crew made the damage.\n\nHold this one until I review the daily photos. Don't take it out of their payment yet.\n\nThanks,\nDana"
+  }
+}

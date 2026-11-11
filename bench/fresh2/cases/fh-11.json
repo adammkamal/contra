@@ -1,0 +1,12 @@
+{
+  "id": "fh-11",
+  "description": "independent held-out case",
+  "email": {
+    "id": "fh-11",
+    "from": "dana.ortiz@apexbuilders.example",
+    "to": "contra.demo+backcharges@example.com",
+    "subject": "Summit small back-charges from walkthrough",
+    "receivedAt": "2026-10-29T14:00:00.000Z",
+    "body": "Hi,\n\nTwo small items from yesterday's Summit walkthrough. Please keep them separate:\n\n- Ridgeline Glass & Glazing: adhesive left on the lobby glazing after film removal; outside cleaning crew estimated $185.\n- Harbor Mechanical: cut pipe and packaging left in the service corridor; labor and haul-off estimated $240.\n\nBoth are back-charges. I don't have invoices yet, so use these estimates in the log for now.\n\nThanks,\nDana"
+  }
+}

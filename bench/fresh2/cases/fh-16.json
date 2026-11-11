@@ -1,0 +1,12 @@
+{
+  "id": "fh-16",
+  "description": "independent held-out case",
+  "email": {
+    "id": "fh-16",
+    "from": "dana.ortiz@apexbuilders.example",
+    "to": "contra.demo+backcharges@example.com",
+    "subject": "Lakeview Library — ceiling cleanup",
+    "receivedAt": "2026-11-03T14:00:00.000Z",
+    "body": "Hi,\n\nRidgeline Drywall left joint compound dust and offcuts above the ceiling in the Lakeview Library north wing. We need a separate cleanup crew before the ceiling closes. My cost estimate is twelve hundred dollars even.\n\nPlease open a back-charge to Ridgeline Drywall for that estimate. I'll confirm the final cost after the work is done.\n\nDana"
+  }
+}

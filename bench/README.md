@@ -83,3 +83,24 @@ scores from then on are not held-out; `npm run bench -- --set fresh` says so in 
 A label's `link` may also be `"none"` (the email holds no back-charge), with `amountCents: null`. Such a run
 is correct only if no item is accepted. An accepted item that would be credited counts as a wrong credit;
 any other accepted outcome is routed to a person and is not correct.
+
+## Fresh2 set: one ordered scenario
+
+`bench/fresh2/` holds a fourth set (`cases/`, fh-09 ... fh-16, one day apart), written by someone outside the
+team, with its own human-written `labels/`. Run it with `--set fresh2`; recordings go to
+`fixtures/bench-extractions/fresh2/<caseId>/`, results to `bench/fresh2/results.json`.
+
+It is scored as **one scenario** (`bench/scenario.ts`), not case by case: run n ingests run n of every case,
+in date order, into one in-memory store through `ingestInboxEmail` (src/commands.ts), so later emails meet the
+charges earlier ones created (duplicate holds, CONTRA- references, BC numbers already known). Each case is
+scored against the store's state right after its own email is ingested. Other sets are scored exactly as before.
+
+Labels use the fresh items format plus two optional item fields:
+
+- `"estimated": true | false`: whether the email calls the amount an estimate. Compared with the product's
+  marking (src/estimate.ts) in its own **estimate** column ("right of labeled"); never part of matching.
+- `"sameAs": { "case": "fh-09", "index": 0 }`: this item is the same charge as item `index` (0-based) of that
+  earlier case's label. **Correct** if it is held as a possible duplicate of that item or merged into it (or
+  joined it by citing its BC number), and the two don't both proceed; a **wrong credit** if both proceed
+  separately (each would reach a notice); **missed** if nothing was extracted and nothing refused. Anything else
+  visible is not correct. The baseline keeps no state, so it never treats two items as one charge.
