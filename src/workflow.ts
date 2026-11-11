@@ -25,6 +25,7 @@ import type {
 } from "./types.ts";
 
 const SYSTEM: Actor = { kind: "system", id: "contra" };
+const ROLE_WORDS = { pm: "PM", controller: "Controller", ap: "AP" } as const;
 
 export interface Deps {
   clock: Clock;
@@ -246,16 +247,20 @@ export class Contra {
 
     const email = this.emails.get(bc.extracted.amountEvidence.emailId);
     const where = email ? describeAt(email, bc.extracted.amountEvidence.at) : "an image";
+    const byRole = ROLE_WORDS[pm.role];
+    const confirmation = { by: `${pm.id} (${byRole})`, byRole, at: this.d.clock.now(), from: where };
     this.d.log.append({
       actor: pm,
       entity: "backcharge",
       entityId: ref,
-      action: `amount ${formatUsd(typed)} confirmed by the PM against ${where}`,
+      action: `amount confirmed by ${confirmation.by} from ${where}: ${formatUsd(typed)}`,
       from: null,
       to: null,
-      evidence: [`read from the image: ${bc.extracted.amountEvidence.sentence}`],
+      evidence: [`the model's reading of the image (not verifiable word for word): ${bc.extracted.amountEvidence.sentence}`],
     });
-    // The person's confirmation stands in for the word-for-word check an image can't have.
+    // The person's confirmation stands in for the word-for-word check an image can't have. It is recorded
+    // on the item, so eligibility's trace says "amount confirmed by <who> from <where>", never "verbatim".
+    bc.amountConfirmation = confirmation;
     this.#evidenceOk.set(ref, true);
     bc.holdReasons = [];
     const r = resolve(bc.extracted, this.d.erp);

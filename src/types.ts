@@ -175,6 +175,21 @@ export interface BackCharge {
   subResponse: "accepted" | "disputed" | null;
   holdReasons: HoldReason[];
   creditId: string | null;
+  /**
+   * Set when a person confirmed an amount the model read from a photo or scanned page (confirmImageAmount).
+   * That amount is human evidence, not verified word for word: the trace and the audit say so.
+   */
+  amountConfirmation?: AmountConfirmation;
+}
+
+export interface AmountConfirmation {
+  /** Who confirmed it, as shown: "dana.ortiz (PM)". */
+  by: string;
+  /** Their role, as shown: "PM", "Controller" or "AP". */
+  byRole: string;
+  at: Date;
+  /** The image it was read from: "attachment IMG_2041.jpg", or "attachment scan.pdf, page 2". */
+  from: string;
 }
 
 export type NoticeState = "drafted" | "approved" | "sent";

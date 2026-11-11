@@ -230,9 +230,41 @@ test("attachments: a person clears amount_only_in_image only by typing the amoun
     assert.equal(bc.state, "linked");
     assert.deepEqual(bc.holdReasons, []);
     assert.equal(bc.subcontractId, "SC-SUM-0912");
-    const confirmed = app.ctx.contra.audit.forEntity("backcharge", "BC-7403").find((e) => e.action.startsWith("amount $640.00 confirmed"))!;
+    const confirmed = app.ctx.contra.audit.forEntity("backcharge", "BC-7403").find((e) => e.action.startsWith("amount confirmed"))!;
     assert.equal(confirmed.actor.kind, "human");
-    assert.ok(app.ctx.contra.explainEligibility("BC-7403").trace.includes("PASS all evidence verbatim in source"));
+    assert.ok(app.ctx.contra.explainEligibility("BC-7403").trace.includes("PASS amount confirmed by dana.ortiz (PM) from attachment IMG_2041.jpg"));
+  } finally {
+    app.close();
+  }
+});
+
+test("attachments: a PM-confirmed image amount is never called verbatim: the trace and the audit say who confirmed it from which attachment", async () => {
+  const app = liveApp();
+  try {
+    const photo: Part = { filename: "IMG_2041.jpg", contentType: "image/jpeg", data: png(64, 48) };
+    const { email } = await parseEmlWithMedia(eml({ subject: "Summit - BC-7403", body: "Photo attached.", parts: [photo] }), "gmail-h1");
+    cmd.ingestInboxEmail(app, email, parseBackCharges({ items: [photoItem()] }, email).items, LLM, "gmail");
+    const action = buildScreens(app).inbox.find((r) => r.ref === "BC-7403")!.actions[0]!;
+    await cmd.runAction(app, action, { choice: "SC-SUM-0912", amount: "$640.00" });
+    const line = "amount confirmed by dana.ortiz (PM) from attachment IMG_2041.jpg";
+    // Through the notice and the response window to eligible, as any item goes.
+    const noticeId = cmd.draftNotice(app, "SC-SUM-0912")!;
+    cmd.approveNotice(app, noticeId);
+    cmd.sendNotice(app, noticeId);
+    cmd.advanceDays(app, 14);
+    assert.deepEqual(cmd.evaluateAll(app), [{ ref: "BC-7403", status: "eligible" }]);
+    const trace = app.ctx.contra.explainEligibility("BC-7403").trace;
+    assert.equal(trace[1], `PASS ${line}`);
+    const history = app.ctx.contra.audit.forEntity("backcharge", "BC-7403");
+    assert.equal(history.find((e) => e.actor.kind === "human" && e.action.startsWith("amount"))!.action, `${line}: $640.00`);
+    assert.ok(history.find((e) => e.to === "eligible")!.evidence.includes(`PASS ${line}`));
+    // Nowhere, for this item, is it called verbatim.
+    for (const e of history) assert.ok(![e.action, ...e.evidence].some((s) => /verbatim/i.test(s)), `${e.action}: ${e.evidence.join(" | ")}`);
+    assert.ok(!trace.some((s) => /verbatim/i.test(s)));
+    // An item whose amount is in the text keeps the word-for-word label.
+    const text = await parseEmlWithMedia(eml({ subject: "Summit", body: BODY, parts: [await pdfPart([PAGE1, PAGE2])] }), "gmail-h2");
+    cmd.ingestInboxEmail(app, { ...text.email, messageId: "h2" }, parseBackCharges({ items: [rawItem()] }, text.email).items, LLM, "gmail");
+    assert.equal(app.ctx.contra.explainEligibility("BC-7401").trace[1], "PASS all evidence verbatim in source");
   } finally {
     app.close();
   }

@@ -5,7 +5,10 @@ export interface EligibilityInput {
   bc: Readonly<BackCharge>;
   subcontract: Readonly<Subcontract> | null;
   notice: Readonly<Notice> | null;
-  /** Result of the span checks on all of the item's evidence (computed by code, not the model). */
+  /**
+   * Result of the span checks on all of the item's evidence (computed by code, not the model), or, for an
+   * amount read from an image, of a person's confirmation of that amount (bc.amountConfirmation).
+   */
   evidenceVerified: boolean;
   /** Model-flagged dispute (span-verified) OR code backstop hit. Either one holds the item. */
   disputeInSource: boolean;
@@ -36,7 +39,9 @@ export function evaluateEligibility(i: EligibilityInput): EligibilityResult {
   };
 
   rule(i.subcontract !== null && i.bc.subcontractId === i.subcontract.id, "linked to a subcontract", "unresolved_link");
-  rule(i.evidenceVerified, "all evidence verbatim in source", "unverified_evidence");
+  // An amount a person confirmed from an image is human evidence, never "verbatim": the trace names who and where.
+  const confirmed = i.bc.amountConfirmation;
+  rule(i.evidenceVerified, confirmed ? `amount confirmed by ${confirmed.by} from ${confirmed.from}` : "all evidence verbatim in source", "unverified_evidence");
   rule(!i.disputeInSource, "no dispute noted in source", "dispute_noted_in_source");
 
   const clause = i.subcontract?.clause ?? null;
