@@ -1,0 +1,75 @@
+:root {
+  --bg: #e9edf1; --surface: #ffffff; --ink: #12202c; --muted: #4a5b69; --rule: #c3ccd5;
+  --accent: #0a4f8f; --accent-ink: #ffffff; --hl: #ffd23f;
+  --ok: #1b7a3d; --warn: #a15c00; --danger: #b3261e; --info: #0a4f8f; --idle: #6b7782;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0f1a24; --surface: #172431; --ink: #e8eef3; --muted: #9db0bf; --rule: #2c3d4c;
+    --accent: #5aa9f0; --accent-ink: #0b1620; --ok: #4cc27a; --warn: #f0a63a; --danger: #ff7b72; --info: #5aa9f0; --idle: #8a99a6; }
+}
+* { box-sizing: border-box; }
+html { font-size: 18px; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; line-height: 1.45; font-variant-numeric: tabular-nums; }
+a { color: var(--accent); }
+.presenter { position: sticky; top: 0; z-index: 5; display: flex; gap: 16px; align-items: center; padding: 12px 32px; background: #12202c; color: #e8eef3; }
+.presenter .step { flex: 1; font-size: 1.1rem; font-weight: 600; }
+.presenter .label { font-weight: 400; opacity: .75; margin-right: 8px; }
+.presenter .clock { opacity: .75; }
+nav { display: flex; gap: 4px; padding: 0 32px; background: var(--surface); border-bottom: 1px solid var(--rule); }
+nav a { padding: 14px 16px; text-decoration: none; color: var(--ink); border-bottom: 3px solid transparent; }
+nav a:hover { border-bottom-color: var(--rule); }
+main { padding: 28px 32px 64px; max-width: 1280px; margin: 0 auto; }
+h1 { font-size: 1.8rem; margin: 0 0 4px; }
+h2 { font-size: 1.2rem; margin: 20px 0 10px; }
+.sub { color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+.badge { display: inline-block; border: 2px solid currentColor; padding: 1px 8px; font-weight: 700; font-size: .85rem; margin-left: 10px; vertical-align: middle; }
+.card { background: var(--surface); border: 1px solid var(--rule); border-left: 6px solid var(--idle); padding: 16px 20px; margin-bottom: 14px; }
+.card.ok { border-left-color: var(--ok); } .card.warn { border-left-color: var(--warn); } .card.danger { border-left-color: var(--danger); } .card.info { border-left-color: var(--info); }
+.status { font-weight: 700; }
+.status.ok { color: var(--ok); } .status.warn { color: var(--warn); } .status.danger { color: var(--danger); } .status.info { color: var(--info); } .status.idle { color: var(--idle); }
+.row { display: grid; grid-template-columns: 1fr auto; gap: 8px 24px; align-items: start; }
+.amt { text-align: right; font-weight: 700; font-size: 1.25rem; white-space: nowrap; }
+.quote { margin: 8px 0; padding: 8px 12px; background: var(--bg); border-left: 3px solid var(--muted); }
+.meta { color: var(--muted); }
+ul.plain { margin: 6px 0; padding-left: 20px; }
+.btn { font: inherit; font-weight: 600; padding: 8px 16px; border: 2px solid var(--accent); background: var(--surface); color: var(--accent); cursor: pointer; border-radius: 3px; }
+.btn:hover { background: var(--accent); color: var(--accent-ink); }
+.btn.next { background: var(--hl); color: #12202c; border-color: #12202c; box-shadow: 0 0 0 3px var(--hl); }
+.btn.quiet { background: transparent; border-color: #8a99a6; color: #e8eef3; }
+.btn:disabled { opacity: .6; cursor: wait; }
+.btn:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.action { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 8px 0 0; }
+select, input { font: inherit; padding: 7px 10px; border: 2px solid var(--rule); background: var(--surface); color: var(--ink); border-radius: 3px; }
+.err { color: var(--danger); font-weight: 600; }
+table { width: 100%; border-collapse: collapse; background: var(--surface); }
+th, td { padding: 8px 12px; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
+th.num, td.num { text-align: right; white-space: nowrap; }
+.totals { display: flex; gap: 14px; margin-bottom: 18px; }
+.totals .card { flex: 1; margin: 0; }
+.totals .big { font-size: 2rem; font-weight: 700; }
+pre.body { white-space: pre-wrap; font: inherit; background: var(--bg); padding: 12px 14px; margin: 8px 0; }
+.trace { font-family: Consolas, monospace; font-size: .95rem; }
+h3 { font-size: 1rem; margin: 14px 0 6px; }
+.switch { display: inline-flex; border: 2px solid #8a99a6; border-radius: 4px; overflow: hidden; }
+.seg { font: inherit; font-weight: 600; padding: 6px 12px; border: 0; background: transparent; color: #e8eef3; cursor: pointer; }
+.seg.on { background: #e8eef3; color: #12202c; }
+.seg:disabled { opacity: .55; cursor: not-allowed; }
+.presenter .badge { margin-left: 0; }
+.live-dot { font-size: .85rem; opacity: .75; }
+.inbox-status { display: flex; flex-wrap: wrap; gap: 8px 24px; padding: 10px 32px; background: var(--surface); border-bottom: 1px solid var(--rule); }
+.notes { margin: 0 0 16px; }
+.field { display: block; margin-bottom: 12px; font-weight: 600; }
+.field input, .field textarea { display: block; width: 100%; margin-top: 4px; font-weight: 400; }
+textarea { font: inherit; padding: 8px 10px; border: 2px solid var(--rule); background: var(--surface); color: var(--ink); border-radius: 3px; }
+mark { background: var(--hl); color: #12202c; padding: 0 2px; }
+.note { border-left: 3px solid var(--info); padding-left: 10px; }
+.memo-status { margin-top: 6px; }
+details { margin-top: 10px; }
+summary { cursor: pointer; font-weight: 600; }
+/* A reading of a photo is not a verified quote: dashed, italic, labelled. Rejected items are not back-charges. */
+.reading { margin: 8px 0; padding: 8px 12px; background: transparent; border: 2px dashed var(--muted); font-style: italic; }
+.reading-label { font-style: normal; font-weight: 700; font-size: .85rem; margin-bottom: 2px; }
+.card.rejected { background: transparent; border: 2px dashed var(--danger); border-left: 6px dashed var(--danger); }
+.rejected-tag { display: inline-block; font-weight: 700; font-size: .85rem; border: 2px solid var(--danger); color: var(--danger); padding: 0 8px; margin-right: 8px; }
+.amt.pending { font-size: .95rem; font-weight: 600; color: var(--muted); }
+.action input[data-testid$="-amount"] { min-width: 30ch; }

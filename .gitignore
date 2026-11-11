@@ -11,3 +11,10 @@ bench/fresh/results.json
 !.env.example
 # Real (non-sample) emails never go in git:
 private/
+.next/
+next-env.d.ts
+# Playwright output
+e2e/screenshots/
+test-results/
+playwright-report/
+*.tsbuildinfo
