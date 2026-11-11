@@ -9,7 +9,7 @@ import { cents, parseUsd } from "../src/money.ts";
 import { resolve } from "../src/resolver.ts";
 import { demoReply } from "../src/seed.ts";
 import { IllegalTransition, transitionBackCharge } from "../src/state.ts";
-import { AP, CONTROLLER, LLM, PM, setup, throughNotice } from "./helpers.ts";
+import { AP, LLM, PM, setup, throughNotice } from "./helpers.ts";
 
 function srcFiles(dir = "src"): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((d) =>
@@ -80,7 +80,7 @@ test("I5: no credit and no notice without a human approval", () => {
   const n = contra.draftNotice("SC-SUM-0912")!;
   assert.throws(() => contra.sendNotice(n.id), IllegalTransition);
   assert.throws(() => contra.approveNotice(n.id, LLM), IllegalTransition);
-  contra.approveNotice(n.id, CONTROLLER);
+  contra.approveNotice(n.id, PM);
   contra.sendNotice(n.id);
   ctx.clock.advanceDays(7);
   contra.evaluateAll();
