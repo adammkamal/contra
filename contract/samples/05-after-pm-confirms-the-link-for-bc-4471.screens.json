@@ -12,8 +12,10 @@
   },
   "inbox": [
     {
+      "kind": "backCharge",
       "ref": "BC-4467",
       "emailSubject": "Summit - back-charges L2",
+      "emailFrom": "dana.ortiz@apexbuilders.example",
       "vendorAsWritten": "Ridgeline Drywall",
       "amount": "$6,800.00",
       "sourceSentence": "BC-4467: replace damaged ceiling grid, L2, $6,800.00 per the Apex Ceilings invoice.",
@@ -31,8 +33,10 @@
       "actions": []
     },
     {
+      "kind": "backCharge",
       "ref": "BC-4468",
       "emailSubject": "Summit - back-charges L2",
+      "emailFrom": "dana.ortiz@apexbuilders.example",
       "vendorAsWritten": "Ridgeline Drywall",
       "amount": "$4,700.00",
       "sourceSentence": "BC-4468: debris haul-off, $4,700.00.",
@@ -50,8 +54,10 @@
       "actions": []
     },
     {
+      "kind": "backCharge",
       "ref": "BC-4470",
       "emailSubject": "RE: Summit corridor patch",
+      "emailFrom": "dana.ortiz@apexbuilders.example",
       "vendorAsWritten": "Ridgeline Drywall",
       "amount": "$2,750.00",
       "sourceSentence": "BC-4470: re-patch corridor wall after MEP rework, $2,750.00.",
@@ -69,8 +75,10 @@
       "actions": []
     },
     {
+      "kind": "backCharge",
       "ref": "BC-4471",
       "emailSubject": "Summit MOB - missed inspection",
+      "emailFrom": "dana.ortiz@apexbuilders.example",
       "vendorAsWritten": "Ridgeline Drywall",
       "amount": "$4,000.00",
       "sourceSentence": "BC-4471: overtime for missed inspection, $4,000.00.",

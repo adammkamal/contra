@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { chosenWorkspace, getDetail } from "../../../ui/api.ts";
-import { findSentence, Marked, StatusWord } from "../../../ui/Bits.tsx";
+import { differenceNote, findConfirmation, findSentence, ImageReading, Marked, redact, StatusWord } from "../../../ui/Bits.tsx";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +23,11 @@ export default async function Detail({ params }: { params: Promise<{ ref: string
   const pageText = d.email?.attachmentText.find((t) => t.where === d.sourceLocation);
   const range = d.email ? findSentence(inBody ? d.email.body : (pageText?.text ?? ""), d.sourceSentence) : null;
   const fromImage = !inBody && !pageText;
+  // A reading of an image is hidden until the PM confirms the amount, then shown labelled as unchecked.
+  const confirmation = fromImage ? findConfirmation(d.history, d.sourceSentence) : null;
+  const unconfirmed = fromImage && !confirmation;
+  const hidden = unconfirmed ? [d.sourceSentence] : [];
+  const diff = confirmation ? differenceNote(confirmation) : null;
   return (
     <>
       <p>
@@ -32,7 +37,18 @@ export default async function Detail({ params }: { params: Promise<{ ref: string
         <h1>
           {d.ref} <span className="meta">{d.description}</span>
         </h1>
-        <div className="amt">{d.amount}</div>
+        {unconfirmed ? (
+          <div className="amt pending">Amount shown after the PM confirms it</div>
+        ) : (
+          <div className="amt">
+            <div data-testid="detail-amount">{d.amount}</div>
+            {diff && (
+              <div className="meta" style={{ fontSize: ".85rem", fontWeight: 400, whiteSpace: "normal" }} data-testid="amount-difference">
+                {diff}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       <p>
         <StatusWord s={d.status} />
@@ -42,7 +58,15 @@ export default async function Detail({ params }: { params: Promise<{ ref: string
       </p>
 
       <h2>Source</h2>
-      <div className="quote">“{d.sourceSentence}”</div>
+      {unconfirmed ? (
+        <p className="meta" data-testid="hidden-reading">
+          The model read an amount from an image. It is shown after the PM types the amount they see and confirms it.
+        </p>
+      ) : fromImage ? (
+        <ImageReading testId="image-reading">{d.sourceSentence}</ImageReading>
+      ) : (
+        <div className="quote">“{d.sourceSentence}”</div>
+      )}
       <p className="meta" data-testid="source-location">
         Source: {d.sourceLocation}
       </p>
@@ -112,7 +136,7 @@ export default async function Detail({ params }: { params: Promise<{ ref: string
       {d.eligibility.waitingFor.length > 0 && <p>Waiting for: {d.eligibility.waitingFor.join("; ")}</p>}
       <ul className="plain trace">
         {d.eligibility.trace.map((t, i) => (
-          <li key={i}>{t}</li>
+          <li key={i}>{redact(t, hidden)}</li>
         ))}
       </ul>
 
@@ -131,8 +155,8 @@ export default async function Detail({ params }: { params: Promise<{ ref: string
             <tr key={h.seq}>
               <td>{h.at}</td>
               <td>{h.actor}</td>
-              <td>{h.what}</td>
-              <td>{h.evidence.join(" | ")}</td>
+              <td>{redact(h.what, hidden)}</td>
+              <td>{h.evidence.map((x) => redact(x, hidden)).join(" | ")}</td>
             </tr>
           ))}
         </tbody>

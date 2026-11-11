@@ -114,6 +114,24 @@ export interface ExtractedBackCharge {
   disputeEvidence?: Evidence;
 }
 
+/**
+ * Something the extractor returned that validation refused (src/extract/validate.ts): one item, or the
+ * whole output (index -1). Never repaired and never a back-charge, but never dropped either: ingest keeps
+ * it and the Inbox shows it as a held row. `reason` is technical (logs, benchmark); `words` says it to a PM;
+ * `ref` is the item's BC number when it had a readable one.
+ */
+export interface RejectedExtraction {
+  index: number;
+  reason: string;
+  words: string;
+  ref?: string;
+}
+
+/** A rejected extraction as ingest keeps it, with the email it came from. */
+export interface RejectedItem extends RejectedExtraction {
+  emailId: string;
+}
+
 /** What the extractor returns for a sub's reply to a notice. Untrusted until verified. */
 export interface ExtractedResponse {
   noticeId: string;
@@ -157,6 +175,25 @@ export interface BackCharge {
   subResponse: "accepted" | "disputed" | null;
   holdReasons: HoldReason[];
   creditId: string | null;
+  /**
+   * Set when a person confirmed an amount the model read from a photo or scanned page (confirmImageAmount).
+   * That amount is human evidence, not verified word for word: the trace and the audit say so.
+   */
+  amountConfirmation?: AmountConfirmation;
+}
+
+export interface AmountConfirmation {
+  /** Who confirmed it, as shown: "dana.ortiz (PM)". */
+  by: string;
+  /** Their role, as shown: "PM", "Controller" or "AP". */
+  byRole: string;
+  at: Date;
+  /** The image it was read from: "attachment IMG_2041.jpg", or "attachment scan.pdf, page 2". */
+  from: string;
+  /** The amount the person typed. This is the item's amount from then on (backChargeAmount in src/credits.ts). */
+  enteredCents: Cents;
+  /** What the model read from the image (extracted.amountCents), kept so both are shown. */
+  modelCents: Cents;
 }
 
 export type NoticeState = "drafted" | "approved" | "sent";

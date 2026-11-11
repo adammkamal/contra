@@ -34,7 +34,8 @@ const live = (id: string, sub: string, line: string) => ({
 // A third made-up email carries a text PDF (page 2 states BC-7611) and a photo (BC-7612, which a fake model
 // "reads" from the image). Both files are generated here; nothing real.
 const PDF_SENTENCE = "BC-7611: corridor wall repair, Summit, $1,250.00.";
-const PHOTO_TEXT = "BC-7612 FLOOR PROTECTION $640.00";
+// The fake model misreads the photo ($604.00); the PM types what the photo really says ($640.00).
+const PHOTO_TEXT = "BC-7612 FLOOR PROTECTION $604.00";
 const attachmentRaw = eml({
   id: "e2e03",
   subject: "Summit - estimate and ticket photo attached",
@@ -64,10 +65,12 @@ const extract: Extract = async (email, media) => {
         const m = page >= 0 ? SENTENCE.exec(a.pages![page]!) : null;
         if (m) items.push({ ref: m[1]!.slice(0, 7), description: "Corridor wall repair", amountCents: centsOf(m[2]!, m[3]!), amountEvidence: { emailId: email.id, sentence: m[1]!, at: { attachment: a.n, page: page + 1 } }, vendorNameAsWritten: "Ridgeline Drywall", jobRef: "Summit", disputeNoted: false });
       } else if (a.read === "image" && media.some((x) => x.n === a.n)) {
-        items.push({ ref: "BC-7612", description: "Floor protection", amountCents: cents(64_000), amountEvidence: { emailId: email.id, sentence: PHOTO_TEXT, at: { attachment: a.n, page: 1 } }, vendorNameAsWritten: "Ridgeline Drywall", jobRef: "Summit", disputeNoted: false });
+        items.push({ ref: "BC-7612", description: "Floor protection", amountCents: cents(60_400), amountEvidence: { emailId: email.id, sentence: PHOTO_TEXT, at: { attachment: a.n, page: 1 } }, vendorNameAsWritten: "Ridgeline Drywall", jobRef: "Summit", disputeNoted: false });
       }
     }
-    return { ok: true, items, actor: LIVE_EXTRACTOR };
+    // Something validation refused (a page that does not exist): kept as a held "not taken in" row.
+    const rejected = [{ index: 2, reason: "evidence cites page 3 of estimate.pdf, which has 2", words: "the model said the amount is on page 3 of estimate.pdf, which has only 2 pages", ref: "BC-7613" }];
+    return { ok: true, items, rejected, actor: LIVE_EXTRACTOR };
   }
   const m = SENTENCE.exec(email.body);
   const sub = /^Sub: (.+)$/m.exec(email.body)?.[1]?.trim() ?? "Unknown";

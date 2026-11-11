@@ -4,6 +4,15 @@ import type { BackCharge } from "./types.ts";
 export class IneligibleForCredit extends Error {}
 
 /**
+ * The amount a back-charge is for: the amount a person entered when they confirmed it from an image
+ * (it may correct the model's reading), else the amount extracted from verified text. Every money path
+ * (notice, credit, memo, bill check, screens) reads this, never extracted.amountCents directly.
+ */
+export function backChargeAmount(b: Readonly<BackCharge>): Cents {
+  return b.amountConfirmation ? b.amountConfirmation.enteredCents : b.extracted.amountCents;
+}
+
+/**
  * The only path from back-charges to a credit amount. Refuses anything not in state "eligible",
  * anything with a dispute, and mixing subcontracts (INVARIANT 4).
  */
@@ -18,5 +27,5 @@ export function creditAmountFor(items: readonly Readonly<BackCharge>[]): { subco
   }
   const scs = new Set(items.map((b) => b.subcontractId));
   if (scs.size !== 1 || !items[0]!.subcontractId) throw new IneligibleForCredit("items span more than one subcontract");
-  return { subcontractId: items[0]!.subcontractId, amountCents: sum(items.map((b) => b.extracted.amountCents)) };
+  return { subcontractId: items[0]!.subcontractId, amountCents: sum(items.map(backChargeAmount)) };
 }

@@ -1,4 +1,5 @@
 import { windowCloses } from "./clock.ts";
+import { backChargeAmount } from "./credits.ts";
 import { formatUsd, sum } from "./money.ts";
 import type { BackCharge, Credit, Job, Notice, Subcontract } from "./types.ts";
 
@@ -38,14 +39,14 @@ export function renderCreditMemo(m: MemoInput): { filename: string; text: string
   if (m.items.length !== refs.size || !m.items.every((b) => refs.has(b.ref))) {
     throw new Error(`memo items do not match credit ${m.credit.id}`);
   }
-  const total = sum(m.items.map((b) => b.extracted.amountCents));
+  const total = sum(m.items.map(backChargeAmount));
   if (total !== m.credit.amountCents) {
     throw new Error(`memo lines total ${formatUsd(total)} but credit is ${formatUsd(m.credit.amountCents)}`);
   }
 
   const clause = m.subcontract.clause!;
   const lines = m.items.map(
-    (b) => `${b.ref.padEnd(9)} ${b.extracted.description.slice(0, 48).padEnd(48)} ${m.job.id.padEnd(7)} ${formatUsd(b.extracted.amountCents).padStart(12)}`,
+    (b) => `${b.ref.padEnd(9)} ${b.extracted.description.slice(0, 48).padEnd(48)} ${m.job.id.padEnd(7)} ${formatUsd(backChargeAmount(b)).padStart(12)}`,
   );
   const noticeLines = m.notices.map((n) => {
     const closes = windowCloses(n.sentAt!, clause.responseWindow);

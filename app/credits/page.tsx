@@ -37,6 +37,13 @@ export default async function Credits() {
             <div>
               <StatusWord s={cr.status} />
             </div>
+            {cr.amountNotes.length > 0 && (
+              <ul className="plain note" data-testid={`amount-notes-${cr.id}`}>
+                {cr.amountNotes.map((n, k) => (
+                  <li key={k}>{n}</li>
+                ))}
+              </ul>
+            )}
             {cr.memo && (
               <div className="memo-status">
                 Credit memo: <span data-testid={`memo-status-${cr.id}`}>

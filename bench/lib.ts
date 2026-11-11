@@ -20,7 +20,8 @@ export interface BenchRun {
   effort: string;
   recordedAt: string;
   items: ExtractedBackCharge[];
-  rejected: Rejected[];
+  /** Recordings made before rejections carried plain words (`words`, `ref`) have only index and reason. */
+  rejected: (Pick<Rejected, "index" | "reason"> & Partial<Rejected>)[];
   /**
    * The model's tool input before validation. When present, loadRuns re-validates it with the current
    * parseBackCharges and uses that result instead of the stored items/rejected (which reflect the

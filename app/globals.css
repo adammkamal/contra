@@ -66,3 +66,10 @@ mark { background: var(--hl); color: #12202c; padding: 0 2px; }
 .memo-status { margin-top: 6px; }
 details { margin-top: 10px; }
 summary { cursor: pointer; font-weight: 600; }
+/* A reading of a photo is not a verified quote: dashed, italic, labelled. Rejected items are not back-charges. */
+.reading { margin: 8px 0; padding: 8px 12px; background: transparent; border: 2px dashed var(--muted); font-style: italic; }
+.reading-label { font-style: normal; font-weight: 700; font-size: .85rem; margin-bottom: 2px; }
+.card.rejected { background: transparent; border: 2px dashed var(--danger); border-left: 6px dashed var(--danger); }
+.rejected-tag { display: inline-block; font-weight: 700; font-size: .85rem; border: 2px solid var(--danger); color: var(--danger); padding: 0 8px; margin-right: 8px; }
+.amt.pending { font-size: .95rem; font-weight: 600; color: var(--muted); }
+.action input[data-testid$="-amount"] { min-width: 30ch; }
