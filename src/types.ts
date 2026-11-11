@@ -190,6 +190,10 @@ export interface AmountConfirmation {
   at: Date;
   /** The image it was read from: "attachment IMG_2041.jpg", or "attachment scan.pdf, page 2". */
   from: string;
+  /** The amount the person typed. This is the item's amount from then on (backChargeAmount in src/credits.ts). */
+  enteredCents: Cents;
+  /** What the model read from the image (extracted.amountCents), kept so both are shown. */
+  modelCents: Cents;
 }
 
 export type NoticeState = "drafted" | "approved" | "sent";

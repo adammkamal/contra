@@ -119,6 +119,7 @@
         "BC-4467",
         "BC-4468"
       ],
+      "amountNotes": [],
       "status": {
         "label": "Applied to a bill",
         "tone": "ok"

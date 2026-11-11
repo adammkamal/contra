@@ -221,7 +221,7 @@ test("attachments: a person clears amount_only_in_image only by typing the amoun
     const action = row().actions.find((a) => a.command === "confirmImageAmount")!;
     assert.deepEqual(action, { command: "confirmImageAmount", ref: "BC-7403", options: ["SC-SUM-0912"] });
     assert.deepEqual(parseAction(action), action);
-    await assert.rejects(cmd.runAction(app, action, { choice: "SC-SUM-0912", amount: "$604.00" }), /you typed \$604\.00, but the amount read from the image is \$640\.00/);
+    await assert.rejects(cmd.runAction(app, action, { choice: "SC-SUM-0912", amount: "$0.00" }), /must be more than \$0\.00; nothing changed and BC-7403 stays held/);
     await assert.rejects(cmd.runAction(app, action, { choice: "SC-SUM-0912" }), /type the amount/);
     await assert.rejects(cmd.runAction(app, action, { choice: "SC-LAK-0301", amount: "$640.00" }), /choose one of/);
     assert.equal(app.ctx.contra.backCharges.get("BC-7403")!.state, "held");
@@ -265,6 +265,102 @@ test("attachments: a PM-confirmed image amount is never called verbatim: the tra
     const text = await parseEmlWithMedia(eml({ subject: "Summit", body: BODY, parts: [await pdfPart([PAGE1, PAGE2])] }), "gmail-h2");
     cmd.ingestInboxEmail(app, { ...text.email, messageId: "h2" }, parseBackCharges({ items: [rawItem()] }, text.email).items, LLM, "gmail");
     assert.equal(app.ctx.contra.explainEligibility("BC-7401").trace[1], "PASS all evidence verbatim in source");
+  } finally {
+    app.close();
+  }
+});
+
+/**
+ * A photo whose amount the model read as `modelRead`; the PM types `typed`; then notice, response window,
+ * eligibility, credit proposal and the controller's approval, as for any item.
+ */
+async function photoToApprovedCredit(modelRead: string, typed: string) {
+  const app = liveApp();
+  const photo: Part = { filename: "IMG_2041.jpg", contentType: "image/jpeg", data: png(64, 48) };
+  const { email } = await parseEmlWithMedia(eml({ subject: "Summit - BC-7403", body: "Photo of the ticket attached.", parts: [photo] }), "gmail-p1");
+  const item = photoItem({ amountText: modelRead, amountSentence: `BC-7403 FLOOR PROTECTION ${modelRead}` });
+  cmd.ingestInboxEmail(app, email, parseBackCharges({ items: [item] }, email).items, LLM, "gmail");
+  await cmd.runAction(app, buildScreens(app).inbox.find((r) => r.ref === "BC-7403")!.actions[0]!, { choice: "SC-SUM-0912", amount: typed });
+  const noticeId = cmd.draftNotice(app, "SC-SUM-0912")!;
+  const notice = app.ctx.contra.notices.get(noticeId)!.body;
+  cmd.approveNotice(app, noticeId);
+  cmd.sendNotice(app, noticeId);
+  cmd.advanceDays(app, 14);
+  cmd.evaluateAll(app);
+  const creditId = cmd.proposeCredit(app, "SC-SUM-0912")!;
+  const proposedRow = buildScreens(app).credits.find((c) => c.id === creditId)!;
+  cmd.approveCredit(app, creditId);
+  return { app, creditId, notice, proposedRow };
+}
+
+test("attachments: a confirmed image amount that matches the model's reading: both are recorded, and the credit shows them", async () => {
+  const { app, creditId, proposedRow } = await photoToApprovedCredit("$640.00", "$640.00");
+  try {
+    const note = "BC-7403: amount confirmed by dana.ortiz (PM) from attachment IMG_2041.jpg (PM entered $640.00; model read $640.00)";
+    assert.equal(proposedRow.amount, "$640.00");
+    assert.deepEqual(proposedRow.amountNotes, [note]);
+    assert.deepEqual(proposedRow.actions.map((a) => a.command), ["approveCredit", "rejectCredit"]);
+    const approved = app.ctx.contra.audit.forEntity("credit", creditId).find((e) => e.to === "approved")!;
+    assert.deepEqual(approved.evidence, ["BC-7403", note]);
+    assert.match(app.ctx.contra.creditMemo(creditId).text, /TOTAL CREDIT\s+\$640\.00/);
+  } finally {
+    app.close();
+  }
+});
+
+test("attachments: a PM corrects a misread photo amount: the PM's amount is used everywhere, and both are recorded and shown on the credit", async () => {
+  const { app, creditId, notice, proposedRow } = await photoToApprovedCredit("$604.00", "$640.00");
+  try {
+    const both = "PM entered $640.00; model read $604.00";
+    const bc = app.ctx.contra.backCharges.get("BC-7403")!;
+    // The model's reading is kept as it was; the item's amount is the PM's.
+    assert.equal(bc.extracted.amountCents, 60_400);
+    assert.deepEqual({ entered: bc.amountConfirmation!.enteredCents, model: bc.amountConfirmation!.modelCents }, { entered: 64_000, model: 60_400 });
+    const confirmed = app.ctx.contra.audit.forEntity("backcharge", "BC-7403").find((e) => e.actor.kind === "human" && e.action.startsWith("amount confirmed"))!;
+    assert.equal(confirmed.action, "amount confirmed by dana.ortiz (PM) from attachment IMG_2041.jpg: $640.00");
+    assert.equal(confirmed.evidence[0], both);
+    // Notice, Inbox, credit and memo all carry $640.00.
+    assert.match(notice, /- BC-7403: Floor protection - \$640\.00\nTotal: \$640\.00/);
+    assert.equal(buildScreens(app).inbox.find((r) => r.ref === "BC-7403")!.amount, "$640.00");
+    assert.equal(proposedRow.amount, "$640.00");
+    assert.equal(app.ctx.contra.credits.get(creditId)!.amountCents, 64_000);
+    // The controller sees both readings on the credit they approve, and the approval record keeps them.
+    const note = `BC-7403: amount confirmed by dana.ortiz (PM) from attachment IMG_2041.jpg (${both})`;
+    assert.deepEqual(proposedRow.amountNotes, [note]);
+    assert.ok(app.ctx.contra.audit.forEntity("credit", creditId).find((e) => e.to === "proposed")!.evidence.includes(note));
+    assert.ok(app.ctx.contra.audit.forEntity("credit", creditId).find((e) => e.to === "approved")!.evidence.includes(note));
+    const memo = app.ctx.contra.creditMemo(creditId).text;
+    assert.match(memo, /BC-7403\s+Floor protection\s+SUM-01\s+\$640\.00/);
+    assert.match(memo, /TOTAL CREDIT\s+\$640\.00/);
+    assert.doesNotMatch(memo, /\$604\.00/);
+    assert.equal(app.ctx.ramp.credits.find((c) => c.id === creditId)!.amountCents, 64_000);
+  } finally {
+    app.close();
+  }
+});
+
+test("attachments: a corrected amount that the email's own text contradicts is refused, and the item stays held", async () => {
+  const app = liveApp();
+  try {
+    const photo: Part = { filename: "IMG_2041.jpg", contentType: "image/jpeg", data: png(64, 48) };
+    // The body agrees with the model's reading of the photo ($604.00), so ingest found no conflict.
+    const { email } = await parseEmlWithMedia(eml({ subject: "Summit - BC-7403", body: "BC-7403 is $604.00, ticket photo attached.", parts: [photo] }), "gmail-x1");
+    const item = photoItem({ amountText: "$604.00", amountSentence: "BC-7403 FLOOR PROTECTION $604.00" });
+    cmd.ingestInboxEmail(app, email, parseBackCharges({ items: [item] }, email).items, LLM, "gmail");
+    const bc = app.ctx.contra.backCharges.get("BC-7403")!;
+    assert.deepEqual(bc.holdReasons, ["amount_only_in_image"]);
+    const action = buildScreens(app).inbox.find((r) => r.ref === "BC-7403")!.actions[0]!;
+    const before = app.ctx.contra.audit.all().length;
+    await assert.rejects(
+      cmd.runAction(app, action, { choice: "SC-SUM-0912", amount: "$640.00" }),
+      /BC-7403: you typed \$640\.00, but the email body gives BC-7403 \$604\.00, not \$640\.00: BC-7403 is \$604\.00, ticket photo attached\.; nothing changed and BC-7403 stays held/,
+    );
+    assert.equal(app.ctx.contra.backCharges.get("BC-7403")!.state, "held");
+    assert.equal(app.ctx.contra.backCharges.get("BC-7403")!.amountConfirmation, undefined);
+    assert.equal(app.ctx.contra.audit.all().length, before);
+    // The amount the text agrees with is accepted.
+    await cmd.runAction(app, action, { choice: "SC-SUM-0912", amount: "$604.00" });
+    assert.equal(app.ctx.contra.backCharges.get("BC-7403")!.state, "linked");
   } finally {
     app.close();
   }

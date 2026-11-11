@@ -122,6 +122,7 @@
         "BC-4467",
         "BC-4468"
       ],
+      "amountNotes": [],
       "status": {
         "label": "Proposed, needs controller approval",
         "tone": "warn"

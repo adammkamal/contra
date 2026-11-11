@@ -1,10 +1,10 @@
 import type { AuditLog } from "./audit.ts";
 import { describeWindow, type Clock } from "./clock.ts";
-import { creditAmountFor } from "./credits.ts";
+import { backChargeAmount, creditAmountFor } from "./credits.ts";
 import { evaluateEligibility, type EligibilityResult } from "./eligibility.ts";
 import { renderCreditMemo } from "./memo.ts";
 import { formatUsd, sub as subCents, sum, type Cents } from "./money.ts";
-import { assessExtractedItem } from "./intake.ts";
+import { assessExtractedItem, conflictingStatements } from "./intake.ts";
 import { ambiguousWith, matchJobs, resolve, type Resolution } from "./resolver.ts";
 import { describeAt, describeAttachment, disputeSentencesFor, normalize, verifySpan } from "./span.ts";
 import { IllegalTransition, transitionBackCharge, transitionCredit, transitionMemo, transitionNotice } from "./state.ts";
@@ -13,6 +13,7 @@ import { planApplication, type PaymentsPlatform, type PlannedApplication } from 
 import { EMAIL_INGESTED, type EmailOrigin } from "./types.ts";
 import type {
   Actor,
+  AmountConfirmation,
   BackCharge,
   Credit,
   Email,
@@ -26,6 +27,16 @@ import type {
 
 const SYSTEM: Actor = { kind: "system", id: "contra" };
 const ROLE_WORDS = { pm: "PM", controller: "Controller", ap: "AP" } as const;
+
+/** Both readings of a confirmed image amount: "PM entered $640.00; model read $604.00". */
+export function confirmationNote(c: Readonly<AmountConfirmation>): string {
+  return `${c.byRole} entered ${formatUsd(c.enteredCents)}; model read ${formatUsd(c.modelCents)}`;
+}
+
+/** For each item whose amount a person confirmed from an image: who, from where, and both readings. */
+export function amountNotes(items: readonly Readonly<BackCharge>[]): string[] {
+  return items.flatMap((b) => (b.amountConfirmation ? [`${b.ref}: amount confirmed by ${b.amountConfirmation.by} from ${b.amountConfirmation.from} (${confirmationNote(b.amountConfirmation)})`] : []));
+}
 
 export interface Deps {
   clock: Clock;
@@ -149,7 +160,7 @@ export class Contra {
     for (const x of extracted) {
       const existing = this.backCharges.get(x.ref);
       if (existing) {
-        if (existing.extracted.amountCents !== x.amountCents && existing.state !== "held") {
+        if (backChargeAmount(existing) !== x.amountCents && existing.state !== "held") {
           this.#hold(existing, ["conflicting_amounts"], [`${email.id}: ${x.amountEvidence.sentence}`]);
         }
         continue;
@@ -228,8 +239,11 @@ export class Contra {
   /**
    * The PM confirms an amount the model read from a photo or scanned page, and links the item: held ->
    * linked, a human transition. Only for an item held for amount_only_in_image and nothing else. The PM
-   * types the amount they see; it must equal the amount read, or nothing changes and the item stays held.
-   * The subcontract must be on the item's job when its job resolves (as for chooseSubcontract).
+   * types the amount they see. It may differ from the model's reading (a misread photo): the PM's amount is
+   * used from then on, both are recorded, and both are shown on the credit the controller approves. It is
+   * refused (nothing changes, the item stays held) when it isn't more than $0.00, or when the email's text
+   * (body or a PDF page) gives this back-charge a different amount. The subcontract must be on the item's
+   * job when its job resolves (as for chooseSubcontract).
    */
   confirmImageAmount(ref: string, pm: Actor, typed: Cents, subcontractId: string): void {
     const bc = this.#bc(ref);
@@ -237,18 +251,21 @@ export class Contra {
       throw new Error(`${ref}: only an item held just for an amount read from an image can be confirmed this way`);
     }
     if (pm.kind !== "human") throw new IllegalTransition(`${ref}: confirming an amount requires a human, got ${pm.kind}`);
-    if (typed !== bc.extracted.amountCents) {
-      throw new Error(`${ref}: you typed ${formatUsd(typed)}, but the amount read from the image is ${formatUsd(bc.extracted.amountCents)}; nothing changed and ${ref} stays held`);
-    }
+    if (typed <= 0) throw new Error(`${ref}: the amount must be more than $0.00; nothing changed and ${ref} stays held`);
     const sc = this.d.erp.subcontract(subcontractId);
     if (!sc) throw new Error(`no subcontract ${subcontractId}`);
     const jobs = matchJobs(bc.extracted.jobRef, this.d.erp.jobs);
     if (jobs.length === 1 && sc.jobId !== jobs[0]!.id) throw new Error(`${sc.id} is not on ${jobs[0]!.id}, the job of ${ref}`);
-
     const email = this.emails.get(bc.extracted.amountEvidence.emailId);
-    const where = email ? describeAt(email, bc.extracted.amountEvidence.at) : "an image";
+    if (!email) throw new Error(`${ref}: its email is missing`);
+    // At ingest the email's text was compared with the model's reading. The amount typed now is what becomes
+    // money, so the text must not give this back-charge a different amount from it either.
+    const conflicts = conflictingStatements(email, { ...bc.extracted, amountCents: typed });
+    if (conflicts.length) throw new Error(`${ref}: you typed ${formatUsd(typed)}, but the ${conflicts[0]}; nothing changed and ${ref} stays held`);
+
+    const where = describeAt(email, bc.extracted.amountEvidence.at);
     const byRole = ROLE_WORDS[pm.role];
-    const confirmation = { by: `${pm.id} (${byRole})`, byRole, at: this.d.clock.now(), from: where };
+    const confirmation: AmountConfirmation = { by: `${pm.id} (${byRole})`, byRole, at: this.d.clock.now(), from: where, enteredCents: typed, modelCents: bc.extracted.amountCents };
     this.d.log.append({
       actor: pm,
       entity: "backcharge",
@@ -256,7 +273,7 @@ export class Contra {
       action: `amount confirmed by ${confirmation.by} from ${where}: ${formatUsd(typed)}`,
       from: null,
       to: null,
-      evidence: [`the model's reading of the image (not verifiable word for word): ${bc.extracted.amountEvidence.sentence}`],
+      evidence: [confirmationNote(confirmation), `the model's reading of the image (not verifiable word for word): ${bc.extracted.amountEvidence.sentence}`],
     });
     // The person's confirmation stands in for the word-for-word check an image can't have. It is recorded
     // on the item, so eligibility's trace says "amount confirmed by <who> from <where>", never "verbatim".
@@ -285,14 +302,14 @@ export class Contra {
     if (include.length === 0) return null;
 
     const job = this.d.erp.jobs.find((j) => j.id === sc.jobId)!;
-    const total = sum(include.map((b) => b.extracted.amountCents));
+    const total = sum(include.map(backChargeAmount));
     const clause = sc.clause!;
     const body = [
       `NOTICE OF BACK-CHARGES - Subcontract ${sc.id}, ${clause.section}`,
       `To: ${sc.partyLegalName}`,
       `Job: ${job.id} ${job.name}`,
       ``,
-      ...include.map((b) => `- ${b.ref}: ${b.extracted.description} - ${formatUsd(b.extracted.amountCents)}`),
+      ...include.map((b) => `- ${b.ref}: ${b.extracted.description} - ${formatUsd(backChargeAmount(b))}`),
       `Total: ${formatUsd(total)}`,
       ``,
       `${clause.section}: "${clause.text}"`,
@@ -399,7 +416,7 @@ export class Contra {
       approvedBy: null,
     };
     this.credits.set(c.id, c);
-    this.d.log.append({ actor: SYSTEM, entity: "credit", entityId: c.id, action: `proposed ${formatUsd(amountCents)}`, from: null, to: "proposed", evidence: c.backChargeRefs });
+    this.d.log.append({ actor: SYSTEM, entity: "credit", entityId: c.id, action: `proposed ${formatUsd(amountCents)}`, from: null, to: "proposed", evidence: [...c.backChargeRefs, ...amountNotes(items)] });
     return c;
   }
 
@@ -407,8 +424,10 @@ export class Contra {
   approveCredit(id: string, human: Actor): void {
     const c = this.#credit(id);
     // Re-check at approval time: items may have changed since the proposal.
-    creditAmountFor(c.backChargeRefs.map((r) => this.#bc(r)));
-    transitionCredit(this.d.log, c, "approved", human, `approved ${formatUsd(c.amountCents)}`, c.backChargeRefs);
+    const items = c.backChargeRefs.map((r) => this.#bc(r));
+    creditAmountFor(items);
+    // The approval record carries what the controller saw: amounts a person entered from an image, with the model's reading.
+    transitionCredit(this.d.log, c, "approved", human, `approved ${formatUsd(c.amountCents)}`, [...c.backChargeRefs, ...amountNotes(items)]);
     c.approvedBy = human.id;
 
     this.d.ramp.createCredit({ id: c.id, vendorId: c.vendorId, jobId: c.jobId, amountCents: c.amountCents, accountingDate: this.d.clock.now(), memo: `Contra ${c.id}: ${c.backChargeRefs.join(", ")}` });
@@ -494,7 +513,7 @@ export class Contra {
     const onProposal = new Set(proposed.flatMap((c) => c.backChargeRefs));
     const unproposed = mine.filter((b) => b.state === "eligible" && !b.creditId && !onProposal.has(b.ref));
     if (unproposed.length) {
-      actions.push(`propose a credit for ${unproposed.map((b) => b.ref).join(", ")} (${formatUsd(sum(unproposed.map((b) => b.extracted.amountCents)))}) before paying`);
+      actions.push(`propose a credit for ${unproposed.map((b) => b.ref).join(", ")} (${formatUsd(sum(unproposed.map(backChargeAmount)))}) before paying`);
     }
     for (const c of proposed) actions.push(`approve credit ${c.id} (${formatUsd(c.amountCents)}) before paying`);
 

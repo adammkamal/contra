@@ -121,6 +121,7 @@
         "BC-4467",
         "BC-4468"
       ],
+      "amountNotes": [],
       "status": {
         "label": "Approved and synced to ERP",
         "tone": "ok"

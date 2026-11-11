@@ -5,7 +5,8 @@ import { formatUsd } from "./money.ts";
 import { matchJobs, resolve, type Resolution } from "./resolver.ts";
 import { attachmentPages, describeAt, describeAttachment } from "./span.ts";
 import { EMAIL_INGESTED, type Actor, type BackCharge, type Credit, type EmailOrigin, type HoldReason, type Job, type Notice, type RejectedItem, type Subcontract } from "./types.ts";
-import { Contra } from "./workflow.ts";
+import { amountNotes, Contra } from "./workflow.ts";
+import { backChargeAmount } from "./credits.ts";
 
 /**
  * Pure screen data. Screens render this and nothing else: every status word, amount and available
@@ -153,8 +154,12 @@ export interface Screens {
   nextStep: { text: string; action: Action | null };
   inbox: InboxRow[];
   outbox: { id: string; total: string; refs: string[]; body: string; status: Status; actions: Action[] }[];
-  /** memo: the memo's delivery to the AP inbox, or null when the credit has no memo yet (not approved). */
-  credits: { id: string; amount: string; job: string; refs: string[]; status: Status; actions: Action[]; hasMemo: boolean; memo: Status | null }[];
+  /**
+   * memo: the memo's delivery to the AP inbox, or null when the credit has no memo yet (not approved).
+   * amountNotes: one line per item whose amount a person confirmed from an image, with both readings:
+   * "BC-7403: amount confirmed by dana.ortiz (PM) from attachment IMG_2041.jpg (PM entered $640.00; model read $604.00)".
+   */
+  credits: { id: string; amount: string; job: string; refs: string[]; amountNotes: string[]; status: Status; actions: Action[]; hasMemo: boolean; memo: Status | null }[];
   bills: {
     id: string;
     vendor: string;
@@ -212,7 +217,7 @@ export function buildScreens(app: App): Screens {
       emailSubject: email?.subject ?? "",
       emailFrom: email?.from ?? "",
       vendorAsWritten: b.extracted.vendorNameAsWritten,
-      amount: formatUsd(b.extracted.amountCents),
+      amount: formatUsd(backChargeAmount(b)),
       sourceSentence: b.extracted.amountEvidence.sentence,
       sourceLocation: email ? describeAt(email, b.extracted.amountEvidence.at) : "email body",
       attachments: email?.attachments?.map(describeAttachment) ?? [],
@@ -269,6 +274,7 @@ export function buildScreens(app: App): Screens {
       amount: formatUsd(c.amountCents),
       job: c.jobId,
       refs: c.backChargeRefs,
+      amountNotes: amountNotes(c.backChargeRefs.flatMap((r) => contra.backCharges.get(r) ?? [])),
       status: CREDIT_STATUS[c.state],
       actions,
       hasMemo,
@@ -467,7 +473,7 @@ export function backChargeDetail(app: App, ref: string): BackChargeDetail {
   return {
     ref,
     description: b.extracted.description,
-    amount: formatUsd(b.extracted.amountCents),
+    amount: formatUsd(backChargeAmount(b)),
     status: backChargeStatus(b),
     vendorAsWritten: b.extracted.vendorNameAsWritten,
     jobRef: b.extracted.jobRef,
