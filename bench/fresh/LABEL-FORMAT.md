@@ -16,8 +16,11 @@ contested or on hold.
 
 **Single-item form** (the same as `bench/labels/` and `bench/heldout/labels/`, scored exactly as there):
 `link`, `disputed`, `amountCents` at the top level. A run is scored only if the extractor accepted exactly
-one item; several accepted items count as "review" for both systems, and 0 accepted items count as
-**missed** (nobody sees the charge: not correct, not routed to a person).
+one item; several accepted items count as "review" for both systems. 0 accepted items count as **routed
+to a person** (not correct) if validation refused at least one item from the email, since each refused item
+is a "not taken in" Inbox row asking a person to read the email; otherwise as **missed** (nobody sees the
+charge: not correct, not routed to a person). Only refused items count, not a row saying the email holds no
+back-charge.
 
 **Items form**: an `items` list, one entry per back-charge in the email, and no top-level `link`,
 `disputed` or `amountCents`. Every accepted item of a run is decided (as ingest would, with all the run's
@@ -27,8 +30,10 @@ refs) and paired with a labeled item:
 2. an item without a `ref` pairs with an accepted item of exactly its amount; if several have that
    amount, the one the system linked to the item's subcontract, else the first in extraction order.
 
-Each pair is scored like a single-item label. A labeled item that pairs with nothing was not extracted and
-counts as **missed**: in the product nobody sees it, so it is neither correct nor routed to a person. An accepted item that pairs with nothing counts as against
+Each pair is scored like a single-item label. A labeled item that pairs with nothing was not extracted. It
+counts as **routed to a person** (not correct) if the run refused at least one item from the email (a "not
+taken in" row sends a person to the email), and otherwise as **missed**: in the product nobody sees it, so it
+is neither correct nor routed to a person. An accepted item that pairs with nothing counts as against
 `"none"`: never correct; crediting it is a wrong credit, linking it is a wrong link. The case is
 **matching** only if every labeled item matches and nothing is left over. **wrong link**, **wrong
 credit**, **routed to human** and **missed** are counted if any item has one.

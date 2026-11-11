@@ -52,6 +52,18 @@ test("scoring: a labeled charge with no extracted item is missed: not correct an
   assert.deepEqual(score(REVIEW, L("SC-A"), 0, 2), { matching: false, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: true, missed: false });
 });
 
+test("scoring: no accepted item but at least one refused item is routed to a person (the 'not taken in' row), not missed", () => {
+  const ROUTED = { matching: false, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: true, missed: false };
+  const MISSED = { ...ROUTED, routedToHuman: false, missed: true };
+  for (const l of [L("SC-A"), L("review"), L("SC-A", true)]) {
+    assert.deepEqual(score(REVIEW, l, 0, 0, 1), ROUTED);
+    assert.deepEqual(score(REVIEW, l, 0, 0, 3), ROUTED);
+    assert.deepEqual(score(REVIEW, l, 0, 0, 0), MISSED);
+  }
+  // A "none" label is unaffected: nothing accepted is still correct.
+  assert.deepEqual(score(REVIEW, NONE, 0, 0, 2), { matching: true, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: false, missed: false });
+});
+
 test("baseline honors the extraction's disputeNoted", () => {
   const seed = demoSeed(new Date("2026-11-07T15:00:00Z"));
   const x: ExtractedBackCharge = {
@@ -137,6 +149,13 @@ test("items label: one of two charges not extracted -> missed (not routed to a p
   assert.deepEqual(r.score, { matching: false, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: false, missed: true });
   assert.deepEqual(r.items.map((s) => [s.score.missed, s.score.routedToHuman]), [[false, false], [true, false]]);
   assert.deepEqual(r.items.map((s) => s.at), [0, null]);
+  // The same run with an item validation refused: the charge isn't extracted, but a person is sent to the email.
+  const withRefused = scoreItems(dec([item("BC-1", 36_000), link("SC-SUM-0912")]), label, 1);
+  assert.deepEqual(withRefused.score, { matching: false, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: true, missed: false });
+  assert.deepEqual(withRefused.items.map((s) => [s.score.missed, s.score.routedToHuman]), [[false, false], [false, true]]);
+  // Nothing accepted at all: routed with a refused item, missed without one.
+  assert.deepEqual(scoreItems([], label, 2).score, { matching: false, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: true, missed: false });
+  assert.deepEqual(scoreItems([], label, 0).score, { matching: false, dispute: true, wrongLink: false, wrongCredit: false, routedToHuman: false, missed: true });
 });
 
 test("items label: wrong amount does not pair; crediting it is a wrong credit", () => {

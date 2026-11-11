@@ -44,9 +44,11 @@ type Sys = "contra" | "baseline";
 type RunRow = { caseId: string; run: number; items: number; failed?: string; contra?: Score; baseline?: Score; contraDecision: string; baselineDecision: string };
 
 const show = (o: Outcome) => (o.decision.kind === "link" ? `link ${o.decision.subcontractId}` : o.decision.kind) + (o.wouldCredit ? " +credit" : "");
-// A run with no accepted item puts nothing in the Inbox: shown as "nothing extracted", never as "review".
+// A run with no accepted item: "nothing extracted" when nothing reaches the Inbox (missed), never "review".
+// When validation refused items, each is a "not taken in" row asking a person to read the email (routed).
 const NOTHING = "nothing extracted";
-const showItems = (d: readonly DecidedItem[]) => (d.length ? d.map(({ x, o }) => `${x.ref} ${show(o)}`).join("; ") : NOTHING);
+const nothingTaken = (refused: number) => (refused ? `nothing taken in (${refused} refused)` : NOTHING);
+const showItems = (d: readonly DecidedItem[], refused: number) => (d.length ? d.map(({ x, o }) => `${x.ref} ${show(o)}`).join("; ") : nothingTaken(refused));
 
 const rows: RunRow[] = [];
 for (const c of cases) {
@@ -57,6 +59,7 @@ for (const c of cases) {
       rows.push({ caseId: c.id, run, items: 0, failed: r.error, contraDecision: "failed", baselineDecision: "failed" });
       return;
     }
+    const refused = r.rejected.length;
     if (isItemsLabel(label)) {
       // Multi-item label: every accepted item is decided, as ingest would, and paired with the labeled items.
       const refs = r.items.map((x) => x.ref);
@@ -64,8 +67,8 @@ for (const c of cases) {
       const bo = r.items.map((x) => ({ x, o: baselineDecide(x, seed.vendors, seed.subcontracts, seed.jobs) }));
       rows.push({
         caseId: c.id, run, items: r.items.length,
-        contra: scoreItems(co, label).score, baseline: scoreItems(bo, label).score,
-        contraDecision: showItems(co), baselineDecision: showItems(bo),
+        contra: scoreItems(co, label, refused).score, baseline: scoreItems(bo, label, refused).score,
+        contraDecision: showItems(co, refused), baselineDecision: showItems(bo, refused),
       });
       return;
     }
@@ -77,8 +80,8 @@ for (const c of cases) {
     const note = x ? "" : ` (${r.items.length} items)`;
     rows.push({
       caseId: c.id, run, items: r.items.length,
-      contra: score(co, label, amount, accepted), baseline: score(bo, label, amount, accepted),
-      contraDecision: accepted === 0 ? NOTHING : show(co) + note, baselineDecision: accepted === 0 ? NOTHING : show(bo) + note,
+      contra: score(co, label, amount, accepted, refused), baseline: score(bo, label, amount, accepted, refused),
+      contraDecision: accepted === 0 ? nothingTaken(refused) : show(co) + note, baselineDecision: accepted === 0 ? nothingTaken(refused) : show(bo) + note,
     });
   });
 }
@@ -121,7 +124,7 @@ console.table(rows.map((r) => ({
   baseline: r.baselineDecision, "b match": r.baseline?.matching, "b dispute": r.baseline?.dispute, "b missed": r.baseline?.missed,
 })));
 for (const k of ["contra", "baseline"] as const) {
-  console.log(`\n${k} (per run; matching = correct link or correct review; missed = a labeled back-charge nothing was extracted for, which nobody sees)`);
+  console.log(`\n${k} (per run; matching = correct link or correct review; missed = a labeled back-charge nothing was extracted or refused for, which nobody sees)`);
   console.table(summary[k]);
 }
 console.log(`\nUnstable cases (outcome differs between runs): contra ${summary.unstable.contra.join(", ") || "none"}; baseline ${summary.unstable.baseline.join(", ") || "none"}`);
