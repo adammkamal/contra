@@ -72,7 +72,7 @@ test("API: bad input is rejected with 400, unknown things with 404, illegal move
     assert.equal(illegal.status, 409);
     assert.match(illegal.body.error, /not available right now/);
     const s = (await getJson(`${base}/api/screens`)).body as Screens;
-    assert.equal(s.outbox[0]!.status.label, "Draft, needs controller approval");
+    assert.equal(s.outbox[0]!.status.label, "Draft, needs PM approval");
   });
 });
 

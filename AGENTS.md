@@ -32,6 +32,7 @@ src/types.ts         domain records
 src/clock.ts         injectable clock
 src/audit.ts         append-only event log
 src/state.ts         back-charge and credit state machines
+src/roles.ts         who may do what: PM approves notices, controller decides credits, AP turns credits on; separation of duties
 src/span.ts          verbatim source check
 src/intake.ts        per-item ingest checks (span, dispute, link); shared with bench/
 src/resolver.ts      job -> subcontract party -> alias linkage

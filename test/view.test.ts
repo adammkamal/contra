@@ -58,7 +58,7 @@ test("following nextStep from start to finish reproduces the demo script exactly
     "PM confirms the link for BC-4470",
     "PM confirms the link for BC-4471",
     "Draft the back-charge notice",
-    "Controller approves the notice",
+    "PM approves the notice",
     "Send the notice",
     "Ridgeline replies",
     "Wait for the response window: advance a week",

@@ -5,7 +5,7 @@ import { formatUsd, scanUsdAmounts } from "./money.ts";
 import { matchJobs, resolve, type Resolution } from "./resolver.ts";
 import { attachmentPages, describeAt, describeAttachment, inEmailText, readFromImage } from "./span.ts";
 import { conflictingStatements } from "./intake.ts";
-import { EMAIL_INGESTED, type Actor, type BackCharge, type Credit, type Email, type EmailOrigin, type HoldReason, type Job, type Notice, type RejectedItem, type Subcontract } from "./types.ts";
+import { EMAIL_INGESTED, ROLE_WORDS, type Actor, type BackCharge, type Credit, type Email, type EmailOrigin, type HoldReason, type Job, type Notice, type RejectedItem, type Subcontract } from "./types.ts";
 import { amountNotes, Contra } from "./workflow.ts";
 import { backChargeAmount } from "./credits.ts";
 
@@ -77,7 +77,7 @@ export function backChargeStatus(b: Readonly<BackCharge>): Status {
 }
 
 const NOTICE_STATUS: Record<Notice["state"], Status> = {
-  drafted: { label: "Draft, needs controller approval", tone: "warn" },
+  drafted: { label: "Draft, needs PM approval", tone: "warn" },
   approved: { label: "Approved, not sent", tone: "info" },
   sent: { label: "Sent", tone: "ok" },
 };
@@ -105,7 +105,7 @@ export function memoStatus(c: Readonly<Credit>): Status {
 }
 
 export function actorLabel(a: Actor): string {
-  if (a.kind === "human") return `${a.id} (${a.role === "pm" ? "PM" : a.role === "ap" ? "AP" : "Controller"})`;
+  if (a.kind === "human") return `${a.id} (${ROLE_WORDS[a.role]})${a.presentedBy ? `, presented by ${a.presentedBy}` : ""}`;
   if (a.kind === "llm") return `AI extractor (${a.model})`;
   if (a.id === "sample-extractions") return "Sample extractions (hand-written)";
   return "Contra";
@@ -466,7 +466,7 @@ export function nextStep(app: App): { text: string; action: Action | null } {
   if (toConfirm) return { text: `PM confirms the link for ${toConfirm.ref}`, action: { command: "confirmLink", ref: toConfirm.ref } };
   if (notices.length === 0) return { text: "Draft the back-charge notice", action: { command: "draftNotice", subcontractId: DEMO_SC } };
   const n = notices[0]!;
-  if (n.state === "drafted") return { text: "Controller approves the notice", action: { command: "approveNotice", noticeId: n.id } };
+  if (n.state === "drafted") return { text: "PM approves the notice", action: { command: "approveNotice", noticeId: n.id } };
   if (n.state === "approved") return { text: "Send the notice", action: { command: "sendNotice", noticeId: n.id } };
   const replied = bcs.some((b) => b.subResponse !== null);
   if (!replied && bcs.some((b) => b.state === "noticed")) return { text: "Ridgeline replies", action: { command: "ingestSubReply", noticeId: n.id } };
@@ -500,7 +500,7 @@ function liveNextStep(app: App): { text: string; action: Action | null } {
   if (toConfirmAmount) return { text: `PM checks the amount of ${toConfirmAmount.ref} against its image and confirms it (in its Inbox row)`, action: null };
   const notices = [...contra.notices.values()];
   const drafted = notices.find((n) => n.state === "drafted");
-  if (drafted) return { text: `Controller approves notice ${drafted.id}`, action: { command: "approveNotice", noticeId: drafted.id } };
+  if (drafted) return { text: `PM approves notice ${drafted.id}`, action: { command: "approveNotice", noticeId: drafted.id } };
   const approved = notices.find((n) => n.state === "approved");
   if (approved) return { text: `Send notice ${approved.id}`, action: { command: "sendNotice", noticeId: approved.id } };
   // After the unsent notices above: an item stays "linked" until its notice is sent, so drafting must wait

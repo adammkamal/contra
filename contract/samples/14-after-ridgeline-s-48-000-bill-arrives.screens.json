@@ -370,13 +370,13 @@
       "actor": "Contra",
       "what": "notice N-1: notice sent to outbox (approved → sent)",
       "evidence": [
-        "approved by lee.chen"
+        "approved by dana.ortiz"
       ]
     },
     {
       "seq": 14,
       "at": "2026-11-07 15:00 UTC",
-      "actor": "lee.chen (Controller)",
+      "actor": "dana.ortiz (PM)",
       "what": "notice N-1: notice approved (drafted → approved)",
       "evidence": [
         "NOTICE OF BACK-CHARGES - Subcontract SC-SUM-0912, §14.3 Back-Charges\nTo: Ridgeline Interiors LLC\nJob: SUM-01 Summit Medical Office\n\n- BC-4467: Replace ceiling grid damaged by drywall lift, L2 - $6,800.00\n- BC-4468: Debris haul-off after 3 warnings - $4,700.00\n- BC-4471: Overtime for missed inspection - $4,000.00\nTotal: $15,500.00\n\n§14.3 Back-Charges: \"Contractor shall give Subcontractor written notice of any back-charge. Subcontractor shall have five (5) working days from receipt to dispute in writing. Undisputed back-charges may be deducted from any payment due Subcontractor.\"\n\nYou have 5 working days from the date of this notice to dispute any item in writing, citing its number.\nUndisputed amounts will be deducted from payments due under the subcontract."

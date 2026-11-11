@@ -219,7 +219,7 @@
   },
   "audit": [
     {
-      "seq": 33,
+      "seq": 34,
       "at": "2026-11-14 15:00 UTC",
       "actor": "Contra",
       "what": "memo VC-1: memo sent to contra.demo+ramp-ap@example.com (queued → sent)",
@@ -228,7 +228,7 @@
       ]
     },
     {
-      "seq": 32,
+      "seq": 33,
       "at": "2026-11-14 15:00 UTC",
       "actor": "sam.ap (AP)",
       "what": "memo VC-1: memo queued for contra.demo+ramp-ap@example.com (new → queued)",
@@ -237,7 +237,7 @@
       ]
     },
     {
-      "seq": 31,
+      "seq": 32,
       "at": "2026-11-14 15:00 UTC",
       "actor": "Contra",
       "what": "backcharge BC-4468: deducted on B-SUM-48K (credited → applied)",
@@ -246,7 +246,7 @@
       ]
     },
     {
-      "seq": 30,
+      "seq": 31,
       "at": "2026-11-14 15:00 UTC",
       "actor": "Contra",
       "what": "backcharge BC-4467: deducted on B-SUM-48K (credited → applied)",
@@ -255,7 +255,7 @@
       ]
     },
     {
-      "seq": 29,
+      "seq": 30,
       "at": "2026-11-14 15:00 UTC",
       "actor": "Contra",
       "what": "credit VC-1: applied to B-SUM-48K (synced → applied)",
@@ -264,12 +264,21 @@
       ]
     },
     {
-      "seq": 28,
+      "seq": 29,
       "at": "2026-11-14 15:00 UTC",
       "actor": "sam.ap (AP)",
       "what": "bill B-SUM-48K: paid $36,500.00 (approved → paid)",
       "evidence": [
         "VC-1 applied $11,500.00"
+      ]
+    },
+    {
+      "seq": 28,
+      "at": "2026-11-14 15:00 UTC",
+      "actor": "sam.ap (AP)",
+      "what": "bill B-SUM-48K: credits turned on",
+      "evidence": [
+        "VC-1 would apply $11,500.00"
       ]
     },
     {
@@ -405,13 +414,13 @@
       "actor": "Contra",
       "what": "notice N-1: notice sent to outbox (approved → sent)",
       "evidence": [
-        "approved by lee.chen"
+        "approved by dana.ortiz"
       ]
     },
     {
       "seq": 14,
       "at": "2026-11-07 15:00 UTC",
-      "actor": "lee.chen (Controller)",
+      "actor": "dana.ortiz (PM)",
       "what": "notice N-1: notice approved (drafted → approved)",
       "evidence": [
         "NOTICE OF BACK-CHARGES - Subcontract SC-SUM-0912, §14.3 Back-Charges\nTo: Ridgeline Interiors LLC\nJob: SUM-01 Summit Medical Office\n\n- BC-4467: Replace ceiling grid damaged by drywall lift, L2 - $6,800.00\n- BC-4468: Debris haul-off after 3 warnings - $4,700.00\n- BC-4471: Overtime for missed inspection - $4,000.00\nTotal: $15,500.00\n\n§14.3 Back-Charges: \"Contractor shall give Subcontractor written notice of any back-charge. Subcontractor shall have five (5) working days from receipt to dispute in writing. Undisputed back-charges may be deducted from any payment due Subcontractor.\"\n\nYou have 5 working days from the date of this notice to dispute any item in writing, citing its number.\nUndisputed amounts will be deducted from payments due under the subcontract."

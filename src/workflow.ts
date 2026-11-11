@@ -10,7 +10,8 @@ import { describeAt, describeAttachment, disputeSentencesFor, normalize, verifyS
 import { IllegalTransition, transitionBackCharge, transitionCredit, transitionMemo, transitionNotice } from "./state.ts";
 import type { MockERP } from "./mocks/erp.ts";
 import { planApplication, type PaymentsPlatform, type PlannedApplication } from "./mocks/ramp.ts";
-import { EMAIL_INGESTED, type EmailOrigin } from "./types.ts";
+import { requireRole, requireSeparateFrom } from "./roles.ts";
+import { EMAIL_INGESTED, ROLE_WORDS, type EmailOrigin } from "./types.ts";
 import type {
   Actor,
   AmountConfirmation,
@@ -26,7 +27,6 @@ import type {
 } from "./types.ts";
 
 const SYSTEM: Actor = { kind: "system", id: "contra" };
-const ROLE_WORDS = { pm: "PM", controller: "Controller", ap: "AP" } as const;
 
 /** Both readings of a confirmed image amount: "PM entered $640.00; model read $604.00". */
 export function confirmationNote(c: Readonly<AmountConfirmation>): string {
@@ -234,7 +234,7 @@ export class Contra {
         this.d.erp.addAlias({ alias: name, partyLegalName: sc.partyLegalName, source: "pm_confirmed", confirmedBy: pm.id });
         this.d.log.append({ actor: pm, entity: "alias", entityId: name, action: `alias -> ${sc.partyLegalName}`, from: null, to: null, evidence: [ref] });
       }
-      bc.linkExplanation = [`PM ${pm.id} linked "${bc.extracted.vendorNameAsWritten}" to ${sc.id} ${sc.partyLegalName}`];
+      bc.linkExplanation = [`${pm.kind === "human" ? ROLE_WORDS[pm.role] : pm.kind} ${pm.id} linked "${bc.extracted.vendorNameAsWritten}" to ${sc.id} ${sc.partyLegalName}`];
     }
     bc.subcontractId = sc.id;
     transitionBackCharge(this.d.log, bc, "linked", pm, "link confirmed", bc.linkExplanation);
@@ -430,6 +430,9 @@ export class Contra {
     // Re-check at approval time: items may have changed since the proposal.
     const items = c.backChargeRefs.map((r) => this.#bc(r));
     creditAmountFor(items);
+    // Only a controller (also in the state table), and never one who raised or linked one of its back-charges.
+    requireRole(human, "controller", `approving credit ${id}`);
+    requireSeparateFrom(this.d.log, c.backChargeRefs, human, `approve credit ${id}`);
     // The approval record carries what the controller saw: amounts a person entered from an image, with the model's reading.
     transitionCredit(this.d.log, c, "approved", human, `approved ${formatUsd(c.amountCents)}`, [...c.backChargeRefs, ...amountNotes(items)]);
     c.approvedBy = human.id;
@@ -488,6 +491,14 @@ export class Contra {
   }
 
   // ---- Step 5: bill and payment ------------------------------------------------------------
+
+  /** AP turns on "apply credits" for a bill (in Ramp, a person does this on the bill). Audited with who did it. */
+  turnOnCredits(billId: string, human: Actor): void {
+    requireRole(human, "ap", `turning on credits for bill ${billId}`);
+    this.d.ramp.setApplyCredits(billId, true);
+    const plan = this.d.ramp.previewApplication(billId);
+    this.d.log.append({ actor: human, entity: "bill", entityId: billId, action: "credits turned on", from: null, to: null, evidence: plan.map((p) => `${p.creditId} would apply ${formatUsd(p.cents)}`) });
+  }
 
   /** Shows where credits would land BEFORE anyone turns credits on for a bill. */
   previewBill(billId: string): { plan: PlannedApplication[]; warnings: string[] } {

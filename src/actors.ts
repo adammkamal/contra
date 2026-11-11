@@ -1,9 +1,9 @@
-import type { Actor } from "./types.ts";
+import type { Actor, Human } from "./types.ts";
 
 /** Demo identities. Production replaces these with signed-in users and roles. */
-export const PM: Actor = { kind: "human", id: "dana.ortiz", role: "pm" };
-export const CONTROLLER: Actor = { kind: "human", id: "lee.chen", role: "controller" };
-export const AP: Actor = { kind: "human", id: "sam.ap", role: "ap" };
+export const PM: Human = { kind: "human", id: "dana.ortiz", role: "pm" };
+export const CONTROLLER: Human = { kind: "human", id: "lee.chen", role: "controller" };
+export const AP: Human = { kind: "human", id: "sam.ap", role: "ap" };
 /**
  * Hand-written sample extractions (src/seed.ts). Deliberately NOT an llm actor: the audit log and the
  * screens must never credit hand-written data to the model.
