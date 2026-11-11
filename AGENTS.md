@@ -47,7 +47,7 @@ src/store/sqlite.ts  append-only event log + snapshots (node:sqlite, built in)
 src/app.ts           App: the ONLY entry point for UI and scripts
 src/commands.ts      one function per UI button (each inside app.run) + runAction(app, action, input) dispatcher
 server/api.ts        JSON API over the same functions (npm run api); node:http, plus ingest/ for .eml
-server/auth.ts       accounts (data/auth.db, scrypt) and sessions; npm run user:add -- <username> <role> [--live]
+server/auth.ts       accounts (data/auth.db, scrypt) and sessions; npm run user:add -- <username> <role> [--live] [--email <address>]
 ingest/eml.ts        parseEml / loadPmEmails: .eml files -> Email (mailparser; outside src/ on purpose)
 ingest/attachments.ts  PDF text (pdfjs-dist) and photo checks for PM email attachments, with the limits
 scripts/make-eml.ts  writes fixtures/emails/E-1..E-3.eml from the seed (QP, HTML-only, 7bit)

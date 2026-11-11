@@ -299,7 +299,11 @@ export function createApiServer(opts: ApiOptions): {
     if (!opts.inbox || polling) return;
     polling = true;
     try {
-      const r = await opts.inbox.poller.poll(appFor("live"));
+      // A sender whose address is an account's email is recorded as the raiser of its items.
+      const r = await opts.inbox.poller.poll(appFor("live"), (address) => {
+        const u = auth.store.userByEmail(address);
+        return u ? { kind: "human", id: u.username, role: u.role } : null;
+      });
       if (r.ingested > 0) changed("inbox", "live");
     } catch {
       /* the poller records errors in its status; a timer must never throw */

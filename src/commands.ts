@@ -103,6 +103,8 @@ export function ingestInboxEmail(
   extractor: Actor,
   origin: EmailOrigin = "gmail",
   rejected: readonly RejectedExtraction[] = [],
+  /** The account whose email is the sender's address, if any (the host matches it): recorded as the raiser. */
+  raisedBy: Human | null = null,
 ): { ingested: boolean; refs: string[] } {
   // Live mail never reaches the scripted demo: its notice, credit and payment can't change through the inbox.
   if (app.ctx.workspace !== "live") throw new WrongWorkspace("live inbox mail goes only to the live workspace, never to the demo");
@@ -110,7 +112,7 @@ export function ingestInboxEmail(
   if (app.ctx.contra.hasMessage(email.messageId)) return { ingested: false, refs: [] };
   return app.run(({ contra }) => {
     if (contra.hasMessage(email.messageId!)) return { ingested: false, refs: [] };
-    return { ingested: true, refs: contra.ingestBackChargeEmail(email, extracted, extractor, origin, rejected).map((b) => b.ref) };
+    return { ingested: true, refs: contra.ingestBackChargeEmail(email, extracted, extractor, origin, rejected, raisedBy).map((b) => b.ref) };
   });
 }
 

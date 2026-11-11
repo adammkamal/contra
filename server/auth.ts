@@ -73,6 +73,11 @@ export function usernameProblem(u: string): string | null {
   return USERNAME.test(u) ? null : "a username is 2-32 characters: lowercase letters, digits, dot, dash or underscore, starting with a letter or digit";
 }
 
+/** Why an email address can't be used, or null. */
+export function emailProblem(e: string): string | null {
+  return /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(e) && e.length <= 254 ? null : "an email is one plain address like name@example.com";
+}
+
 /** Why a password can't be used, or null. */
 export function passwordProblem(p: string): string | null {
   if ([...p].length < PASSWORD_MIN) return `a password needs at least ${PASSWORD_MIN} characters`;
@@ -106,16 +111,37 @@ export class AuthStore {
         expires_at INTEGER NOT NULL
       );
     `);
+    // Added after the first accounts existed: an optional email, one account per address, stored lower-case.
+    const cols = this.#db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+    if (!cols.some((c) => c.name === "email")) this.#db.exec("ALTER TABLE users ADD COLUMN email TEXT");
+    this.#db.exec("CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email) WHERE email IS NOT NULL");
   }
 
-  async addUser(username: string, role: Role, password: string, opts: { live?: boolean; now?: Date } = {}): Promise<User> {
-    const bad = usernameProblem(username) ?? (ROLES.includes(role) ? null : `role must be one of: ${ROLES.join(", ")}`) ?? passwordProblem(password);
+  /**
+   * `email`: the address this person sends back-charge emails from. Live mail from it records them as the
+   * raiser of its items (separation of duties). Optional; one account per address.
+   */
+  async addUser(username: string, role: Role, password: string, opts: { live?: boolean; email?: string; now?: Date } = {}): Promise<User> {
+    const email = opts.email === undefined ? null : opts.email.trim().toLowerCase();
+    const bad = usernameProblem(username) ?? (ROLES.includes(role) ? null : `role must be one of: ${ROLES.join(", ")}`) ?? (email === null ? null : emailProblem(email)) ?? passwordProblem(password);
     if (bad) throw new Error(bad);
     if (this.user(username)) throw new Error(`user ${username} already exists`);
+    if (email && this.userByEmail(email)) throw new Error(`another account already has the email ${email}`);
     const hash = await hashPassword(password, this.#cost);
     // `now` only stamps created_at; it never decides anything.
-    this.#db.prepare("INSERT INTO users (username, role, live, password, created_at) VALUES (?, ?, ?, ?, ?)").run(username, role, opts.live ? 1 : 0, hash, (opts.now ?? new Date()).toISOString());
+    this.#db.prepare("INSERT INTO users (username, role, live, password, created_at, email) VALUES (?, ?, ?, ?, ?, ?)").run(username, role, opts.live ? 1 : 0, hash, (opts.now ?? new Date()).toISOString(), email);
     return { username, role, live: !!opts.live };
+  }
+
+  /** The account whose email is this address (compared lower-case), or null. */
+  userByEmail(address: string): User | null {
+    const r = this.#db.prepare("SELECT username FROM users WHERE email = ?").get(address.trim().toLowerCase()) as { username: string } | undefined;
+    return r ? this.user(r.username) : null;
+  }
+
+  emailOf(username: string): string | null {
+    const r = this.#db.prepare("SELECT email FROM users WHERE username = ?").get(username) as { email: string | null } | undefined;
+    return r?.email ?? null;
   }
 
   user(username: string): User | null {
@@ -174,20 +200,32 @@ export class AuthStore {
 export const authDbFromEnv = (env: Record<string, string | undefined>) => (env.CONTRA_AUTH_DB ?? "").trim() || DEFAULT_AUTH_DB;
 
 /**
- * npm run user:add -- <username> <role> [--live]. Anything else is refused, and the refusal never repeats
- * the arguments (one of them could be a password typed by mistake).
+ * npm run user:add -- <username> <role> [--live] [--email <address>]. Anything else is refused, and the
+ * refusal never repeats the arguments (one of them could be a password typed by mistake).
  */
-export function parseUserAddArgs(argv: readonly string[]): { username: string; role: Role; live: boolean } | string {
-  const usage = "usage: npm run user:add -- <username> <pm|controller|ap> [--live]   (you are asked for the password; it is never an argument)";
-  const flags = argv.filter((a) => a.startsWith("-"));
-  const pos = argv.filter((a) => !a.startsWith("-"));
+export function parseUserAddArgs(argv: readonly string[]): { username: string; role: Role; live: boolean; email?: string } | string {
+  const usage = "usage: npm run user:add -- <username> <pm|controller|ap> [--live] [--email <address>]   (you are asked for the password; it is never an argument)";
+  const rest = [...argv];
+  let email: string | undefined;
+  const at = rest.findIndex((a) => a === "--email" || a.startsWith("--email="));
+  if (at >= 0) {
+    const [flag] = rest.splice(at, 1);
+    email = flag!.startsWith("--email=") ? flag!.slice("--email=".length) : rest.splice(at, 1)[0];
+    if (email === undefined || email.startsWith("-")) return `--email needs an address. ${usage}`;
+    email = email.trim().toLowerCase();
+    const badEmail = emailProblem(email);
+    if (badEmail) return badEmail;
+    if (rest.some((a) => a === "--email" || a.startsWith("--email="))) return `--email given twice. ${usage}`;
+  }
+  const flags = rest.filter((a) => a.startsWith("-"));
+  const pos = rest.filter((a) => !a.startsWith("-"));
   if (flags.some((f) => f !== "--live")) return `unknown option. ${usage}`;
   if (pos.length !== 2) return `expected exactly a username and a role. ${usage}`;
   const [username, role] = pos as [string, string];
   const bad = usernameProblem(username);
   if (bad) return bad;
   if (!ROLES.includes(role as Role)) return `role must be one of: ${ROLES.join(", ")}`;
-  return { username, role: role as Role, live: flags.includes("--live") };
+  return { username, role: role as Role, live: flags.includes("--live"), ...(email ? { email } : {}) };
 }
 
 /** The session cookie's value from a Cookie header, or "". */

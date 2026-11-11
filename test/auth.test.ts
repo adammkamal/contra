@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { createApiServer, type AuthOptions } from "../server/api.ts";
 import { AuthStore, parseUserAddArgs, SESSION_COOKIE } from "../server/auth.ts";
+import { DatabaseSync } from "node:sqlite";
 import { signIn, TEST_COST, TEST_PASSWORD, testAuth } from "./auth-fakes.ts";
 
 // Accounts and sessions (server/auth.ts). Made-up names and passwords only.
@@ -310,4 +311,47 @@ test("no session: 401 on every route except POST /api/login and GET /api/health;
   } finally {
     await api.close();
   }
+});
+
+test("accounts: an optional email, stored lower-case, one account per address; an auth.db from before emails gains the column", async () => {
+  const path = join(tmp(), "auth.db");
+  // An auth.db made before accounts had emails.
+  const old = new DatabaseSync(path);
+  old.exec("CREATE TABLE users (username TEXT PRIMARY KEY, role TEXT NOT NULL, live INTEGER NOT NULL, password TEXT NOT NULL, created_at TEXT NOT NULL)");
+  old.prepare("INSERT INTO users VALUES ('old.user', 'pm', 0, 'scrypt$1$1$1$AA==$AA==', '2026-11-01T00:00:00Z')").run();
+  old.close();
+  const store = new AuthStore(path, { cost: TEST_COST });
+  try {
+    assert.deepEqual(store.user("old.user"), { username: "old.user", role: "pm", live: false });
+    assert.equal(store.emailOf("old.user"), null);
+    await store.addUser("cy.ctl", "controller", TEST_PASSWORD, { email: " Cy@Apex.Example " });
+    assert.equal(store.emailOf("cy.ctl"), "cy@apex.example");
+    assert.equal(store.userByEmail("CY@apex.example")?.username, "cy.ctl");
+    assert.equal(store.userByEmail("nobody@apex.example"), null);
+    await assert.rejects(store.addUser("cy.two", "controller", TEST_PASSWORD, { email: "cy@APEX.example" }), /another account already has the email cy@apex\.example/);
+    await assert.rejects(store.addUser("cy.three", "controller", TEST_PASSWORD, { email: "not an address" }), /one plain address/);
+    await store.addUser("no.mail", "ap", TEST_PASSWORD); // email stays optional; several accounts may have none
+    await store.addUser("no.mail2", "ap", TEST_PASSWORD);
+  } finally {
+    store.close();
+  }
+  assert.deepEqual(parseUserAddArgs(["cy.ctl", "controller", "--live", "--email", "Cy@Apex.Example"]), { username: "cy.ctl", role: "controller", live: true, email: "cy@apex.example" });
+  assert.deepEqual(parseUserAddArgs(["--email=cy@apex.example", "cy.ctl", "controller"]), { username: "cy.ctl", role: "controller", live: false, email: "cy@apex.example" });
+  assert.match(parseUserAddArgs(["cy.ctl", "controller", "--email"]) as string, /--email needs an address/);
+  assert.match(parseUserAddArgs(["cy.ctl", "controller", "--email", "x"]) as string, /one plain address/);
+});
+
+test("user:add --email: the account gets the email, and a second account with the same email is refused", () => {
+  const env = { ...process.env, CONTRA_AUTH_DB: join(tmp(), "auth.db") };
+  const run = (args: string[]) => spawnSync(process.execPath, ["--import", "tsx", "scripts/user-add.ts", ...args], { env, input: "piped-pass-phrase-5d0a\n", encoding: "utf8" });
+  const ok = run(["cy.ctl", "controller", "--live", "--email", "cy@apex.example"]);
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.match(ok.stdout, /added cy\.ctl \(Controller, demo and live workspaces, email cy@apex\.example\)/);
+  const dup = run(["cy.two", "controller", "--email=CY@apex.example"]);
+  assert.equal(dup.status, 1);
+  assert.match(dup.stderr, /another account already has the email cy@apex\.example; nothing was added/);
+  const store = new AuthStore(env.CONTRA_AUTH_DB);
+  assert.equal(store.userByEmail("cy@apex.example")?.username, "cy.ctl");
+  assert.equal(store.user("cy.two"), null);
+  store.close();
 });

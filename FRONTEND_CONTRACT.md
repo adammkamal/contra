@@ -98,7 +98,7 @@ Show the message; don't retry.
 ## Signing in
 
 There is no sign-up. Accounts are made on the server's machine with
-`npm run user:add -- <username> <pm|controller|ap> [--live]`, which asks for the password (stored as a
+`npm run user:add -- <username> <pm|controller|ap> [--live] [--email <address>]`, which asks for the password (stored as a
 salted scrypt hash in `data/auth.db`). `--live` lets the account open the live workspace (real Gmail, real
 memo emails); without it the account sees only the scripted demo.
 
@@ -148,7 +148,7 @@ why when it refuses (409); show the message. Don't hide or disable buttons by ro
 | Who can open it | Any signed-in account | Only accounts created with `--live` (else 403) |
 | Who each step is recorded under | The scripted actor (Dana Ortiz PM, Lee Chen Controller, Sam AP), with `presented by <username>`: any account can present every step | The signed-in account and its role |
 | `approveNotice` | Presented as Dana Ortiz (PM) | A PM |
-| `approveCredit`, `rejectCredit` | Presented as Lee Chen (Controller) | A controller, and for `approveCredit` not one who raised or linked any of the credit's back-charges (separation of duties) |
+| `approveCredit`, `rejectCredit` | Presented as Lee Chen (Controller) | A controller, and for `approveCredit` not one who raised or linked any of the credit's back-charges (separation of duties). "Raised" includes live mail sent from the address given as the account's `--email`: its items' audit shows `raised by <username> (<Role>): the email came from their address`. |
 | `turnOnCredits` | Presented as Sam (AP) | AP |
 | `sendCreditMemo` | `--live` accounts only (403 otherwise): it emails the AP inbox for real | `--live` accounts (all who can open it) |
 

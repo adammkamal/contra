@@ -9,7 +9,7 @@ import { GmailClient, InboxPoller } from "../server/gmail.ts";
 import type { MemoSender } from "../src/memo.ts";
 import type { Role } from "../src/types.ts";
 import type { Screens } from "../src/view.ts";
-import { signIn, testAuth } from "./auth-fakes.ts";
+import { signIn, TEST_PASSWORD, testAuth } from "./auth-fakes.ts";
 import { CONFIG, fakeExtract, fakeGmail, rfc822, sseClient, until } from "./gmail-fakes.ts";
 
 // Who may reach which workspace, and who is recorded for each step, over HTTP. Made-up names, addresses
@@ -176,6 +176,38 @@ test("live: refusals are 409 with the reason in words: a PM can't approve a cred
     assert.equal(who(/^notice N-1: notice approved/), "pat.pm (PM)");
     assert.equal(who(/^credit VC-1: approved \$900\.00/), "di.ctl (Controller)");
     assert.ok(!audit.some((e) => /presented by/.test(e.actor)), "live steps are never 'presented'");
+    // The sender's address is no account's email here, so nobody is recorded as the raiser.
+    assert.ok(!audit.some((e) => /raised by/.test(e.what)));
+  } finally {
+    await s.api.close();
+  }
+});
+
+test("raised by: live mail from an account's email records that person as its raiser, so they can't approve a credit for it", async () => {
+  const s = await server();
+  try {
+    // The fake mail comes from Dana Ortiz <dana.ortiz@apexbuilders.example>; Cy's account has that email (any case).
+    await s.api.authStore.addUser("cy.ctl", "controller", TEST_PASSWORD, { live: true, email: "Dana.Ortiz@ApexBuilders.EXAMPLE" });
+    await s.api.pollNow();
+    const pm = await s.as("pat.pm", "pm", true);
+    const cy = await s.as("cy.ctl", "controller", true);
+    const di = await s.as("di.ctl", "controller", true);
+    const raised = (await s.screens(pm, "live")).audit.find((e) => /^backcharge BC-7501: raised by/.test(e.what))!;
+    assert.equal(raised.what, "backcharge BC-7501: raised by cy.ctl (Controller): the email came from their address");
+    assert.equal(raised.actor, "cy.ctl (Controller)");
+    assert.deepEqual(raised.evidence, ["From: Dana Ortiz <dana.ortiz@apexbuilders.example>"]);
+    // Pat (PM) links and runs the notice; Cy never touches the item in the app.
+    for (let i = 0; i < 8; i++) {
+      const a = (await s.screens(pm, "live")).nextStep.action!;
+      if (a.command === "approveCredit") break;
+      assert.equal((await s.post(pm, "/api/action?workspace=live", { action: a })).status, 200, a.command);
+    }
+    const approve = (await s.screens(pm, "live")).nextStep.action!;
+    assert.equal(approve.command, "approveCredit");
+    const refused = await s.post(cy, "/api/action?workspace=live", { action: approve });
+    assert.equal(refused.status, 409);
+    assert.deepEqual(await refused.json(), { ok: false, error: "separation of duties: cy.ctl raised BC-7501, so cy.ctl can't approve credit VC-1; another controller must" });
+    assert.equal((await s.post(di, "/api/action?workspace=live", { action: approve })).status, 200);
   } finally {
     await s.api.close();
   }
