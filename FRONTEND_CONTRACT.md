@@ -133,6 +133,9 @@ never put it in a URL, `localStorage`, a log or client-side JavaScript.
 
 Any route can answer 401 `"sign in first"` once the session has expired or been ended, including the
 SSE stream (its connection is refused; `EventSource` reports an error and keeps retrying, so close it).
+An open stream doesn't outlive its session: at sign-out, or when the session expires, the server sends
+`event: session-ended` with `data: {"reason": "signed out" | "expired"}` and closes that session's
+streams (only that session's: the same account signed in elsewhere keeps its own). Treat it like a 401.
 On a 401 from anything but `/api/login`: close the stream, drop cached screens, show the sign-in page with
 "Your session has ended; sign in again", and after sign-in return to the screen the person was on and
 re-read it. Don't re-send the request that got the 401: nothing ran, and the screen it came from may be
@@ -223,6 +226,9 @@ events reach only streams opened by `--live` accounts.
   `"live"`). One stream carries both workspaces: re-read `GET /api/screens?workspace=<workspace>` only
   when it is the workspace on screen. The event never carries screen data itself.
 - `event: heartbeat`, `data: {}`: every 15 seconds, so the connection stays open. Ignore it.
+- `event: session-ended`, `data: {"reason": "signed out" | "expired"}`: the last event on a stream whose
+  session ended; the server then closes it. Close the `EventSource` (so it doesn't reconnect) and show the
+  sign-in page (see [Handling 401](#handling-401)).
 
 ## Workspaces
 

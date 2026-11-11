@@ -283,9 +283,24 @@ export function createApiServer(opts: ApiOptions): {
 
   // ---- Server-Sent Events: "screens-changed" after every change, plus a heartbeat. Event data never
   // carries state or secrets: the client re-reads GET /api/screens.
-  const sseClients = new Map<ServerResponse, { live: boolean }>();
-  /** A live workspace's events go only to streams opened by accounts that may see it. */
+  // Each stream belongs to the session that opened it (the raw id is kept in memory only, never logged).
+  const sseClients = new Map<ServerResponse, { live: boolean; sid: string; timer: ReturnType<typeof setTimeout> | null }>();
+  /** Ends one stream: a last `session-ended` event (so the client signs in again instead of reconnecting), then close. */
+  const endStream = (c: ServerResponse, reason: "signed out" | "expired") => {
+    const s = sseClients.get(c);
+    if (!s) return;
+    sseClients.delete(c);
+    if (s.timer) clearTimeout(s.timer);
+    c.write(`event: session-ended\ndata: ${JSON.stringify({ reason })}\n\n`);
+    c.end();
+  };
+  /** Ends every stream whose session has expired or no longer exists. */
+  const sweep = () => {
+    for (const [c, s] of sseClients) if (!auth.store.session(s.sid, authNow())) endStream(c, "expired");
+  };
+  /** A live workspace's events go only to streams opened by accounts that may see it; never to an ended session's. */
   const broadcast = (event: string, data: Record<string, string>) => {
+    sweep();
     const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
     for (const [c, who] of sseClients) if (data.workspace !== "live" || who.live) c.write(msg);
   };
@@ -456,14 +471,25 @@ export function createApiServer(opts: ApiOptions): {
 
       if (req.method === "GET" && path === "/api/me") return send(res, 200, meBody(session, workspacesFor(session.user)));
       if (req.method === "POST" && path === "/api/logout") {
-        auth.store.endSession(sessionIdFrom(req.headers.cookie));
+        const sid = sessionIdFrom(req.headers.cookie);
+        auth.store.endSession(sid);
+        // This session's open live-update streams close now; other sessions' (even the same account's) stay.
+        for (const [c, s] of sseClients) if (s.sid === sid) endStream(c, "signed out");
         return send(res, 200, { ok: true }, { "set-cookie": sessionCookie("", 0, !!auth.secureCookies) });
       }
       if (req.method === "GET" && path === "/api/events") {
         res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
         res.write("retry: 3000\n\n");
-        sseClients.set(res, { live: session.user.live });
-        req.on("close", () => sseClients.delete(res));
+        // Closed at the session's expiry (a timer, plus every heartbeat re-checks the session) or at its logout.
+        const left = session.expiresAt.getTime() - authNow();
+        const timer = left < 2 ** 31 - 1 ? setTimeout(() => endStream(res, "expired"), Math.max(0, left)) : null;
+        timer?.unref();
+        sseClients.set(res, { live: session.user.live, sid: sessionIdFrom(req.headers.cookie), timer });
+        req.on("close", () => {
+          const s = sseClients.get(res);
+          if (s?.timer) clearTimeout(s.timer);
+          sseClients.delete(res);
+        });
         return;
       }
       if (req.method === "GET" && path === "/api/screens") return send(res, 200, buildScreens(appFor(workspaceOf(url, session.user))));
@@ -542,7 +568,10 @@ export function createApiServer(opts: ApiOptions): {
       new Promise<void>((resolve) => {
         clearInterval(heartbeat);
         if (pollTimer) clearInterval(pollTimer);
-        for (const c of sseClients.keys()) c.end();
+        for (const [c, s] of sseClients) {
+          if (s.timer) clearTimeout(s.timer);
+          c.end();
+        }
         sseClients.clear();
         server.close(() => {
           for (const a of apps.values()) a.close();
