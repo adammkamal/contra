@@ -1,10 +1,10 @@
 import type { AuditEvent } from "./audit.ts";
 import type { App, Workspace } from "./app.ts";
 import { DEMO_BILL, DEMO_SC } from "./commands.ts";
-import { formatUsd } from "./money.ts";
+import { formatUsd, scanUsdAmounts } from "./money.ts";
 import { matchJobs, resolve, type Resolution } from "./resolver.ts";
-import { attachmentPages, describeAt, describeAttachment } from "./span.ts";
-import { EMAIL_INGESTED, type Actor, type BackCharge, type Credit, type EmailOrigin, type HoldReason, type Job, type Notice, type RejectedItem, type Subcontract } from "./types.ts";
+import { attachmentPages, describeAt, describeAttachment, readFromImage } from "./span.ts";
+import { EMAIL_INGESTED, type Actor, type BackCharge, type Credit, type Email, type EmailOrigin, type HoldReason, type Job, type Notice, type RejectedItem, type Subcontract } from "./types.ts";
 import { amountNotes, Contra } from "./workflow.ts";
 import { backChargeAmount } from "./credits.ts";
 
@@ -132,16 +132,45 @@ export interface InboxRow {
   /** Who sent the email the row came from. */
   emailFrom: string;
   vendorAsWritten: string;
+  /** "" while the amount is a reading of an image that no person has confirmed (see photoAmount). */
   amount: string;
+  /** "" while the amount is a reading of an image that no person has confirmed: the sentence is the model's reading too. */
   sourceSentence: string;
   /** Where sourceSentence is: "email body", "attachment <name>, page <n>", or "attachment <name>" for a photo. */
   sourceLocation: string;
+  /**
+   * Set once a person confirmed an amount read from a photo or scanned page: what they typed (the item's
+   * amount from then on) and what the model read. null otherwise, and always null before the confirmation:
+   * until then nothing the screens show carries the model's reading.
+   */
+  photoAmount: PhotoAmount | null;
   /** What became of each of the email's attachments, in words (read as text, read as an image, or skipped and why). */
   attachments: string[];
   linkExplanation: string[];
   status: Status;
   actions: Action[];
 }
+
+/** Both readings of an image amount a person confirmed, formatted like every other amount: "$640.00". */
+export interface PhotoAmount {
+  pmEntered: string;
+  modelRead: string;
+}
+
+/**
+ * True while the item's amount is the model's reading of an image and no person has confirmed it. Then
+ * neither the amount nor the sentence it came from is shown anywhere, so the person who types the amount
+ * reads the image without being anchored on the model's figure. (Ingest doesn't log it either: src/workflow.ts.)
+ */
+function readingWithheld(b: Readonly<BackCharge>, email: Email | undefined): boolean {
+  return !b.amountConfirmation && email !== undefined && readFromImage(email, b.extracted.amountEvidence.at);
+}
+
+const photoAmount = (b: Readonly<BackCharge>): PhotoAmount | null =>
+  b.amountConfirmation ? { pmEntered: formatUsd(b.amountConfirmation.enteredCents), modelRead: formatUsd(b.amountConfirmation.modelCents) } : null;
+
+/** The model's own text about a withheld item (its description), with every dollar amount in it taken out. */
+const withoutAmounts = (text: string) => scanUsdAmounts(text).reduce((t, a) => t.split(a.text).join("[amount withheld]"), text);
 
 export interface Screens {
   /** "demo" (the scripted demo) or "live" (mail from the live inbox only). Each is separate state. */
@@ -211,15 +240,17 @@ export function buildScreens(app: App): Screens {
       const r = resolve(b.extracted, erp);
       actions.push({ command: "confirmImageAmount", ref: b.ref, options: r.kind === "linked" ? [r.subcontractId] : subcontractOptions(b.extracted.jobRef, r, erp.jobs, erp.subcontracts) });
     }
+    const withheld = readingWithheld(b, email);
     return {
       kind: "backCharge" as const,
       ref: b.ref,
       emailSubject: email?.subject ?? "",
       emailFrom: email?.from ?? "",
       vendorAsWritten: b.extracted.vendorNameAsWritten,
-      amount: formatUsd(backChargeAmount(b)),
-      sourceSentence: b.extracted.amountEvidence.sentence,
+      amount: withheld ? "" : formatUsd(backChargeAmount(b)),
+      sourceSentence: withheld ? "" : b.extracted.amountEvidence.sentence,
       sourceLocation: email ? describeAt(email, b.extracted.amountEvidence.at) : "email body",
+      photoAmount: photoAmount(b),
       attachments: email?.attachments?.map(describeAttachment) ?? [],
       linkExplanation: b.linkExplanation.length ? b.linkExplanation : proposal?.kind === "review" ? proposal.reasons : [],
       status: backChargeStatus(b),
@@ -238,6 +269,7 @@ export function buildScreens(app: App): Screens {
       amount: "",
       sourceSentence: "",
       sourceLocation: "",
+      photoAmount: null,
       attachments: email?.attachments?.map(describeAttachment) ?? [],
       linkExplanation: [],
       status: rejectedStatus(r),
@@ -440,16 +472,22 @@ function liveNextStep(app: App): { text: string; action: Action | null } {
 
 export interface BackChargeDetail {
   ref: string;
+  /** The model's description; while the amount is withheld (see amount), any dollar amount in it reads "[amount withheld]". */
   description: string;
+  /** "" while the amount is a reading of an image that no person has confirmed, as in the Inbox row. */
   amount: string;
+  /** As in the Inbox row: both readings once a person confirmed an image amount, else null. */
+  photoAmount: PhotoAmount | null;
   status: Status;
   vendorAsWritten: string;
   jobRef: string;
   /** attachments: each attachment in words; attachmentText: the text of each page read from a PDF, to show and highlight in. */
   email: { id: string; subject: string; from: string; body: string; attachments: string[]; attachmentText: { where: string; text: string }[] } | null;
+  /** "" while the amount is withheld, as in the Inbox row. */
   sourceSentence: string;
   /** Where sourceSentence is: "email body", "attachment <name>, page <n>", or "attachment <name>" for a photo. */
   sourceLocation: string;
+  /** null when there is none; while the amount is withheld, a sentence read from an image has its dollar amounts taken out. */
   disputeSentence: string | null;
   link: { subcontractId: string | null; explanation: string[] };
   /** The subcontract's back-charge clause, quoted, or null if not linked / no clause. */
@@ -470,10 +508,14 @@ export function backChargeDetail(app: App, ref: string): BackChargeDetail {
   const scId = b.subcontractId ?? (proposal?.kind === "linked" ? proposal.subcontractId : null);
   const sc = scId ? erp.subcontract(scId) : null;
   const r = contra.explainEligibility(ref);
+  const withheld = readingWithheld(b, email ?? undefined);
+  const dispute = b.extracted.disputeEvidence;
+  const disputeSentence = dispute?.sentence || null;
   return {
     ref,
-    description: b.extracted.description,
-    amount: formatUsd(backChargeAmount(b)),
+    description: withheld ? withoutAmounts(b.extracted.description) : b.extracted.description,
+    amount: withheld ? "" : formatUsd(backChargeAmount(b)),
+    photoAmount: photoAmount(b),
     status: backChargeStatus(b),
     vendorAsWritten: b.extracted.vendorNameAsWritten,
     jobRef: b.extracted.jobRef,
@@ -487,9 +529,9 @@ export function backChargeDetail(app: App, ref: string): BackChargeDetail {
           attachmentText: attachmentPages(email).map((p) => ({ where: p.where, text: p.text })),
         }
       : null,
-    sourceSentence: b.extracted.amountEvidence.sentence,
+    sourceSentence: withheld ? "" : b.extracted.amountEvidence.sentence,
     sourceLocation: email ? describeAt(email, b.extracted.amountEvidence.at) : "email body",
-    disputeSentence: b.extracted.disputeEvidence?.sentence || null,
+    disputeSentence: disputeSentence && withheld && email && readFromImage(email, dispute!.at) ? withoutAmounts(disputeSentence) : disputeSentence,
     link: { subcontractId: b.subcontractId, explanation: b.linkExplanation.length ? b.linkExplanation : proposal?.kind === "review" ? proposal.reasons : proposal?.kind === "linked" ? proposal.explanation : [] },
     clause: sc?.clause
       ? {

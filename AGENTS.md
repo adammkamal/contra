@@ -6,7 +6,7 @@ Read SPEC.md and INVARIANTS.md before writing code.
 
 ## Hard rules
 1. **Never edit** `INVARIANTS.md`, `test/invariants.test.ts`, `test/demo.test.ts` or anything under
-   `bench/labels/` or `bench/heldout/labels/`. If one of them looks wrong, stop and say so. A pre-commit hook rejects such edits
+   `bench/labels/`, `bench/heldout/labels/` or `bench/fresh/labels/`. If one of them looks wrong, stop and say so. A pre-commit hook rejects such edits
    (`scripts/protect.sh`).
 2. **Money:** use `Cents` from `src/money.ts`. Never use `number` arithmetic on dollars, `toFixed` for
    math, or `parseFloat` on amounts.

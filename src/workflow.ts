@@ -6,7 +6,7 @@ import { renderCreditMemo } from "./memo.ts";
 import { formatUsd, sub as subCents, sum, type Cents } from "./money.ts";
 import { assessExtractedItem, conflictingStatements } from "./intake.ts";
 import { ambiguousWith, matchJobs, resolve, type Resolution } from "./resolver.ts";
-import { describeAt, describeAttachment, disputeSentencesFor, normalize, verifySpan } from "./span.ts";
+import { describeAt, describeAttachment, disputeSentencesFor, normalize, readFromImage, verifySpan } from "./span.ts";
 import { IllegalTransition, transitionBackCharge, transitionCredit, transitionMemo, transitionNotice } from "./state.ts";
 import type { MockERP } from "./mocks/erp.ts";
 import { planApplication, type PaymentsPlatform, type PlannedApplication } from "./mocks/ramp.ts";
@@ -26,6 +26,8 @@ import type {
 } from "./types.ts";
 
 const SYSTEM: Actor = { kind: "system", id: "contra" };
+/** In place of the model's reading of an image amount, until a person confirms the amount (confirmImageAmount). */
+const WITHHELD = "withheld until a person confirms the amount from the image";
 const ROLE_WORDS = { pm: "PM", controller: "Controller", ap: "AP" } as const;
 
 /** Both readings of a confirmed image amount: "PM entered $640.00; model read $604.00". */
@@ -161,7 +163,11 @@ export class Contra {
       const existing = this.backCharges.get(x.ref);
       if (existing) {
         if (backChargeAmount(existing) !== x.amountCents && existing.state !== "held") {
-          this.#hold(existing, ["conflicting_amounts"], [`${email.id}: ${x.amountEvidence.sentence}`]);
+          // A reading of an image is never logged unconfirmed (see below): say where it is, not what the model read.
+          const other = readFromImage(email, x.amountEvidence.at)
+            ? `another amount, read by the model from ${describeAt(email, x.amountEvidence.at)} (the model's reading isn't shown; a person must read the image)`
+            : x.amountEvidence.sentence;
+          this.#hold(existing, ["conflicting_amounts"], [`${email.id}: ${other}`]);
         }
         continue;
       }
@@ -182,18 +188,27 @@ export class Contra {
         creditId: null,
       };
       this.backCharges.set(x.ref, bc);
+      // An amount read from an image is the model's reading, which nothing can check. It is not logged here,
+      // so no screen, detail or audit view shows it before a person types the amount they see without being
+      // anchored on it; confirmImageAmount then logs both readings. bc.extracted keeps it.
+      const imageAmount = readFromImage(email, x.amountEvidence.at);
+      const dispute = !x.disputeEvidence
+        ? []
+        : imageAmount && readFromImage(email, x.disputeEvidence.at)
+          ? [`dispute sentence read by the model from ${describeAt(email, x.disputeEvidence.at)}: ${WITHHELD}`]
+          : [x.disputeEvidence.sentence];
       this.d.log.append({
         actor: extractor,
         entity: "backcharge",
         entityId: x.ref,
-        action: `extracted ${formatUsd(x.amountCents)}`,
+        action: imageAmount ? `extracted (amount read from an image: ${WITHHELD})` : `extracted ${formatUsd(x.amountCents)}`,
         from: null,
         to: "extracted",
         evidence: [
-          x.amountEvidence.sentence,
+          ...(imageAmount ? [] : [x.amountEvidence.sentence]),
           // Where it is, when not in the body: "in attachment estimate.pdf, page 2".
           ...(x.amountEvidence.at ? [`in ${describeAt(email, x.amountEvidence.at)}`] : []),
-          ...(x.disputeEvidence ? [x.disputeEvidence.sentence] : []),
+          ...dispute,
           ...a.backstop,
         ],
       });

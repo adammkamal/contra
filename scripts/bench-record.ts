@@ -3,8 +3,8 @@
  * CONTRA_EFFORT from .env.local (never from ANTHROPIC_* variables, which Claude Code also reads).
  *   npm run bench:record              # 3 runs per case
  *   npm run bench:record -- --runs 5
- *   npm run bench:record -- --set heldout   # held-out set (default: main)
- * Writes fixtures/bench-extractions/<caseId>/run-<n>.json (held-out: fixtures/bench-extractions/heldout/<caseId>/). A failed call is recorded (with `error`)
+ *   npm run bench:record -- --set heldout   # held-out set (default: main); --set fresh for the fresh set
+ * Writes fixtures/bench-extractions/<caseId>/run-<n>.json (held-out and fresh: fixtures/bench-extractions/<set>/<caseId>/). A failed call is recorded (with `error`)
  * and the recording continues. Each run also stores the model's raw tool input (`rawToolInput`), which `npm run bench`
  * re-validates with the current validator. Never touches fixtures/extractions/ (the demo's).
  */

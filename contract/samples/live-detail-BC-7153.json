@@ -1,7 +1,8 @@
 {
   "ref": "BC-7153",
   "description": "Floor protection",
-  "amount": "$640.00",
+  "amount": "",
+  "photoAmount": null,
   "status": {
     "label": "Held: amount read from a photo or scanned page, which can't be checked word for word; a person must confirm it",
     "tone": "danger"
@@ -29,7 +30,7 @@
       }
     ]
   },
-  "sourceSentence": "BC-7153 FLOOR PROTECTION $640.00",
+  "sourceSentence": "",
   "sourceLocation": "attachment IMG_2041.jpg",
   "disputeSentence": null,
   "link": {
@@ -59,9 +60,8 @@
       "seq": 5,
       "at": "2026-11-07 15:00 UTC",
       "actor": "Sample extractions (hand-written)",
-      "what": "extracted $640.00 (new → extracted)",
+      "what": "extracted (amount read from an image: withheld until a person confirms the amount from the image) (new → extracted)",
       "evidence": [
-        "BC-7153 FLOOR PROTECTION $640.00",
         "in attachment IMG_2041.jpg"
       ]
     },

@@ -2,6 +2,7 @@
   "ref": "BC-4470",
   "description": "Re-patch corridor wall after MEP rework",
   "amount": "$2,750.00",
+  "photoAmount": null,
   "status": {
     "label": "Held: dispute noted in the PM's email",
     "tone": "danger"

@@ -86,7 +86,7 @@ Show the message; don't retry.
 | `emailSource` | `"eml"`, `"builtin"`, `"gmail"`, `"mixed"` or `null` (before ingest). Where the Inbox's PM emails were read from. Show it in the Inbox beside the extraction note: **"Emails: .eml files"** for `"eml"`, **"Emails: built-in sample"** for `"builtin"`, **"Emails: Gmail inbox"** for `"gmail"`, **"Emails: more than one source"** for `"mixed"`. |
 | `nextStep` | `{ text, action }` for the presenter bar. Highlight `action`'s button. In `demo`, `action` is `null` only at "Demo complete". In `live`, it is also `null` while waiting for mail ("Waiting for back-charge emails from the live inbox") while the PM must choose a subcontract in an Inbox row, and while the PM must confirm an amount read from an image in an Inbox row; show the text without a button. |
 | `opener` | The missed back-charges screen. Always show **"Sample data"**. Totals are already formatted; rows carry `ref`, `status`, `amount` and `evidence`. |
-| `inbox[]` | `kind`, `ref`, `emailSubject`, `emailFrom`, `vendorAsWritten`, `amount`, `sourceSentence` (show beside the amount), `sourceLocation` (where that sentence is: `"email body"`, `"attachment estimate.pdf, page 2"`, or `"attachment IMG_2041.jpg"` for a photo; show it with the sentence), `attachments[]` (what became of each of the email's attachments, in words; show them all, skipped ones included, as written), `linkExplanation[]`, `status`, `actions[]`. `kind` is `"backCharge"` (an extracted back-charge, with a detail screen) or `"rejected"` (see [Items not taken in](#items-not-taken-in)). |
+| `inbox[]` | `kind`, `ref`, `emailSubject`, `emailFrom`, `vendorAsWritten`, `amount`, `sourceSentence` (show beside the amount), `sourceLocation` (where that sentence is: `"email body"`, `"attachment estimate.pdf, page 2"`, or `"attachment IMG_2041.jpg"` for a photo; show it with the sentence), `photoAmount` (`{ pmEntered, modelRead }`, both formatted like every amount, once a person confirmed an amount read from an image; else `null`; see [Amounts read from an image](#amounts-read-from-an-image)), `attachments[]` (what became of each of the email's attachments, in words; show them all, skipped ones included, as written), `linkExplanation[]`, `status`, `actions[]`. `kind` is `"backCharge"` (an extracted back-charge, with a detail screen) or `"rejected"` (see [Items not taken in](#items-not-taken-in)). For a `"backCharge"` row, `amount` and `sourceSentence` are `""` only while its amount is an unconfirmed reading of an image. |
 | `outbox[]` | Notices: `id`, `total`, `refs`, `body` (shown as written, preformatted), `status`, `actions[]`. |
 | `credits[]` | `id`, `amount`, `job`, `refs`, `amountNotes[]` (one line per item whose amount a person confirmed from an image, with both readings, e.g. `"BC-7403: amount confirmed by dana.ortiz (PM) from attachment IMG_2041.jpg (PM entered $640.00; model read $604.00)"`; show them beside the amount, above the Approve button, as written; usually empty), `status`, `actions[]`, `hasMemo` (when true, offer "View memo"), `memo`: the memo's delivery to the AP inbox as a `Status` (e.g. "Memo not sent", "Memo sent to …", "Memo not sent: … You can send it again."), or `null` when there is no memo yet. Show `memo.label` as written. |
 | `bills[]` | Always show **"Simulated Ramp"**. `vendor`, `job`, `amount`, `creditsOn`, `status`, `paid`, plus `check`: `status`, `actions[]` (sentences), `warnings[]`, `wouldPay`. Also has `actions[]` (buttons). |
@@ -107,7 +107,7 @@ Render each `actions[]` entry as a button, and when clicked send exactly that ob
 | `ingestPmEmails` | none | Ingest PM emails |
 | `confirmLink` | `ref` | Confirm link |
 | `chooseSubcontract` | `ref`, `options[]` | A picker plus Confirm. Send `input.choice` as one of `options`. |
-| `confirmImageAmount` | `ref`, `options[]` | Only on an item held just because its amount was read from a photo or scanned page. An amount field ("Type the amount you see in the image"), a picker of `options` (often one) and Confirm. Send `input.amount` (what the person typed, e.g. `"$640.00"` or `"640.00"`) and `input.choice`. The typed amount may differ from the model's reading (a misread photo): it becomes the item's amount, both are recorded, and the credit shows both in `amountNotes`. It is refused (409, the item stays held) when it isn't more than $0.00, or when the email's text (body or a PDF page) gives the back-charge a different amount; the message says which. Don't prefill the amount field. Contra doesn't keep the image: the person checks it in the original email (`sourceLocation` names the file). |
+| `confirmImageAmount` | `ref`, `options[]` | Only on an item held just because its amount was read from a photo or scanned page. An amount field ("Type the amount you see in the image"), a picker of `options` (often one) and Confirm. Send `input.amount` (what the person typed, e.g. `"$640.00"` or `"640.00"`) and `input.choice`. The typed amount may differ from the model's reading (a misread photo): it becomes the item's amount, both are recorded, and the credit shows both in `amountNotes`. It is refused (409, the item stays held) when it isn't more than $0.00, or when the email's text (body or a PDF page) gives the back-charge a different amount; the message says which. Don't prefill the amount field: the server sends nothing to prefill it with (see [Amounts read from an image](#amounts-read-from-an-image)). Contra doesn't keep the image: the person checks it in the original email (`sourceLocation` names the file). |
 | `draftNotice` | `subcontractId` | Draft notice |
 | `approveNotice` | `noticeId` | Approve notice |
 | `sendNotice` | `noticeId` | Send notice |
@@ -170,8 +170,9 @@ Addressing a workspace:
 - `POST /api/try` always reads the demo's seed and changes neither workspace.
 - Samples: `contract/samples/live-00-waiting-for-mail.screens.json`, `live-01-after-an-email-arrives.screens.json`
   (a made-up email with a hand-written extraction) and `live-02-after-an-email-with-attachments-arrives.screens.json`
-  (a made-up email with a PDF read as text, a photo and a skipped HEIC; BC-7153 shows `confirmImageAmount`), with
-  `live-detail-BC-7153.json`.
+  (a made-up email with a PDF read as text, a photo and a skipped HEIC; BC-7153 shows `confirmImageAmount`, with
+  its amount withheld), with `live-detail-BC-7153.json`, and `live-04-after-a-photo-amount-is-confirmed.screens.json`
+  (the PM typed $640.00 for BC-7153, which the model had read as $604.00: `photoAmount` has both).
 
 ## Live inbox and memos
 
@@ -217,6 +218,25 @@ Attachments of PM emails (live Gmail and `.eml` files) are read when the email i
   text or a file name), a back-charge number no item accounts for, a dispute, and an amount for the same
   back-charge that differs between the body and an attachment (`conflicting amounts`).
 
+### Amounts read from an image
+
+Until a person confirms an amount the model read from a photo or scanned page, **nothing the API returns
+carries the model's reading** (screens, detail, audit, PM queue, SSE), so the person reads the image without
+being anchored on the model's figure:
+
+- The Inbox row and the detail screen have `amount: ""`, `sourceSentence: ""` (the sentence is the model's
+  reading too) and `photoAmount: null`. `sourceLocation` still names the file. The detail's `description`
+  shows any dollar amount in it as `[amount withheld]`; so does a `disputeSentence` read from an image.
+- The item's `extracted` audit entry says `extracted (amount read from an image: withheld until a person
+  confirms the amount from the image)`, with where it is (`in attachment IMG_2041.jpg`) and no sentence. A
+  `conflicting amounts` hold says what the email's text gives, `not the amount read from the image`.
+- After `confirmImageAmount`, `amount` is what the person typed, `sourceSentence` is the model's sentence, and
+  `photoAmount` is `{ "pmEntered": "$640.00", "modelRead": "$604.00" }` (both always present; they may be
+  equal). Show both from `photoAmount`; never parse `audit[]` or `amountNotes[]` for them. The confirmation's
+  audit entry and the credit's `amountNotes[]` carry both readings too.
+- Audit entries written before this rule (a database from an older server) still carry the reading; reset
+  that workspace to start clean.
+
 ## Hold reasons
 
 `status.label` for a held item is `Held: ` and then its reasons, joined by `; `. Each reason is one of these
@@ -259,7 +279,7 @@ in the wrong form, ...), it is never a back-charge, but it is an Inbox row with 
 
 | Field | Contents |
 |---|---|
-| Identity | `ref`, `description`, `amount`, `status` |
+| Identity | `ref`, `description`, `amount`, `photoAmount` (as in the Inbox row), `status`. `amount` is `""` while it is an unconfirmed reading of an image ([Amounts read from an image](#amounts-read-from-an-image)). |
 | Source | `vendorAsWritten`, `jobRef`, `email` (`{ id, subject, from, body, attachments, attachmentText }`), `sourceSentence`, `sourceLocation`, `disputeSentence`. Highlight `sourceSentence` inside `email.body` when `sourceLocation` is `"email body"`, else inside the `attachmentText` entry whose `where` equals `sourceLocation` (`attachmentText` is `{ where, text }[]`, one per page of each PDF read as text; a photo has none). `email.attachments` is the same list of words as the Inbox row's. A sentence can cross a line break in `body` (an .eml's HTML part is re-wrapped), so match it with runs of whitespace treated as equal. |
 | `link` | `subcontractId` and `explanation[]`, e.g. alias, then party, then job |
 | `clause` | `section`, `text` (quote it), `responseWindow` (e.g. "5 working days"), `deductionAllowed`, `noticeRequired`. Can be `null`. |

@@ -85,6 +85,11 @@ function sourceOf(email: Email, at: Evidence["at"]): Source {
   return { kind: "text", text: page, quotable: false };
 }
 
+/** True when the evidence cites an image (a photo or a scanned page): what it says is the model's reading. */
+export function readFromImage(email: Email, at: Evidence["at"]): boolean {
+  return sourceOf(email, at).kind === "image";
+}
+
 /**
  * The sentence must appear (after normalization) in the text it cites: the body, or the locally extracted
  * text of the cited attachment page. An attachment is never quoted mail, so excludeQuoted applies to the body only.

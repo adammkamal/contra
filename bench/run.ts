@@ -3,7 +3,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MockERP } from "../src/mocks/erp.ts";
 import { demoSeed } from "../src/seed.ts";
-import { baselineDecide, contraDecide, loadCases, loadLabels, loadRuns, parseSet, REVIEW, score, setPaths, type BenchSet, type Outcome, type Score } from "./lib.ts";
+import { baselineDecide, contraDecide, isItemsLabel, loadCases, loadLabels, loadRuns, parseSet, REVIEW, score, scoreItems, setPaths, type BenchSet, type DecidedItem, type Outcome, type Score } from "./lib.ts";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 let set: BenchSet;
@@ -44,6 +44,9 @@ type Sys = "contra" | "baseline";
 type RunRow = { caseId: string; run: number; items: number; failed?: string; contra?: Score; baseline?: Score; contraDecision: string; baselineDecision: string };
 
 const show = (o: Outcome) => (o.decision.kind === "link" ? `link ${o.decision.subcontractId}` : o.decision.kind) + (o.wouldCredit ? " +credit" : "");
+// A run with no accepted item puts nothing in the Inbox: shown as "nothing extracted", never as "review".
+const NOTHING = "nothing extracted";
+const showItems = (d: readonly DecidedItem[]) => (d.length ? d.map(({ x, o }) => `${x.ref} ${show(o)}`).join("; ") : NOTHING);
 
 const rows: RunRow[] = [];
 for (const c of cases) {
@@ -52,6 +55,18 @@ for (const c of cases) {
     const run = i + 1;
     if (r.error) {
       rows.push({ caseId: c.id, run, items: 0, failed: r.error, contraDecision: "failed", baselineDecision: "failed" });
+      return;
+    }
+    if (isItemsLabel(label)) {
+      // Multi-item label: every accepted item is decided, as ingest would, and paired with the labeled items.
+      const refs = r.items.map((x) => x.ref);
+      const co = r.items.map((x) => ({ x, o: contraDecide(c.email, x, erp, refs) }));
+      const bo = r.items.map((x) => ({ x, o: baselineDecide(x, seed.vendors, seed.subcontracts, seed.jobs) }));
+      rows.push({
+        caseId: c.id, run, items: r.items.length,
+        contra: scoreItems(co, label).score, baseline: scoreItems(bo, label).score,
+        contraDecision: showItems(co), baselineDecision: showItems(bo),
+      });
       return;
     }
     const x = r.items.length === 1 ? r.items[0]! : null;
@@ -63,7 +78,7 @@ for (const c of cases) {
     rows.push({
       caseId: c.id, run, items: r.items.length,
       contra: score(co, label, amount, accepted), baseline: score(bo, label, amount, accepted),
-      contraDecision: show(co) + note, baselineDecision: show(bo) + note,
+      contraDecision: accepted === 0 ? NOTHING : show(co) + note, baselineDecision: accepted === 0 ? NOTHING : show(bo) + note,
     });
   });
 }
@@ -81,6 +96,7 @@ const perRun = (k: Sys) =>
       wrongLinks: rs.filter((r) => r[k]!.wrongLink).length,
       wrongCredits: rs.filter((r) => r[k]!.wrongCredit).length,
       routedToHuman: rs.filter((r) => r[k]!.routedToHuman).length,
+      missed: rs.filter((r) => r[k]!.missed).length,
     };
   });
 
@@ -101,11 +117,11 @@ console.log(`Set: ${set}${set === "main" ? "" : " (scored separately, never merg
 console.log(`Extractions: ${summary.extractions}`);
 console.table(rows.map((r) => ({
   case: r.caseId, run: r.run, items: r.failed ? "failed" : r.items,
-  contra: r.contraDecision, "c match": r.contra?.matching, "c dispute": r.contra?.dispute,
-  baseline: r.baselineDecision, "b match": r.baseline?.matching, "b dispute": r.baseline?.dispute,
+  contra: r.contraDecision, "c match": r.contra?.matching, "c dispute": r.contra?.dispute, "c missed": r.contra?.missed,
+  baseline: r.baselineDecision, "b match": r.baseline?.matching, "b dispute": r.baseline?.dispute, "b missed": r.baseline?.missed,
 })));
 for (const k of ["contra", "baseline"] as const) {
-  console.log(`\n${k} (per run; matching = correct link or correct review)`);
+  console.log(`\n${k} (per run; matching = correct link or correct review; missed = a labeled back-charge nothing was extracted for, which nobody sees)`);
   console.table(summary[k]);
 }
 console.log(`\nUnstable cases (outcome differs between runs): contra ${summary.unstable.contra.join(", ") || "none"}; baseline ${summary.unstable.baseline.join(", ") || "none"}`);
